@@ -201,6 +201,62 @@ tables in the project doc. Summary:
 `river_producer.py`, `seismic_producer.py`) against Open-Meteo, USGS/NOAA,
 and the USGS earthquake GeoJSON feed respectively.
 
+## 2026-09-28 (later still) — FINAL pivot: pure seismic, event-feed level
+
+Teammate shared a rigorous design proposal for raw-waveform seismic
+detection (EarthScope SeedLink + ObsPy + TauP + Java Kafka Streams).
+Methodologically excellent — several ideas adopted — but too heavy to
+attempt as Phase I scope with ~1 week to review and no prior experience
+with any of that tooling. Decision, confirmed with the team:
+
+- **Earthquake becomes the single headline disaster** (not multi-hazard),
+  built on the **USGS event-feed level** — magnitude/location/depth/time,
+  already detected by USGS — not raw seismometer waveforms. Raw-waveform
+  detection is an explicit **Phase 2 stretch goal**, not dropped.
+- **Faust stays.** Confirmed again: the circular doesn't name Java Kafka
+  Streams specifically.
+- **Fixed a circularity problem**: if we just re-alert on "USGS reported a
+  big earthquake," we're not detecting anything, USGS already did. Fix —
+  two layers: (1) rule-based severity alert on individual event magnitude
+  vs. USGS's own official classification — a lookup, not ML; (2) the
+  actual ML contribution — Isolation Forest on **windowed rate/clustering
+  features** (event count, cumulative magnitude/energy, mean depth per
+  region per window), trained on normal background seismicity, detecting
+  swarm-like clustering that the raw feed never labels as a single value.
+  Non-circular because it's a new aggregate signal from our own windowing,
+  not a re-read of USGS's own label.
+- **Ground truth for the ML layer**: real historical sequences — the 2019
+  Ridgecrest, CA sequence (from the teammate's own suggestion) as a real
+  positive-class stress test, no raw waveform needed since it's fully in
+  the USGS catalog.
+- **Region**: pick a globally active region (Southern California, Japan,
+  Indonesia) over India specifically, purely for real-event frequency.
+- **Architecture**: 2 producers (live USGS poll + historical replay,
+  both real data), 3 topics (`catalog.usgs`, `aggregates.window`,
+  `alerts.seismic`), 3 consumer groups (Faust windowing, ML anomaly,
+  raw archival) — same shape as the flood design, just re-pointed.
+- **Adopted from the teammate's proposal regardless of architecture**:
+  honest ML-vs-baseline comparison, false-alarm rate stated as an upper
+  bound, three separate latency metrics (pipeline/detection/delivery) —
+  add a `latency_trace` table, and the specific fault-tolerance mechanisms
+  (replication factor 3 + min ISR 2, changelog standby replicas,
+  sequence/offset resume with backfill).
+- **Not carried over**: multi-station waveform corroboration — doesn't
+  apply once USGS has already fused multi-station data into one event
+  record; noted explicitly so nobody claims we're doing something we're
+  not.
+- **Still to do**: get faculty to confirm "other available environmental
+  indicators" covers seismic, in writing, before building further —
+  teammate's advice, good regardless of which version we build.
+
+This supersedes the flood-anchored and multi-hazard entries above, which
+stay as the record of how the decision evolved.
+
+**Next**: schema changes for seismic (replace `sensor_readings`/
+`windowed_aggregates` fields with event-based equivalents, add
+`latency_trace`), then `seismic_live_producer.py` +
+`seismic_replay_producer.py` against the USGS feed.
+
 ## Template for new entries
 
 ```
