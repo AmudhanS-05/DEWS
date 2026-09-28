@@ -94,6 +94,46 @@ Each entry: date, what changed, why, what's next, any numbers worth keeping
   it as an abandoned first draft.
 - Activate `spaenv` and try installing this repo's requirements into it.
 
+## 2026-09-28 — Pushback resolved: Kafka-Streams compliance, ML choice, thresholds
+
+Full detail + citations in the "Architecture & Open Decisions" project doc
+(claude.ai project docs). Summary of what changed:
+
+- **Faust vs "must use Kafka"**: checked the circular's actual text — it
+  requires "Apache Kafka must be the central messaging/streaming platform"
+  and "at least one window-based streaming operation," not the Java Kafka
+  Streams library by name. Faust connects to the same real Kafka broker via
+  Kafka's wire protocol and its windows are changelog-topic-backed, same
+  fault-tolerance mechanism Kafka Streams itself uses — compliant. Still
+  confirming with faculty whether the rubric additionally wants the literal
+  Java library; if so, `streams/` swaps to Java/Kotlin with no change
+  downstream.
+- **ML method**: keeping Isolation Forest but explicitly as one signal, not
+  the disaster label — compared against Z-score/domain-threshold, One-Class
+  SVM, LSTM Autoencoder, LOF, and STA/LTA (seismology-specific). Current
+  `contamination=0.05` in `ml/anomaly_consumer.py` is a placeholder and must
+  be replaced by a sweep calibrated against domain-labeled events, not left
+  as a guess.
+- **Thresholds — real citable sources found**, replacing any invented
+  numbers: IMD rainfall-intensity classification, IMD cyclone wind-speed
+  classification, CWC per-station Warning/Danger Level (or NOAA NWPS API's
+  per-gauge flood category levels, more directly usable in code), STA/LTA
+  ratio trigger for seismic (Journal of the Geological Society of India,
+  2018). IMD figures sourced from a social-media repost of IMD's own
+  terminology — **flagged to verify against IMD's primary PDF/circular
+  before citing in the actual technical paper.**
+- **Dataset sufficiency**: Open-Meteo + USGS water services satisfy the
+  multi-topic/multi-stream requirement for the brief's listed variables.
+  Earthquake is NOT covered by either — would need the USGS Earthquake
+  Catalog real-time GeoJSON feed as its own topic (`sensors.seismic`).
+  Live APIs alone won't give enough history to characterize "normal" or
+  validate against real past disasters — a historical-data backfill
+  (IMD/NOAA/USGS/CWC archives, replayed at accelerated speed) is needed
+  alongside live polling.
+
+**Next**: decide real vs. synthetic dataset (comment open on the doc),
+then revisit `ml/anomaly_consumer.py`'s thresholds once that's settled.
+
 ## Template for new entries
 
 ```
