@@ -252,10 +252,74 @@ with any of that tooling. Decision, confirmed with the team:
 This supersedes the flood-anchored and multi-hazard entries above, which
 stay as the record of how the decision evolved.
 
-**Next**: schema changes for seismic (replace `sensor_readings`/
-`windowed_aggregates` fields with event-based equivalents, add
-`latency_trace`), then `seismic_live_producer.py` +
-`seismic_replay_producer.py` against the USGS feed.
+## 2026-09-28 — Detection design simplified to single-layer ML; teammate review incorporated
+
+**Detection-layer question resolved**: dropped the separate rule-based
+magnitude-lookup layer. Isolation Forest alone is sufficient because
+magnitude enters as a *feature* (`max_magnitude_in_window`,
+`cumulative_magnitude`) alongside `event_count`/`mean_depth`/
+`magnitude_std`, not as a hardcoded threshold — a single large event and a
+dense aftershock sequence both produce short isolation paths on different
+features. This also removes the redundant threshold-provenance problem the
+rule-based layer reintroduced. The USGS magnitude-class name is still
+attached to alerts, but only as human-readable labeling, not as a second
+detection gate, and its "accuracy" is never reported as detection accuracy.
+
+**Teammate's second review (attached, full technical critique) accepted
+almost in full** and folded into the architecture doc (rev 2):
+- **Zero-count windows**: Faust/streams only emit non-empty windows by
+  default — fixed by an explicit heartbeat/timer that emits zero-count
+  windows too, so background rate isn't biased upward. Same handling used
+  for training and live.
+- **Event-time messiness**: dedupe producer events by ID; track USGS's
+  `status` (automatic/reviewed) and `updated_at`; explicit lateness
+  allowance on windows, with re-emission on late/revised events.
+- **Live vs. replay must be reported separately** — replay is the final
+  revised catalog, live is preliminary; merging them would misrepresent
+  results.
+- **Ground-truth circularity, round 2**: labeling "sequence" periods by
+  high event count (the same quantity used as a feature) still scores the
+  detector against itself. Fixed by using documented mainshock-aftershock
+  sequences (e.g. Ridgecrest — corrected terminology, it's a
+  mainshock-aftershock sequence, not a "swarm") as independent labels, and
+  masking the mainshock's own magnitude when evaluating whether the ML
+  layer adds value beyond a trivial magnitude check.
+- **"Early warning" framing corrected**: a catalog-fed pipeline alerts
+  after USGS has already detected and published an event — it cannot give
+  advance notice. Renamed throughout to "seismic activity monitoring and
+  alerting"; flagged as an open item to raise with faculty rather than
+  glossed over in the report.
+- **Missing alert delivery mechanism**: added a 4th consumer group
+  (Notifier → Telegram/email) — without a real delivery channel,
+  "alert delivery time" had nothing to measure.
+- **Window size**: 10s (leftover from the flood design) was meaningless on
+  a sparse catalog — changed to 1-hour tumbling windows per grid cell;
+  replay must run accelerated to show several in a demo.
+- **Partitioning weak on a single named region** — switched to lat/lon
+  grid-cell keys for a real multi-key partition/rebalance demo.
+- **Backfill**: added `updatedafter`-based resume (to confirm against
+  current USGS/FDSN feed docs) as the catalog equivalent of SeedLink's
+  sequence-number resume.
+- **Broker fault tolerance**: RF3/min-ISR2 requires an actual 3-broker
+  cluster — noted not to claim broker-level recovery against a
+  single-broker demo setup.
+- **Stronger baseline**: added a Poisson-quantile test per grid cell as
+  the honest comparison point, not just "count above a fixed number."
+- **`faust-streaming`** (maintained fork) to be used instead of upstream
+  `faust` — smoke-test this week.
+- Added a second open item beyond the existing "Kafka Streams" wording
+  risk: confirm the brief's "early-warning" wording against what this
+  system honestly does.
+
+Full updated architecture (all of the above applied) is in the separate
+review-only Claude Docs artifact, not duplicated here in full —
+see the doc link in that conversation turn.
+
+**Next**: schema changes for seismic (event-based fields, grid_cell,
+dedupe keys, `latency_trace`), then `seismic_live_producer.py` +
+`seismic_replay_producer.py` against the USGS feed, with the zero-count
+heartbeat and dedupe/backfill logic built in from the start rather than
+retrofitted.
 
 ## Template for new entries
 
