@@ -134,6 +134,73 @@ Full detail + citations in the "Architecture & Open Decisions" project doc
 **Next**: decide real vs. synthetic dataset (comment open on the doc),
 then revisit `ml/anomaly_consumer.py`'s thresholds once that's settled.
 
+## 2026-09-28 — Disaster focus recommended: flood & severe-weather
+
+Full reasoning + tables in the "Architecture & Open Decisions" project doc.
+Summary:
+
+- **Recommended:** flood/severe-weather early warning, anchored on
+  **water level** as the primary disaster (official per-gauge threshold via
+  NOAA NWPS API, decades of USGS historical data). Rainfall/wind/temp/
+  humidity are correlated multivariate features feeding the Isolation Forest,
+  NOT independently threshold-backed — checked NWS's own Flash Flood Warning
+  criteria directly and confirmed there's no single national rainfall-rate
+  number; flash flood warnings are forecaster/model judgment calls. Selling
+  a fixed rainfall citation would have been the "inventing thresholds"
+  problem, just with extra steps — corrected before it became one.
+- **Ruled out as headline:** cyclone/severe wind (real severe conditions too
+  rare to reliably demo live) and earthquake (USGS's feed is a pre-detected
+  event catalog, not a raw sensor stream — building "our own" anomaly
+  detector on top of it is circular; real raw waveform access is a heavier
+  lift than the timeline supports). Earthquake noted as a one-paragraph
+  future-work mention only.
+- **Producer/consumer/topic count set:** 2 producers (weather, river), 4
+  topics, 3 consumer groups (windowing/Faust, ML anomaly, raw archival) —
+  deliberately more than the circular's stated minimums so partitioning and
+  consumer-group rebalancing can be *shown* live (two workers in the same
+  group during the demo), not just claimed.
+- **Demo reliability:** live real data + a disclosed synthetic fault-injection
+  mode so an alert can be triggered on demand during Phase I/II review,
+  rather than depending on a real flood happening that week.
+
+**Next**: build `weather_producer.py` / `river_producer.py` against
+Open-Meteo + USGS/NOAA NWPS, replacing the current single synthetic
+`sensor_simulator.py`.
+
+## 2026-09-28 (later) — Multi-hazard revision: real data first, seismic added
+
+User confirmed: Faust is fine (no Java Kafka Streams swap needed), open to
+variables beyond the brief's original five, and wants real data as the
+default with synthetic only as a last-resort fallback. Full reasoning +
+tables in the project doc. Summary:
+
+- **Added seismic (earthquake frequency/magnitude) as a second real stream**,
+  specifically because it's the one variable where a genuine, officially
+  labeled anomaly is available essentially every day, regardless of local
+  weather — USGS's own magnitude classification (Great/Major/Strong/
+  Moderate/Light/Minor) is the ground truth, no invention needed. USGS
+  confirms ~16 magnitude-7+ ("major") quakes/year (directly quoted from
+  their FAQ); a ~14,000/year figure for magnitude-4+ came from a secondary
+  source this round and needs primary-source verification before citing in
+  the paper.
+- **Air Quality Index (CPCB, India) flagged as an optional third stream** —
+  official government breakpoints, and Oct-Nov is stubble-burning/Diwali
+  smog season in North India, so real "Poor"-to-"Severe" AQI readings are
+  a well-documented annual pattern in exactly this project's window.
+- **Flood/water-level stays the anchor** (strongest single citable
+  threshold, and the brief names it first) but is no longer the whole
+  story — a real breach at one specific gauge on one specific demo day
+  isn't guaranteed. Noted the NE/retreating monsoon does genuinely affect
+  Karnataka/Tamil Nadu Oct-Nov, so it's plausible, just not certain.
+- **Updated component count**: 3 producers (weather, river, seismic), 5
+  topics, same 3-consumer-group pattern extended to the new stream.
+- **Synthetic fault injection demoted to fallback-only** — used only if, on
+  the actual review day, none of the live streams show a real anomaly.
+
+**Next**: build the three real producers (`weather_producer.py`,
+`river_producer.py`, `seismic_producer.py`) against Open-Meteo, USGS/NOAA,
+and the USGS earthquake GeoJSON feed respectively.
+
 ## Template for new entries
 
 ```
