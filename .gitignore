@@ -10,3 +10,6 @@ data/
 state/
 gate_output/
 _xfer/
+# slide decks and other review material: kept locally, never committed
+presentations/
+*.pptx
