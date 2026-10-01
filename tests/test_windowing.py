@@ -1,0 +1,67 @@
+"""Window logic on synthetic readings (values made up; tests the mechanics only)."""
+from streams import windowing as wd
+
+W = 3600
+T0 = 1_790_000_000 - (1_790_000_000 % W)   # aligned window start
+
+
+def rd(ts, v, series="1", q=("P",)):
+    return {"site_no": "S1", "series": series, "reading_ts": ts, "value": v, "qualifiers": list(q)}
+
+
+def feed(state, readings, mode="LIVE"):
+    out, dropped = [], 0
+    for r in readings:
+        state, em, d = wd.on_reading(state, r, W, mode)
+        out += em
+        dropped += d
+    return state, out, dropped
+
+
+def test_window_closes_on_next_window_event():
+    st, out, _ = feed({}, [rd(T0 + 0, 1.0), rd(T0 + 900, 1.2), rd(T0 + 1800, 1.6), rd(T0 + W + 60, 2.0)])
+    assert len(out) == 1
+    a = out[0]
+    assert a["n_readings"] == 3 and a["stage_last"] == 1.6 and a["stage_max"] == 1.6
+    assert abs(a["rise_rate_ft_per_h"] - (0.6 / 0.5)) < 1e-9   # 0.6 ft over 30 min
+    assert a["provisional"] is True and a["revision"] is False
+
+
+def test_gap_is_zero_filled_with_carried_stage():
+    st, out, _ = feed({}, [rd(T0, 1.0), rd(T0 + 3 * W, 1.5)])
+    assert [a["n_readings"] for a in out] == [1, 0, 0]
+    assert out[1]["stage_last"] == 1.0 and out[1]["carried_forward"] is True
+
+
+def test_duplicate_reading_ignored_and_revision_replaces():
+    st, out, _ = feed({}, [rd(T0, 1.0), rd(T0, 1.0), rd(T0 + 900, 1.1), rd(T0 + 900, 1.3)])
+    assert st["1"]["cur"] == [[T0, 1.0, True], [T0 + 900, 1.3, True]]
+
+
+def test_late_reading_reemits_closed_window_as_revision():
+    st, out, _ = feed({}, [rd(T0, 1.0), rd(T0 + W, 2.0), rd(T0 + 1200, 1.4)])
+    assert out[-1]["revision"] is True and out[-1]["n_readings"] == 2 and out[-1]["stage_last"] == 1.4
+
+
+def test_too_late_is_dropped():
+    st, out, dropped = feed({}, [rd(T0 + 10 * W, 1.0), rd(T0, 5.0)])
+    assert dropped == 1
+
+
+def test_series_kept_separate():
+    st, out, _ = feed({}, [rd(T0, 1.0, "11"), rd(T0, 1.76, "12"), rd(T0 + W, 1.1, "11")])
+    assert set(st) == {"11", "12"} and len(out) == 1 and out[0]["series"] == "11"
+
+
+def test_tick_closes_windows_in_live_mode_only():
+    st, _, _ = feed({}, [rd(T0, 1.0)])
+    st, em = wd.on_tick("S1", st, now_ts=T0 + 2 * W + 1800, w=W, grace_s=1800)
+    assert [a["n_readings"] for a in em] == [1, 0]
+    sim, _, _ = feed({}, [rd(T0, 1.0)], mode="SIMULATION")
+    sim, em2 = wd.on_tick("S1", sim, now_ts=T0 + 10 * W, w=W, grace_s=0)
+    assert em2 == []
+
+
+def test_closed_windows_are_bounded():
+    st, out, _ = feed({}, [rd(T0 + k * W, 1.0) for k in range(10)])
+    assert len(st["1"]["closed"]) == 3
