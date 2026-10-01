@@ -25,8 +25,13 @@ Short trail of where the build is, newest first. One line per step; details go i
 
 ## Trail
 
-- **2026-10-01** — Built Phases 0–4 (offline) and committed: `125e68e` gate check, `9423630` infra,
-  `ebcda0c` producers + windowing, `0b1b89c` baselines/backtest, then docs. 32 tests pass.
+- **2026-10-01 (pm)** — Phase I review deck built from the NLP_Phase3 template (29 slides: intro,
+  dataset + preliminary EDA, 32 verified papers, summary + gaps, objectives, methodology,
+  ≈34% work completed, references). Saved to `presentations/` (git-ignored). Commit hashes in
+  this file updated after the history rewrite (rebase on the laptop).
+  **Next:** run the gate check, then replace the "Pending" EDA rows with real numbers.
+- **2026-10-01** — Built Phases 0–4 (offline) and committed: `4009cf1` gate check, `eed143a` infra,
+  `7c20ab1` producers + windowing, `f808b89` baselines/backtest, then docs. 32 tests pass.
   Found: faust-streaming needs a fresh venv with upgraded setuptools; Faust agent test mode
   hangs without a broker, so Phase 3 is verified only on a real broker.
   **Next (you):** fill `config/candidate_gauges.csv`, run `tools.fetch_sample` + `pytest`, then
@@ -34,4 +39,4 @@ Short trail of where the build is, newest first. One line per step; details go i
   **Next (build):** Phase 4 ML model choice after baseline numbers, then Phase 5 sink.
 - **2026-09-30** — Hazard pivot to floods/flash floods; architecture doc rewritten (rev 3,
   proposed) with real sample records; second same-timestamp sensor series found in USGS data.
-- **2026-09-28** — Last seismic design (rev 2), commit `998e2f3`; superseded.
+- **2026-09-28** — Last seismic design (rev 2), commit `f54d255`; superseded.
