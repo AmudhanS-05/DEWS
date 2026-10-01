@@ -1,0 +1,27 @@
+{"name": "ns1:timeSeriesResponseType",
+ "value": {
+  "queryInfo": {"queryURL": "http://waterservices.usgs.gov/nwis/iv/format=json&parameterCd=00065&period=PT3H&sites=09510200%2C07332500"},
+  "timeSeries": [
+   {"sourceInfo": {"siteName": "Blue River near Blue, OK", "siteCode": [{"value": "07332500", "agencyCode": "USGS"}]},
+    "variable": {"variableCode": [{"value": "00065"}], "variableName": "Gage height, ft",
+                 "unit": {"unitCode": "ft"}, "noDataValue": -999999.0},
+    "values": [{"value": [
+        {"value": "5.19", "qualifiers": ["P"], "dateTime": "2026-09-30T02:00:00.000-05:00"},
+        {"value": "5.19", "qualifiers": ["P"], "dateTime": "2026-09-30T02:30:00.000-05:00"},
+        {"value": "5.19", "qualifiers": ["P"], "dateTime": "2026-09-30T03:00:00.000-05:00"}],
+      "method": [{"methodDescription": "", "methodID": 1}]}]},
+   {"sourceInfo": {"siteName": "SYCAMORE CREEK NEAR FORT MCDOWELL, AZ", "siteCode": [{"value": "09510200", "agencyCode": "USGS"}]},
+    "variable": {"variableCode": [{"value": "00065"}], "variableName": "Gage height, ft",
+                 "unit": {"unitCode": "ft"}, "noDataValue": -999999.0},
+    "values": [
+     {"value": [
+        {"value": "1.28", "qualifiers": ["P"], "dateTime": "2026-09-29T23:45:00.000-07:00"},
+        {"value": "1.25", "qualifiers": ["P"], "dateTime": "2026-09-30T00:00:00.000-07:00"},
+        {"value": "1.25", "qualifiers": ["P"], "dateTime": "2026-09-30T00:15:00.000-07:00"},
+        {"value": "-999999", "qualifiers": ["P", "Eqp"], "dateTime": "2026-09-30T00:30:00.000-07:00"}],
+      "method": [{"methodDescription": "", "methodID": 11}]},
+     {"value": [
+        {"value": "1.76", "qualifiers": ["P"], "dateTime": "2026-09-29T23:45:00.000-07:00"},
+        {"value": "1.77", "qualifiers": ["P"], "dateTime": "2026-09-30T00:00:00.000-07:00"}],
+      "method": [{"methodDescription": "PT Backup", "methodID": 12}]}]}
+  ]}}

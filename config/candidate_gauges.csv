@@ -1,0 +1,5 @@
+usgs_site,nwps_lid,note
+# Rows starting with # are ignored. Fill in 5-10 real candidates before running the gate check.
+# nwps_lid = the NWS gauge id shown on water.noaa.gov for that gauge (look it up per gauge).
+09510200,,Sycamore Creek nr Fort McDowell AZ - seen live 30 Sep; NWPS lid not yet looked up
+07332500,,Blue River nr Blue OK - seen live 30 Sep; NWPS lid not yet looked up
