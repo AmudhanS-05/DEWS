@@ -1,0 +1,67 @@
+# Fallback: ONE broker (the setup already validated on this laptop) + PostgreSQL.
+# Use when the 3-broker stack is too heavy. Then:
+#   $env:KAFKA_BOOTSTRAP="127.0.0.1:9092"; $env:TOPIC_REPLICATION_FACTOR="1"
+# and do NOT claim broker-level fault tolerance in the report.
+#
+#   docker compose -f docker-compose.single.yml up -d
+
+services:
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: flood-kafka-single
+    ports: ["9092:9092"]
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://127.0.0.1:9092'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      CLUSTER_ID: 'MkQkTr7dT3e7YJKSKT3LKA'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
+    healthcheck:
+      test: kafka-broker-api-versions --bootstrap-server localhost:9092 | grep -q ApiVersion
+      interval: 10s
+      retries: 10
+      start_period: 40s
+    volumes: [kafka-single-data:/var/lib/kafka/data]
+
+  topic-init:
+    image: confluentinc/cp-kafka:7.6.0
+    depends_on:
+      kafka: {condition: service_healthy}
+    restart: "no"
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+        for t in gauge.usgs rain.mrms aggregates.window alerts.flood advisories.approved deadletter.flood; do
+          kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic "$$t" \
+            --partitions 3 --replication-factor 1
+        done
+        kafka-topics --bootstrap-server kafka:29092 --describe
+
+  postgres:
+    image: postgres:16
+    container_name: flood-postgres-single
+    ports: ["5432:5432"]
+    environment:
+      POSTGRES_USER: spa_user
+      POSTGRES_PASSWORD: spa_pass
+      POSTGRES_DB: disaster_warning
+    volumes:
+      - pgdata-single:/var/lib/postgresql/data
+      - ../storage/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spa_user -d disaster_warning"]
+      interval: 10s
+      retries: 5
+
+volumes:
+  kafka-single-data:
+  pgdata-single:

@@ -1,47 +1,107 @@
+# 3-broker Kafka (KRaft, combined broker+controller) + PostgreSQL + topic init.
+# Needed to honestly claim replication factor 3 / min.insync.replicas 2.
+# Lighter fallback: docker-compose.single.yml (then set TOPIC_REPLICATION_FACTOR=1
+# and KAFKA_BOOTSTRAP=127.0.0.1:9092, and do not claim broker-level recovery).
+#
+#   cd docker
+#   docker compose up -d
+#   docker compose ps          # all three kafka-N and postgres "healthy", topic-init "exited (0)"
+
+x-kafka-common: &kafka-common
+  image: confluentinc/cp-kafka:7.6.0
+  restart: unless-stopped
+  healthcheck:
+    test: kafka-broker-api-versions --bootstrap-server localhost:29092 | grep -q ApiVersion
+    interval: 10s
+    retries: 10
+    start_period: 40s
+
+x-kafka-env: &kafka-env
+  KAFKA_PROCESS_ROLES: 'broker,controller'
+  KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka-1:29093,2@kafka-2:29093,3@kafka-3:29093'
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+  KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+  KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+  CLUSTER_ID: 'MkQkTr7dT3e7YJKSKT3LKA'
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+  KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+  KAFKA_MIN_INSYNC_REPLICAS: 2
+  KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
+  KAFKA_HEAP_OPTS: '-Xmx512m -Xms512m'
+
 services:
-  kafka:
-    image: confluentinc/cp-kafka:7.6.0
-    container_name: lab-kafka
-    ports:
-      - "9092:9092"
+  kafka-1:
+    <<: *kafka-common
+    container_name: flood-kafka-1
+    ports: ["9092:9092"]
     environment:
+      <<: *kafka-env
       KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: 'broker,controller'
-      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
       KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092'
-      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:29092,PLAINTEXT_HOST://127.0.0.1:9092'
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
-      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
-      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
-      CLUSTER_ID: 'MkQkTr7dT3e7YJKSKT3LKA'
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
-    healthcheck:
-      test: kafka-broker-api-versions --bootstrap-server localhost:9092 | grep -q ApiVersion
-      interval: 10s
-      retries: 10
-      start_period: 40s
-    volumes:
-      - kafka-data:/var/lib/kafka/data
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka-1:29092,PLAINTEXT_HOST://127.0.0.1:9092'
+    volumes: [kafka-1-data:/var/lib/kafka/data]
+
+  kafka-2:
+    <<: *kafka-common
+    container_name: flood-kafka-2
+    ports: ["9093:9093"]
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 2
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9093'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka-2:29092,PLAINTEXT_HOST://127.0.0.1:9093'
+    volumes: [kafka-2-data:/var/lib/kafka/data]
+
+  kafka-3:
+    <<: *kafka-common
+    container_name: flood-kafka-3
+    ports: ["9094:9094"]
+    environment:
+      <<: *kafka-env
+      KAFKA_NODE_ID: 3
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9094'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka-3:29092,PLAINTEXT_HOST://127.0.0.1:9094'
+    volumes: [kafka-3-data:/var/lib/kafka/data]
+
+  topic-init:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: flood-topic-init
+    depends_on:
+      kafka-1: {condition: service_healthy}
+      kafka-2: {condition: service_healthy}
+      kafka-3: {condition: service_healthy}
+    restart: "no"
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+        for t in gauge.usgs rain.mrms aggregates.window alerts.flood advisories.approved deadletter.flood; do
+          kafka-topics --bootstrap-server kafka-1:29092 --create --if-not-exists --topic "$$t" \
+            --partitions 3 --replication-factor 3 --config min.insync.replicas=2
+        done
+        kafka-topics --bootstrap-server kafka-1:29092 --describe
 
   postgres:
     image: postgres:16
-    container_name: lab-postgres
+    container_name: flood-postgres
     restart: unless-stopped
-    ports:
-      - "5432:5432"
+    ports: ["5432:5432"]
     environment:
       POSTGRES_USER: spa_user
       POSTGRES_PASSWORD: spa_pass
       POSTGRES_DB: disaster_warning
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ../storage/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+      - ../storage/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U spa_user -d disaster_warning"]
       interval: 10s
       retries: 5
 
 volumes:
-  kafka-data:
+  kafka-1-data:
+  kafka-2-data:
+  kafka-3-data:
   pgdata:
