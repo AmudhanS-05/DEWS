@@ -1,12 +1,16 @@
-# Agentic AI layer — Phase 2
+# Agentic AI layer (build Phase 6)
+
+> **Flood update (1 Oct 2026):** the agent consumes `alerts.flood` (or the `alerts`
+> table) and only **drafts** advisories. A person approves each one; approved advisories
+> go to `advisories.approved`, which is the only topic the notifier reads. Agent decisions
+> are logged for evaluation. "station" below now means a USGS gauge (`site_no`).
 
 Not started yet (see PROJECT_LOG.md / the SPA-vs-Agentic sequencing note in the
 main reply). This folder is scaffolded so the interface is decided early:
 
 **Contract with the SPA pipeline:** the agentic layer reads from the `alerts`
 and `risk_scores` Postgres tables (or, if we want it fully event-driven, it can
-instead subscribe to a Kafka topic — `alerts.disaster` is already reserved for
-this in `docker/README.md`). It does not touch `sensor_readings` or
+instead subscribe to a Kafka topic — `alerts.flood` is created by `docker/docker-compose.yml`). It does not touch `sensor_readings` or
 `windowed_aggregates` directly — those are internal to the SPA side.
 
 ## Planned shape (maps to AI373TA units)

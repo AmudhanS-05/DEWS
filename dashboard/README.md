@@ -1,3 +1,8 @@
+> **Flood update (1 Oct 2026):** the old weather prototype `streamlit_app.py` was removed;
+> it will be rebuilt in Phase 7 against the flood schema (`gauge_readings`,
+> `windowed_aggregates`, `risk_scores`, `alerts`, `feed_staleness`). The Power BI steps
+> below still apply; table names in step 5 change accordingly.
+
 # Dashboard: prototype (here) vs. Power BI (submission)
 
 ## Why two dashboards

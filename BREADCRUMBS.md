@@ -1,0 +1,37 @@
+# Breadcrumbs — flood build
+
+Short trail of where the build is, newest first. One line per step; details go in
+`PROJECT_LOG.md`. Resume from the top entry's **Next**.
+
+## Where things live
+- Design: Claude Doc "Architecture — Floods & Flash Floods (rev 3, proposed)" (+ tab 2: diagram and real sample data)
+- Phases and test steps: `docs/BUILD_PHASES.md`
+- Things that can bite us: `docs/MANUAL_CHECKS.md`
+- Decisions and numbers: `PROJECT_LOG.md`
+
+## Status board
+
+| Phase | State | Tested how |
+|---|---|---|
+| 0 Gate checks | built | unit tests (synthetic + real-value fixtures); **not yet run on real data** |
+| 1 Infra | built | schema loads on PG16; compose YAML-validated; **not yet `docker compose up`** |
+| 2 Producers | built (USGS live + replay); MRMS not built | unit tests with fake producer; **not run against Kafka** |
+| 3 Windowing | built | window logic unit-tested; Faust app import-checked only |
+| 4 Forecaster | offline backtest built | unit-tested on synthetic floods; ML model + streaming consumer not built |
+| 5 Sink | not started | |
+| 6 Alerts/agent/notifier | not started | |
+| 7 Dashboard | not started | |
+| 8 Fault injection/eval | not started | |
+
+## Trail
+
+- **2026-10-01** — Built Phases 0–4 (offline) and committed: `125e68e` gate check, `9423630` infra,
+  `ebcda0c` producers + windowing, `0b1b89c` baselines/backtest, then docs. 32 tests pass.
+  Found: faust-streaming needs a fresh venv with upgraded setuptools; Faust agent test mode
+  hangs without a broker, so Phase 3 is verified only on a real broker.
+  **Next (you):** fill `config/candidate_gauges.csv`, run `tools.fetch_sample` + `pytest`, then
+  `tools.gate_check`. Start `tools.staleness_logger`. Ask faculty the Phase I questions.
+  **Next (build):** Phase 4 ML model choice after baseline numbers, then Phase 5 sink.
+- **2026-09-30** — Hazard pivot to floods/flash floods; architecture doc rewritten (rev 3,
+  proposed) with real sample records; second same-timestamp sensor series found in USGS data.
+- **2026-09-28** — Last seismic design (rev 2), commit `998e2f3`; superseded.

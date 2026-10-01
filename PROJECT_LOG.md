@@ -321,6 +321,69 @@ dedupe keys, `latency_trace`), then `seismic_live_producer.py` +
 heartbeat and dedupe/backfill logic built in from the start rather than
 retrofitted.
 
+## 2026-09-29 to 2026-10-01 — Pivot to floods / flash floods; Phases 0–4 (offline) built
+
+**Why we moved off earthquakes**
+- A catalog-fed seismic pipeline can only alert after USGS has published an event; it
+  cannot forecast, so the brief's "early warning" and the requested move "from
+  detection to prediction" could not be met honestly.
+- Options explored and set aside: wildfire fusion (feed latency ~30 min, pixel size;
+  geostationary API access unverified), stubble burning / AQI (not a natural disaster
+  without faculty approval), landslides and GLOFs (too little timely labelled data:
+  e.g. NASA GLC not updated after 2018; HMA GLOF database has exact days for 39% of events).
+- Floods fit all six requested updates: prediction is natural (forecast gauge stage vs
+  official NWPS flood categories), latency is measurable, labels are external.
+
+**Decisions**
+- Scope: riverine floods and flash floods at gauge level, US live data (USGS IV,
+  NWPS categories, MRMS rainfall); India as a retrospective test only (CAMELS-IND, daily,
+  1980–2020; no open real-time Indian feed found).
+- Never claim a flood "will occur": forecast a category crossing with horizon and
+  probability. No threshold proves occurrence (WMO: FFG signals "potential flash flooding").
+- Not claimed: better forecasts than NSSL FLASH, GloFAS, NWS or Google. Claimed
+  contributions: guardrailed agent layer with human approval, measured end-to-end
+  latency including the external feed, fault-tolerance evidence, and (novelty
+  unchecked) a sparse-gauge / US-to-India transfer experiment.
+- Notification: named responders only; agent drafts, a person approves; probabilistic
+  wording; provisional-data flag; retraction path; cooldown; SIMULATION stamp on replays.
+- Windowing: hand-rolled event-time hourly windows over a changelog-backed Faust table
+  (zero-fill, late revisions); producer heartbeats close windows by wall clock.
+- Dedupe key includes the sensor series (two series seen at the same timestamps).
+- Infra: 3-broker KRaft (RF 3, min ISR 2) by default; single-broker fallback without
+  the broker fault-tolerance claim.
+- Old synthetic weather simulator, old windowing app, Isolation Forest scripts and the
+  weather Streamlit prototype removed (git history keeps them).
+
+**Done (commits)**
+- `125e68e` Phase 0: gate check (events per gauge, rise times, kill rules; network
+  errors = ERROR, not FAIL), staleness logger, real-sample fetcher, USGS/NWPS parsers.
+- `9423630` Phase 1: 3-broker compose + topic init, single-broker fallback, flood schema
+  (loads on PostgreSQL 16).
+- `ebcda0c` Phases 2–3: live and replay producers, dedupe/envelope, event-time windowing,
+  Faust app, topic peek tool.
+- `0b1b89c` Phase 4 (offline): baselines, event-based metrics, backtest.
+- Docs: `docs/BUILD_PHASES.md`, `docs/MANUAL_CHECKS.md`, `BREADCRUMBS.md`, README.
+
+**Numbers**
+- Feed observation (one sample, 30 Sep): newest readings ~1 h and ~1.5 h old at two
+  gauges; readings every 15 and 30 min; all qualifier P (provisional).
+- Tests: 32 passing, 2 skipped (they need real responses saved on a networked machine).
+
+**Blockers**
+- The build workspace cannot reach USGS/NWPS or run Docker: gate check, compose stack,
+  producers against Kafka and the Faust worker must be run on the laptop.
+- faust-streaming install fails with an old setuptools (opentracing build); fixed by a
+  fresh venv with upgraded pip/setuptools.
+- Faust's agent test mode hangs without a broker, so the Faust app is import-checked only.
+- Parsers use real values but a reconstructed JSON layout until `tools.fetch_sample` runs.
+
+**Next**
+- Fill `config/candidate_gauges.csv`; run `tools.fetch_sample` + `pytest`; run the gate
+  check; start the staleness logger. Ask faculty the Phase I questions
+  (`docs/MANUAL_CHECKS.md`).
+- If a gauge passes: Phase 1 compose up, Phase 2–3 against Kafka, baseline backtest
+  numbers, then choose the ML model and build the forecaster consumer and sink.
+
 ## Template for new entries
 
 ```

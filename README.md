@@ -1,71 +1,54 @@
-# Real-Time Natural Disaster Early Warning Using Apache Kafka
+# Real-Time Flood & Flash-Flood Forecasting and Alerting (Apache Kafka)
 
-Batch 1 – Topic 2. Joint project for:
-- **AI372IA – Stream Processing and Analytics** (SPA)
-- **AI373TA – Agentic Artificial Intelligence**
+Batch 1 – Topic 2 ("Real-Time Natural Disaster Early Warning Using Apache Kafka").
+Joint project for **AI372IA Stream Processing and Analytics** and
+**AI373TA Agentic Artificial Intelligence**, RVCE.
 
-## Pipeline (per project brief)
+**Status: proposed design (rev 3), Phases 0–4 (offline) built.** The hazard choice
+is not final until the Phase 0 gate check passes on real data and faculty confirm scope.
+Where we are and what's next: `BREADCRUMBS.md`.
+
+## What it does
+
+Live USGS river-gauge readings stream through Kafka; Faust builds event-time windows
+per gauge; a forecaster estimates the stage a few hours ahead and whether it will
+cross an **official NWPS flood category**; an agent drafts an advisory; a person
+approves it; only then does the notifier send it. Every step is timestamped, so
+end-to-end latency (including the feed's own delay) is measured, not assumed.
 
 ```
-Weather / Environmental Sensors
-        │
-        ▼
-   Kafka Producer(s)
-        │
-        ▼
-   Kafka Topics (partitioned)
-        │
-        ▼
-   Kafka Streams (windowing + aggregation)
-        │
-        ▼
-   ML-Based Anomaly / Event Detection
-        │
-        ▼
-   PostgreSQL (observations, risk scores, alerts)
-        │
-        ▼
-   Power BI Dashboard / Early-Warning Alerts
-        │
-        ▼
-   Agentic AI layer (Phase 2): reasoning + action over the alerts
+USGS IV (live) ┐
+MRMS rain*     ├─▶ producers ─▶ gauge.usgs / rain.mrms ─▶ Faust windows ─▶ aggregates.window ─▶ forecaster* ─▶ Postgres ─▶ Power BI*
+replay (hist.) ┘                                                                         │
+                                       alerts.flood ─▶ agent triage* ─▶ human approval* ─▶ advisories.approved ─▶ notifier*
 ```
+`*` = not built yet. It never says a flood "will occur"; it forecasts a category crossing
+with a horizon and probability, and reports lead time net of feed delay.
 
 ## Repo layout
 
-| Folder | Purpose | Course |
+| Path | What | Phase |
 |---|---|---|
-| `producers/` | Sensor simulators, Kafka producers (JSON, acks/retries, transactional) | SPA |
-| `streams/` | Kafka Streams-equivalent app: windowing, aggregation, stateful/stateless transforms | SPA |
-| `ml/` | Anomaly/event detection model (Isolation Forest baseline) | SPA |
-| `storage/` | PostgreSQL schema + write path | SPA |
-| `dashboard/` | Real-time dashboard prototype + Power BI connection notes | SPA |
-| `agentic_ai/` | Agent(s) that consume alerts/risk scores and act (Phase 2) | Agentic AI |
-| `docker/` | Local Kafka (KRaft) + PostgreSQL compose stack | Both |
-| `docs/` | Architecture notes, reference repos, evaluation plan | Both |
-| `PROJECT_LOG.md` | Running log of decisions/dates/metrics — source for PPTs + final report | Both |
+| `tools/gate_check.py`, `tools/staleness_logger.py`, `tools/fetch_sample.py` | decide if a gauge is usable; measure feed delay; save real samples | 0 |
+| `docker/` | 3-broker KRaft Kafka + topic init + PostgreSQL (single-broker fallback) | 1 |
+| `storage/schema.sql` | tables for readings, windows, scores, alerts, latency, evaluation | 1 |
+| `producers/` | live USGS producer, replay producer, dedupe + envelope | 2 |
+| `streams/` | event-time windowing logic + Faust app | 3 |
+| `ml/` | baselines, metrics, backtest | 4 |
+| `agentic_ai/`, `dashboard/` | agent triage + approval; Power BI / Streamlit | 6–7 |
+| `common/` | config, USGS/NWPS parsers, hydrology helpers, Kafka producer | all |
+| `tests/` | `pytest` suite (32 tests) | all |
+| `docs/BUILD_PHASES.md` | how to run and test each phase | |
+| `docs/MANUAL_CHECKS.md` | checks to do by hand so nothing bites us later | |
+| `PROJECT_LOG.md` / `BREADCRUMBS.md` | decisions and numbers / progress trail | |
 
-## Quick start (Windows / PowerShell)
-
-See `docker/README.md` for the Docker Compose flow, or `docs/kafka-setup-reference.md`
-which points back to the reproducibility guide already validated on this machine
-(`claude/Kafka-Local-Setup-Reproducibility-Guide.md` in the project docs).
+## Quick start (Windows, PowerShell)
 
 ```powershell
-cd docker
-docker compose up -d
-docker compose ps        # wait for "healthy"
+python -m venv .venv; .venv\Scripts\Activate.ps1
+python -m pip install -U pip setuptools wheel
+pip install -r requirements-dev.txt
+pytest -q
+python -m tools.gate_check --years 10      # after filling config/candidate_gauges.csv
 ```
-
-Then, in separate terminals (Python venv active):
-```powershell
-pip install -r producers/requirements.txt -r streams/requirements.txt -r ml/requirements.txt
-python producers/sensor_simulator.py
-python streams/windowing_app.py
-python ml/anomaly_consumer.py
-```
-
-## Status
-
-Tracked in `PROJECT_LOG.md`. Update it after every working session — it is the
-raw material for the Phase I / Phase II slide decks and the final technical paper.
+Then follow `docs/BUILD_PHASES.md`.

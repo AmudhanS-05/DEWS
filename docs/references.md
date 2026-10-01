@@ -1,4 +1,35 @@
-# Reference Implementations
+# References
+
+## Data sources for the flood design (checked 30 Sep 2026 unless noted)
+
+- USGS, "How often are real-time streamflow data updated?" — recorded at 15-minute
+  intervals, transmitted hourly, possibly more often during floods.
+  https://usgs.gov/faqs/how-often-are-real-time-streamflow-data-updated
+- USGS Instantaneous Values web service. https://waterservices.usgs.gov/nwis/iv/
+- NOAA National Water Prediction Service (NWPS) gauge metadata and flood categories.
+  https://api.water.noaa.gov/nwps/v1/gauges/{lid} (fetched one gauge, TSGA2)
+- NOAA MRMS on the AWS Registry of Open Data (public bucket, 2-minute update cycle).
+  https://registry.opendata.aws/noaa-mrms-pds/
+- NSSL FLASH database (USGS + NWS reports + SHAVE, 1996–2014; notes gauges are rare in
+  small basins). https://inside.nssl.noaa.gov/flash/database/
+- Open-Meteo Flood API (GloFAS v4, daily discharge, from 1984). https://open-meteo.com/en/docs/flood-api
+- Global Flood Database v1 (913 events, 2000–2018).
+  https://developers.google.com/earth-engine/datasets/catalog/GLOBAL_FLOOD_DB_MODIS_EVENTS_V1
+- CAMELS-IND (ESSD 2025): daily, 1980–2020, 472 catchments, 228 with >30% streamflow.
+  https://essd.copernicus.org/articles/17/461/2025/ · data https://doi.org/10.5281/zenodo.14005378
+- GUARDIAN sub-daily river discharge over India (Scientific Data 2024): WRIS history to 2020.
+  https://www.nature.com/articles/s41597-024-03923-8
+- WMO, Global Flash Flood Guidance System overview (FFG signals "potential flash flooding").
+  https://wmo.int/media/magazine-article/overview-of-global-flash-flood-guidance-system-and-its-application-worldwide
+- Iowa Environmental Mesonet archive (NWS products; access not yet verified).
+  https://mesonet.agron.iastate.edu/archive/
+- faust-streaming docs, windowed tables (default "relative to current stream";
+  `relative_to_field` for event time). https://faust-streaming.github.io/faust/userguide/tables.html
+
+---
+
+## Earlier reference implementations (27 Sep, from the weather/seismic phase)
+
 
 Curated from a web search on 2026-09-27. Use these to see working patterns —
 don't copy wholesale, but they save time on plumbing (Docker setup, Kafka↔Spark
@@ -61,7 +92,7 @@ own evaluation numbers).
    A Faust-based aggregator that computes summary statistics (min/max/mean —
    exactly what the CIE program list asks for with stock prices) over a
    tumbling window from a source topic. Good template for
-   `streams/windowing_app.py`'s aggregation step.
+   a windowed aggregation step.
 
 ## Not used directly, kept for context
 
