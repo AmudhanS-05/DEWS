@@ -1,0 +1,729 @@
+{
+ "name": "ns1:timeSeriesResponseType",
+ "declaredType": "org.cuahsi.waterml.TimeSeriesResponseType",
+ "scope": "javax.xml.bind.JAXBElement$GlobalScope",
+ "value": {
+  "queryInfo": {
+   "queryURL": "http://waterservices.usgs.gov/nwis/iv/format=json&sites=09510200&parameterCd=00065,00060&siteStatus=all&period=PT6H",
+   "criteria": {
+    "locationParam": "[ALL:09510200]",
+    "variableParam": "[00065, 00060]",
+    "parameter": []
+   },
+   "note": [
+    {
+     "value": "[ALL:09510200]",
+     "title": "filter:sites"
+    },
+    {
+     "value": "[mode=PERIOD, period=PT6H, modifiedSince=null]",
+     "title": "filter:timeRange"
+    },
+    {
+     "value": "methodIds=[ALL]",
+     "title": "filter:methodId"
+    },
+    {
+     "value": "2026-10-02T07:18:39.803Z",
+     "title": "requestDT"
+    },
+    {
+     "value": "7dc651a0-be31-11f1-a2d4-2cea7f5e5ede",
+     "title": "requestId"
+    },
+    {
+     "value": "Provisional data are subject to revision. Go to http://waterdata.usgs.gov/nwis/help/?provisional for more information.",
+     "title": "disclaimer"
+    },
+    {
+     "value": "sdas01",
+     "title": "server"
+    }
+   ]
+  },
+  "timeSeries": [
+   {
+    "sourceInfo": {
+     "siteName": "SYCAMORE CREEK NEAR FORT MCDOWELL, AZ",
+     "siteCode": [
+      {
+       "value": "09510200",
+       "network": "NWIS",
+       "agencyCode": "USGS"
+      }
+     ],
+     "timeZoneInfo": {
+      "defaultTimeZone": {
+       "zoneOffset": "-07:00",
+       "zoneAbbreviation": "MST"
+      },
+      "daylightSavingsTimeZone": {
+       "zoneOffset": "-06:00",
+       "zoneAbbreviation": "MDT"
+      },
+      "siteUsesDaylightSavingsTime": false
+     },
+     "geoLocation": {
+      "geogLocation": {
+       "srs": "EPSG:4326",
+       "latitude": 33.69422687,
+       "longitude": -111.54182105
+      },
+      "localSiteXY": []
+     },
+     "note": [],
+     "siteType": [],
+     "siteProperty": [
+      {
+       "value": "ST",
+       "name": "siteTypeCd"
+      },
+      {
+       "value": "150602030605",
+       "name": "hucCd"
+      },
+      {
+       "value": "04",
+       "name": "stateCd"
+      },
+      {
+       "value": "04013",
+       "name": "countyCd"
+      }
+     ]
+    },
+    "variable": {
+     "variableCode": [
+      {
+       "value": "00060",
+       "network": "NWIS",
+       "vocabulary": "NWIS:UnitValues",
+       "variableID": 45807197,
+       "default": true
+      }
+     ],
+     "variableName": "Streamflow, ft&#179;/s",
+     "variableDescription": "Discharge, cubic feet per second",
+     "valueType": "Derived Value",
+     "unit": {
+      "unitCode": "ft3/s"
+     },
+     "options": {
+      "option": [
+       {
+        "name": "Statistic",
+        "optionCode": "00000"
+       }
+      ]
+     },
+     "note": [],
+     "noDataValue": -999999.0,
+     "variableProperty": [],
+     "oid": "45807197"
+    },
+    "values": [
+     {
+      "value": [
+       {
+        "value": "0.01",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T18:30:00.000-07:00"
+       },
+       {
+        "value": "0.01",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T18:45:00.000-07:00"
+       },
+       {
+        "value": "0.01",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T19:00:00.000-07:00"
+       },
+       {
+        "value": "0.00",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T19:15:00.000-07:00"
+       },
+       {
+        "value": "0.00",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T19:30:00.000-07:00"
+       },
+       {
+        "value": "0.01",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T19:45:00.000-07:00"
+       },
+       {
+        "value": "0.01",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T20:00:00.000-07:00"
+       },
+       {
+        "value": "0.01",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T20:15:00.000-07:00"
+       },
+       {
+        "value": "0.00",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T20:30:00.000-07:00"
+       },
+       {
+        "value": "0.00",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T20:45:00.000-07:00"
+       },
+       {
+        "value": "0.00",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T21:00:00.000-07:00"
+       },
+       {
+        "value": "0.00",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T21:15:00.000-07:00"
+       },
+       {
+        "value": "0.00",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T21:30:00.000-07:00"
+       },
+       {
+        "value": "0.00",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T21:45:00.000-07:00"
+       },
+       {
+        "value": "0.00",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T22:00:00.000-07:00"
+       },
+       {
+        "value": "0.00",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T22:15:00.000-07:00"
+       },
+       {
+        "value": "0.00",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T22:30:00.000-07:00"
+       },
+       {
+        "value": "0.00",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T22:45:00.000-07:00"
+       },
+       {
+        "value": "0.00",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T23:00:00.000-07:00"
+       },
+       {
+        "value": "0.00",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T23:15:00.000-07:00"
+       },
+       {
+        "value": "0.00",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T23:30:00.000-07:00"
+       }
+      ],
+      "qualifier": [
+       {
+        "qualifierCode": "P",
+        "qualifierDescription": "Provisional data subject to revision.",
+        "qualifierID": 0,
+        "network": "NWIS",
+        "vocabulary": "uv_rmk_cd"
+       }
+      ],
+      "qualityControlLevel": [],
+      "method": [
+       {
+        "methodDescription": "",
+        "methodID": 6802
+       }
+      ],
+      "source": [],
+      "offset": [],
+      "sample": [],
+      "censorCode": []
+     }
+    ],
+    "name": "USGS:09510200:00060:00000"
+   },
+   {
+    "sourceInfo": {
+     "siteName": "SYCAMORE CREEK NEAR FORT MCDOWELL, AZ",
+     "siteCode": [
+      {
+       "value": "09510200",
+       "network": "NWIS",
+       "agencyCode": "USGS"
+      }
+     ],
+     "timeZoneInfo": {
+      "defaultTimeZone": {
+       "zoneOffset": "-07:00",
+       "zoneAbbreviation": "MST"
+      },
+      "daylightSavingsTimeZone": {
+       "zoneOffset": "-06:00",
+       "zoneAbbreviation": "MDT"
+      },
+      "siteUsesDaylightSavingsTime": false
+     },
+     "geoLocation": {
+      "geogLocation": {
+       "srs": "EPSG:4326",
+       "latitude": 33.69422687,
+       "longitude": -111.54182105
+      },
+      "localSiteXY": []
+     },
+     "note": [],
+     "siteType": [],
+     "siteProperty": [
+      {
+       "value": "ST",
+       "name": "siteTypeCd"
+      },
+      {
+       "value": "150602030605",
+       "name": "hucCd"
+      },
+      {
+       "value": "04",
+       "name": "stateCd"
+      },
+      {
+       "value": "04013",
+       "name": "countyCd"
+      }
+     ]
+    },
+    "variable": {
+     "variableCode": [
+      {
+       "value": "00065",
+       "network": "NWIS",
+       "vocabulary": "NWIS:UnitValues",
+       "variableID": 45807202,
+       "default": true
+      }
+     ],
+     "variableName": "Gage height, ft",
+     "variableDescription": "Gage height, feet",
+     "valueType": "Derived Value",
+     "unit": {
+      "unitCode": "ft"
+     },
+     "options": {
+      "option": [
+       {
+        "name": "Statistic",
+        "optionCode": "00000"
+       }
+      ]
+     },
+     "note": [],
+     "noDataValue": -999999.0,
+     "variableProperty": [],
+     "oid": "45807202"
+    },
+    "values": [
+     {
+      "value": [
+       {
+        "value": "0.41",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T18:30:00.000-07:00"
+       },
+       {
+        "value": "0.41",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T18:45:00.000-07:00"
+       },
+       {
+        "value": "0.41",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T19:00:00.000-07:00"
+       },
+       {
+        "value": "0.40",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T19:15:00.000-07:00"
+       },
+       {
+        "value": "0.40",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T19:30:00.000-07:00"
+       },
+       {
+        "value": "0.43",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T19:45:00.000-07:00"
+       },
+       {
+        "value": "0.41",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T20:00:00.000-07:00"
+       },
+       {
+        "value": "0.41",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T20:15:00.000-07:00"
+       },
+       {
+        "value": "0.40",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T20:30:00.000-07:00"
+       },
+       {
+        "value": "0.39",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T20:45:00.000-07:00"
+       },
+       {
+        "value": "0.39",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T21:00:00.000-07:00"
+       },
+       {
+        "value": "0.39",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T21:15:00.000-07:00"
+       },
+       {
+        "value": "0.38",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T21:30:00.000-07:00"
+       },
+       {
+        "value": "0.38",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T21:45:00.000-07:00"
+       },
+       {
+        "value": "0.38",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T22:00:00.000-07:00"
+       },
+       {
+        "value": "0.37",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T22:15:00.000-07:00"
+       },
+       {
+        "value": "0.38",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T22:30:00.000-07:00"
+       },
+       {
+        "value": "0.38",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T22:45:00.000-07:00"
+       },
+       {
+        "value": "0.38",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T23:00:00.000-07:00"
+       },
+       {
+        "value": "0.38",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T23:15:00.000-07:00"
+       },
+       {
+        "value": "0.38",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T23:30:00.000-07:00"
+       }
+      ],
+      "qualifier": [
+       {
+        "qualifierCode": "P",
+        "qualifierDescription": "Provisional data subject to revision.",
+        "qualifierID": 0,
+        "network": "NWIS",
+        "vocabulary": "uv_rmk_cd"
+       }
+      ],
+      "qualityControlLevel": [],
+      "method": [
+       {
+        "methodDescription": "",
+        "methodID": 6803
+       }
+      ],
+      "source": [],
+      "offset": [],
+      "sample": [],
+      "censorCode": []
+     },
+     {
+      "value": [
+       {
+        "value": "1.80",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T18:30:00.000-07:00"
+       },
+       {
+        "value": "1.80",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T18:45:00.000-07:00"
+       },
+       {
+        "value": "1.80",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T19:00:00.000-07:00"
+       },
+       {
+        "value": "1.80",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T19:15:00.000-07:00"
+       },
+       {
+        "value": "1.80",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T19:30:00.000-07:00"
+       },
+       {
+        "value": "1.80",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T19:45:00.000-07:00"
+       },
+       {
+        "value": "1.80",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T20:00:00.000-07:00"
+       },
+       {
+        "value": "1.80",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T20:15:00.000-07:00"
+       },
+       {
+        "value": "1.80",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T20:30:00.000-07:00"
+       },
+       {
+        "value": "1.80",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T20:45:00.000-07:00"
+       },
+       {
+        "value": "1.80",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T21:00:00.000-07:00"
+       },
+       {
+        "value": "1.80",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T21:15:00.000-07:00"
+       },
+       {
+        "value": "1.80",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T21:30:00.000-07:00"
+       },
+       {
+        "value": "1.80",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T21:45:00.000-07:00"
+       },
+       {
+        "value": "1.80",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T22:00:00.000-07:00"
+       },
+       {
+        "value": "1.80",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T22:15:00.000-07:00"
+       },
+       {
+        "value": "1.80",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T22:30:00.000-07:00"
+       },
+       {
+        "value": "1.80",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T22:45:00.000-07:00"
+       },
+       {
+        "value": "1.80",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T23:00:00.000-07:00"
+       },
+       {
+        "value": "1.80",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T23:15:00.000-07:00"
+       },
+       {
+        "value": "1.80",
+        "qualifiers": [
+         "P"
+        ],
+        "dateTime": "2026-10-01T23:30:00.000-07:00"
+       }
+      ],
+      "qualifier": [
+       {
+        "qualifierCode": "P",
+        "qualifierDescription": "Provisional data subject to revision.",
+        "qualifierID": 0,
+        "network": "NWIS",
+        "vocabulary": "uv_rmk_cd"
+       }
+      ],
+      "qualityControlLevel": [],
+      "method": [
+       {
+        "methodDescription": "[PT Backup]",
+        "methodID": 271265
+       }
+      ],
+      "source": [],
+      "offset": [],
+      "sample": [],
+      "censorCode": []
+     }
+    ],
+    "name": "USGS:09510200:00065:00000"
+   }
+  ]
+ },
+ "nil": false,
+ "globalScope": true,
+ "typeSubstituted": false
+}

@@ -16,13 +16,16 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1
 python -m pip install -U pip setuptools wheel     # old setuptools fails on faust-streaming's opentracing
 pip install -r requirements-dev.txt
-pytest -q                                          # expect: 32 passed, 2 skipped
+pytest -q                                          # expect: 35 passed, 1 skipped (0 after fetch_sample --nwps)
 ```
 
 ## Phase 0 — Gate checks (decide if floods are buildable) · built + unit-tested · needs your machine
 
-1. Put 5–10 real candidate gauges in `config/candidate_gauges.csv` (USGS site number +
-   NWPS gauge id from water.noaa.gov).
+1. Fill `config/candidate_gauges.csv` with 5–10 gauges:
+   `python -m tools.find_gauges --bbox=-100.5,29.4,-97.4,30.9 --top 10 --write`
+   (any region; it keeps only NWS gauges linked to a USGS site that have official
+   action + minor flood stages). To look up one known gauge's NWPS id:
+   `python -m tools.find_gauges --near-usgs 09510200`.
 2. `python -m tools.fetch_sample --site 09510200 --nwps <LID>` then `pytest -q`
    → the 2 skipped tests now run against **real** responses. Both must pass;
    if not, the parser layout is wrong (fix before anything else).
@@ -33,7 +36,8 @@ pytest -q                                          # expect: 32 passed, 2 skippe
    **Kill:** every gauge `FAIL` → stop and revisit the hazard choice.
 4. Start `python -m tools.staleness_logger --hours 72` and leave it running
    (feeds the latency section; look for staleness during rain).
-5. For the top 2–3 gauges, plot stage vs rainfall for 2–3 events (rainfall source:
+5. EDA for submission: run `notebooks/01–03` in Colab/Kaggle (see `notebooks/README.md`).
+6. For the top 2–3 gauges, plot stage vs rainfall for 2–3 events (rainfall source:
    MRMS, Phase 2b) and check they visibly track.
 
 ## Phase 1 — Infrastructure · built (compose YAML-validated, schema loads on PG16) · needs your machine

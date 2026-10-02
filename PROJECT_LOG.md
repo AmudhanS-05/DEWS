@@ -384,6 +384,31 @@ retrofitted.
 - If a gauge passes: Phase 1 compose up, Phase 2–3 against Kafka, baseline backtest
   numbers, then choose the ML model and build the forecaster consumer and sink.
 
+## 2026-10-02 — Real USGS layout confirmed; gauge finder; EDA notebooks; deck v2
+
+**Done**
+- Real USGS response saved (`tests/fixtures/live_usgs_iv.json`); parser test passes on it.
+  Sycamore Creek (09510200) returns 3 series: discharge 6802, stage 6803 and stage 271265
+  "[PT Backup]" — confirms the series-aware dedupe key.
+- `tools/find_gauges.py`: NWPS bounding-box search (API params from its swagger spec:
+  bbox.xmin/ymin/xmax/ymax, srid=EPSG_4326) and USGS→NWPS lid lookup; keeps gauges with a
+  USGS link and action + minor stages; can write `config/candidate_gauges.csv`.
+- `notebooks/01_classic_eda_usgs`, `02_flood_specific_eda`, `03_mrms_rainfall_eda`
+  (Colab/Kaggle, self-contained). Executed here end to end against simulated services;
+  real GRIB2 decoding (cfgrib) untested here.
+- Review deck v2 (`presentations/SPA_Phase1_updated.pptx`, git-ignored): literature now 35
+  papers, all 2020–2026 (18 new, verified), summary-of-literature slide removed, gaps slide
+  rewritten; all other slides unchanged.
+- `docs/REVIEW_WORDING.md`: the team's deck wording is now the source of truth for review material.
+
+**Decisions**
+- CAMELS-IND files on Zenodo are login-restricted, and the team's deck no longer lists it,
+  so no CAMELS-IND notebook.
+
+**Open**
+- Deck methodology says Isolation Forest "predicts river stage" (it is unsupervised and
+  cannot); wording to be fixed by the team.
+
 ## Template for new entries
 
 ```

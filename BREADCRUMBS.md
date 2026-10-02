@@ -13,7 +13,7 @@ Short trail of where the build is, newest first. One line per step; details go i
 
 | Phase | State | Tested how |
 |---|---|---|
-| 0 Gate checks | built | unit tests (synthetic + real-value fixtures); **not yet run on real data** |
+| 0 Gate checks | built + gauge finder + EDA notebooks | real USGS layout confirmed 2 Oct; gate check **not yet run on real data** |
 | 1 Infra | built | schema loads on PG16; compose YAML-validated; **not yet `docker compose up`** |
 | 2 Producers | built (USGS live + replay); MRMS not built | unit tests with fake producer; **not run against Kafka** |
 | 3 Windowing | built | window logic unit-tested; Faust app import-checked only |
@@ -25,6 +25,13 @@ Short trail of where the build is, newest first. One line per step; details go i
 
 ## Trail
 
+- **2026-10-02** — Your run: 33 passed, 1 skipped after `fetch_sample` (real USGS layout confirmed:
+  09510200 has 3 series incl. "[PT Backup]"). Added `tools/find_gauges.py` (NWPS bbox search /
+  USGS→NWPS id lookup), 3 EDA notebooks (classic, flood-specific, MRMS) executed here against
+  simulated services, `docs/REVIEW_WORDING.md` (deck wording = source of truth). Deck updated to
+  `presentations/SPA_Phase1_updated.pptx`: 35 papers 2020–2026, summary slide removed, gaps rewritten.
+  **Next (you):** `find_gauges --near-usgs 09510200` → `fetch_sample --nwps <lid>` → `pytest` (0 skipped);
+  `find_gauges --bbox=... --write` → `gate_check`; run notebooks; fix the Isolation-Forest wording.
 - **2026-10-01 (pm)** — Phase I review deck built from the NLP_Phase3 template (29 slides: intro,
   dataset + preliminary EDA, 32 verified papers, summary + gaps, objectives, methodology,
   ≈34% work completed, references). Saved to `presentations/` (git-ignored). Commit hashes in
