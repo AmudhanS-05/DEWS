@@ -409,6 +409,30 @@ retrofitted.
 - Deck methodology says Isolation Forest "predicts river stage" (it is unsupervised and
   cannot); wording to be fixed by the team.
 
+## 2026-10-02 (night) — First real gate check; literature rebuilt from gaps
+
+**Numbers** (Texas Hill Country box -100.5,29.4,-97.4,30.9; minor stage; 10 years)
+- 134 NWS gauges in the box; 60 scanned; 18 usable (USGS-linked, action + minor stages).
+- 10 gate-checked, 0 pass per gauge (rule: >= 10 events and median rise >= 3 h).
+- Events: 76 total; 47 / 32 / 26 with rise >= 1 / 2 / 3 h. Shoal Creek 38 events, median rise
+  0.88 h; Bull Creek 19, 1.5 h; Onion Creek at US 183 5, 10.4 h; Blanco River 1–3 events, 8.8–29 h.
+- Most Austin-area gauges report every 5 min (others 15 min); Colorado River at Austin had 0 minor
+  crossings (dam-regulated); some gauges have multi-month gaps (Onion Creek largest gap 3,276 h).
+
+**Decisions / open**
+- The per-gauge rule (>= 10 minor floods per gauge in 10 years) was too strict for a region where
+  minor floods are rare; `gate_check` now also reports a pooled verdict across gauges
+  (26 slow-rise events -> pooled PASS). Whether to evaluate pooled across a basin is for the team to confirm.
+- Fast urban creeks only work if the feed delay is short: run `tools.staleness_logger` on the
+  5-min gauges before ruling them in or out.
+
+**Literature**
+- Rebuilt by working back from the gaps the objectives close: G1 live performance unmeasured
+  (Obj 3), G2 alerts not tied to official categories (Obj 2), G3 no fault-tolerant streaming
+  pipeline for river stage (Obj 1), G4 forecasts do not reach people as a live workflow (Obj 4).
+  24 papers, 2020–2026, newest first, each tagged with the gap it justifies. Dropped papers that
+  justified nothing we deliver (datasets, surveys, visions, non-flood LLM work).
+
 ## Template for new entries
 
 ```

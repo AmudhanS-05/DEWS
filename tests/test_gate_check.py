@@ -55,3 +55,15 @@ def test_error_is_not_a_verdict(monkeypatch):
     monkeypatch.setattr(gate_check, "fetch_year", boom)
     s, _ = gate_check.check_gauge({"usgs_site": "1", "nwps_lid": "X"}, 1, "minor", 10, 3.0, False)
     assert s["verdict"] == "ERROR"
+
+
+def test_pooled_verdict(monkeypatch, tmp_path, capsys):
+    """Two gauges with 6 slow events each: each fails alone, the pool passes."""
+    monkeypatch.setattr(gate_check, "get_json", lambda url: NWPS_DOC)
+    monkeypatch.setattr(gate_check, "fetch_year", lambda site, y, refresh: year_doc(y, 3, 5))
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "candidate_gauges.csv").write_text("usgs_site,nwps_lid,note\n0000001,T1,a\n0000002,T2,b\n")
+    rc = gate_check.main(["--years", "2"])
+    out = capsys.readouterr().out
+    assert "0/2 gauges PASS" in out and "POOLED: 12 events" in out and rc == 0

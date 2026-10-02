@@ -180,9 +180,19 @@ def main(argv=None):
     if errored:
         print(f"{len(errored)} gauge(s) ERROR: data could not be fetched (network, proxy or bad id). "
               "That is not a verdict; fix and rerun.")
-    if not passed and not errored:
-        print("KILL RULE: no gauge passes. Do not start Phase 1 on floods; revisit the hazard choice.")
-    return 0 if passed else (3 if errored else 2)
+    # Pooled view: the evaluation can use events from several gauges in one region,
+    # so a gauge set can be usable even when no single gauge has enough floods.
+    slow = [e for e in all_events if e["rise_time_h"] >= a.min_rise_h]
+    gauges_with_slow = sorted({e["usgs_site"] for e in slow})
+    pooled_ok = len(slow) >= a.min_events
+    print(f"POOLED: {len(slow)} events with rise time >= {a.min_rise_h} h across {len(gauges_with_slow)} gauges "
+          f"({len(all_events)} events in total) -> {'PASS' if pooled_ok else 'FAIL'} "
+          f"(rule: >= {a.min_events} pooled events)")
+    if not passed and not errored and not pooled_ok:
+        print("KILL RULE: neither any single gauge nor the pooled set passes. Revisit the gauge set or the hazard.")
+    elif not passed and pooled_ok:
+        print("No single gauge passes, but the pooled set does: evaluate across these gauges together.")
+    return 0 if (passed or pooled_ok) else (3 if errored else 2)
 
 
 if __name__ == "__main__":

@@ -25,6 +25,14 @@ Short trail of where the build is, newest first. One line per step; details go i
 
 ## Trail
 
+- **2026-10-02 (night)** — Gate check, Texas Hill Country, 10 gauges, 10 years, minor stage:
+  **0/10 pass per gauge**, but 76 events in total, 26 with rise >= 3 h across 9 gauges, so the
+  **pooled set passes**. `gate_check` now prints a pooled verdict. Urban Austin creeks flood often
+  but rise in ~1–1.5 h; slower rivers (Onion, Blanco, Barton) rise 4–29 h but flood rarely.
+  Only 60 of 134 NWS gauges in the box were scanned; 8 more usable gauges not yet gate-checked.
+  Deck v3 (`presentations/SPA_Phase1_v3.pptx`): literature rebuilt from 4 gaps (G1–G4, each mapped
+  to an objective), 24 papers 2020–2026, newest first.
+  **Next:** decide pooled evaluation; rerun with all usable gauges; run staleness_logger on the 5-min gauges.
 - **2026-10-02** — Your run: 33 passed, 1 skipped after `fetch_sample` (real USGS layout confirmed:
   09510200 has 3 series incl. "[PT Backup]"). Added `tools/find_gauges.py` (NWPS bbox search /
   USGS→NWPS id lookup), 3 EDA notebooks (classic, flood-specific, MRMS) executed here against

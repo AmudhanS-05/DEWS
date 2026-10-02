@@ -24,6 +24,12 @@ substance are listed at the bottom so they get decided, not silently merged.
 - Notification: "Email notification, delivery time logged"; "nothing is sent unapproved".
 - Progress is reported as **Work Status** (~40 % complete at Phase I), not a percentage chart.
 
+## Literature gaps (deck v3, 2 Oct)
+- G1 · Live performance is not measured → Objective 3
+- G2 · Alerts are not tied to official flood categories → Objective 2
+- G3 · No fault-tolerant streaming pipeline for river-stage forecasting → Objective 1
+- G4 · Forecasts do not reach people as a live workflow → Objective 4
+
 ## Substance to decide (raised 2 Oct, not changed in the deck)
 - **Methodology slide says "A supervised model (Isolation forest) predicts river stage".** Isolation Forest is an unsupervised anomaly detector and cannot predict a stage value. The repo's design is a supervised forecaster (choice made after the persistence / rise-rate baselines), with Isolation Forest at most a sensor-fault check. The wording should change before a reviewer asks.
 - The objectives no longer mention the agentic AI layer or the India retrospective test; the cover names only AI372IA. Decide whether the agent layer (AI373TA) appears in SPA reviews at all.
