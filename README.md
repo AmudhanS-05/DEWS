@@ -6,7 +6,7 @@ Joint project for **AI372IA Stream Processing and Analytics** and
 
 **Status: proposed design (rev 3), Phases 0–4 (offline) built.** The hazard choice
 is not final until the Phase 0 gate check passes on real data and faculty confirm scope.
-Where we are and what's next: `BREADCRUMBS.md`.
+Where we are and what's next: `BREADCRUMBS.md` (team's local notes, not in git). Why things are the way they are: `FAQ.md`.
 
 ## What it does
 
@@ -40,7 +40,8 @@ with a horizon and probability, and reports lead time net of feed delay.
 | `tests/` | `pytest` suite (32 tests) | all |
 | `docs/BUILD_PHASES.md` | how to run and test each phase | |
 | `docs/MANUAL_CHECKS.md` | checks to do by hand so nothing bites us later | |
-| `PROJECT_LOG.md` / `BREADCRUMBS.md` | decisions and numbers / progress trail | |
+| `PROJECT_LOG.md` / `BREADCRUMBS.md` | decisions and numbers / progress trail (local only, git-ignored) | |
+| `FAQ.md` | gauges, datasets, pooled evaluation, what the models predict | |
 
 ## Quick start (Windows, PowerShell)
 

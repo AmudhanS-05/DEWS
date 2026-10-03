@@ -13,3 +13,6 @@ _xfer/
 # slide decks and other review material: kept locally, never committed
 presentations/
 *.pptx
+# personal working notes: kept locally, commit only when decided
+BREADCRUMBS.md
+PROJECT_LOG.md
