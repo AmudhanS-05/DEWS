@@ -11,6 +11,8 @@ Self-contained: each notebook downloads its own data, so it runs in **Google Col
 
 Defaults (3 Oct 2026) use the real Texas gauges that passed the gate check; `FAQ.md` → Notebooks lists them.
 
+**Read alongside:** `docs/EDA_WALKTHROUGH.md` explains every cell, output and figure of the three notebooks.
+
 Order: run 02 first to find real flood events, then put one event's time into 03.
 
 **Tested how:** all three were executed end to end here against simulated USGS, NWPS,

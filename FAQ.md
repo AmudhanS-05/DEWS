@@ -214,6 +214,57 @@ Run 02 before 03: notebook 02's event table is where 03's event time comes from.
 picks a 2024 event because the MRMS archive on AWS starts in late 2020, after the large May 2019 floods (check the bucket listing if you choose another event).
 Notebook 02's numbers should match `gate_output/gate_events.csv` for the same gauges (same event definitions).
 
+### Where do the candidate gauge codes come from?
+`python -m tools.find_gauges --bbox=…` asked the NOAA NWPS API for every NWS forecast gauge in
+a box over the Texas Hill Country (134 gauges). It kept those that list a **USGS site number**
+(where the readings come from) **and** official action + minor flood stages (49). It wrote the top
+40 to `config/candidate_gauges.csv`. The 5-letter code (e.g. `DRWT2`) is the NWS gauge id ("lid");
+the 8-digit code (e.g. `08158700`) is the USGS site number. Both appear on the NWPS gauge page.
+
+### What do the gauge codes mean?
+- **NWS id** (5 characters, e.g. `DRWT2`): a place mnemonic plus a state code. For example, DRW = Driftwood and T2 = Texas.
+  NOAA's flood categories are filed under this id.
+- **USGS site number** (8 digits, e.g. `08158700`): the first two digits are the hydrologic region (08 = Texas–Gulf
+  basins); the rest orders the station along its river, upstream to downstream. Readings are filed under this number.
+- The notebooks label plots by USGS number. `docs/EDA_WALKTHROUGH.md` starts with a key; the deck's EDA charts use
+  "DRWT2 · Onion Creek near Driftwood" style labels.
+
+### Why US data and not Indian data?
+Of the sources we checked, only the US offers all of these openly, free of charge and with archives: live gauge readings
+every 5–15 min going back 10+ years, official flood levels for each gauge, and hourly 1-km radar rainfall. India's CWC
+publishes warning and danger levels on its forecasting portal, but has no open real-time API or downloadable archive.
+CAMELS-IND is daily and access-restricted, and GloFAS is a modelled daily product. The deck states this on the
+"EDA Results – Data at a glance" slide.
+
+### Which rainfall product should the pipeline stream (notebook 03)?
+On 2 Oct 2026, the gauge-corrected hourly MRMS (Pass 2) appeared about 58 min after its hour, Pass 1 about 16 min after,
+and the radar-only products about 3–5 min after (refreshed every 2 min). The live producer uses radar-only or Pass 1;
+evaluation uses Pass 2. One hourly CONUS grid is 3500 × 7000 cells, about 0.8 MB compressed; −3 marks cells with no coverage.
+
+### What did the EDA find (3 Oct 2026, notebook 02 on DRWT2, LCPT2, JNCT2, AHOT2)?
+- **Categories:** each gauge spends 0.05–0.3 % of its readings at or above minor flood stage.
+  Floods are a rare class, so accuracy is meaningless; score events.
+- **Events** match the gate check exactly (16, 15, 9, 38): the notebook and the pipeline use the same definitions.
+- **Season:** most floods fall in May–June and October; 2022–2023 were nearly dry.
+- **Hydrographs:** LCPT2 climbs for 3–8 h before crossing. AHOT2 and DRWT2 jump in the last hour or so.
+- **Caveat on "rise time":** at DRWT2 the median rise time is 10.9 h, but the aligned plot shows
+  the stage creeps slowly and then jumps in about the last hour. The rise-start rule finds an
+  early, shallow trough, so **rise time overstates the warning that stage alone gives**. The
+  rise-rate baseline's median warning (0.8 h at DRWT2, 2 h at LCPT2) is the honest stage-only
+  number. Rainfall is what moves the warning earlier.
+- **Rain → stage:** at DRWT2 on 4 May 2019 about 107 mm fell in the days around the flood, much of it before the jump.
+  The best rain–stage lag varies from 0 to 18 h between events, so the model needs several
+  rainfall windows (1, 3, 6, 24 h), not one fixed lag.
+- **Rise rate:** about 0 ft/h in normal hours vs a median of about 1 ft/h in the 6 h before a flood
+  (LCPT2). This is a strong feature, but it arrives late.
+- **Live feed delay (one sample):** 24–69 min. Usable warning (median rise minus delay) is
+  about 10 h at DRWT2, 11 h at LCPT2 and below zero at AHOT2, before the caveat above.
+- **Baselines:** persistence never warns (recall 0). Rise-rate extrapolation at 3 h: F1 0.65 at DRWT2,
+  0.26 at LCPT2, 0.64 at JNCT2, 0.41 at AHOT2, with under 1–2 h of warning. This is the bar the ML model must beat.
+
+Notebook 01 has been rerun on DRWT2 and LCPT2 (3 Oct). Neither gauge reached minor flood stage in its 2-year window
+(peaks 5.49 ft and 13.73 ft in June 2026). Every cell and figure is explained in `docs/EDA_WALKTHROUGH.md`.
+
 ### How do I check that MRMS files decode at all (notebook 03)?
 Run after the cell that builds `files` (the day's file listing). `files` is a **table**
 (DataFrame), not a list, so take the key from its `key` column: `files[0]` fails with `KeyError: 0`.
