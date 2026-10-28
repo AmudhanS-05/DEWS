@@ -35,7 +35,7 @@ with a horizon and probability, and reports lead time net of feed delay.
 | `producers/` | live USGS producer, replay producer, dedupe + envelope | 2 |
 | `streams/` | event-time windowing logic + Faust app | 3 |
 | `ml/` | baselines, metrics, backtest | 4 |
-| `agentic_ai/`, `dashboard/` | agent triage + approval; Power BI / Streamlit | 6–7 |
+| `agentic_ai/`, `dashboard/` | agent triage + approval; Power BI / Streamlit; `dashboard/flow_monitor.py` live flow view (works from Phase 1) | 1, 6–7 |
 | `common/` | config, USGS/NWPS parsers, hydrology helpers, Kafka producer | all |
 | `tests/` | `pytest` suite (39 tests) | all |
 | `docs/BUILD_PHASES.md` | how to run and test each phase | |

@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flood Pipeline Flow</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#fff; --ink:#1f2933; --muted:#6b7785; --line:#d5dae1;
+    --producer:#e3f4ec; --topic:#ebe9fb; --group:#fbe9e0; --store:#f3f4f6; --manual:#fafafa; --info:#f3f4f6;
+    --ok:#1f9d63; --idle:#4a7bd0; --warn:#d98e04; --down:#d63b3b; --absent:#a7afba;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  header{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;padding:12px 20px;background:var(--panel);border-bottom:1px solid var(--line)}
+  h1{font-size:16px;margin:0 8px 0 0}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid var(--line);border-radius:999px;font-size:12px;background:#fff}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--absent);display:inline-block}
+  .dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.down{background:var(--down)}
+  .demo{background:#fff4d6;border-color:#f0d58a}
+  main{max-width:1180px;margin:0 auto;padding:16px 20px 28px}
+  .canvas{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px}
+  svg{width:100%;height:auto;display:block}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--muted);margin:10px 4px 0}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .banner{display:none;margin:0 0 12px;padding:8px 12px;border-radius:8px;background:#fde8e8;color:#8a1f1f;border:1px solid #f3b9b9}
+  h2{font-size:14px;margin:20px 0 8px}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:13px}
+  td,th{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left}
+  th{background:#eef0f3;font-weight:600}
+  td.t{color:var(--muted);white-space:nowrap;width:90px}
+  .st{font-weight:600}
+  .st.ok{color:var(--ok)}.st.idle{color:var(--idle)}.st.warn{color:var(--warn)}.st.down{color:var(--down)}.st.absent{color:var(--absent)}
+
+  /* nodes */
+  .node rect{stroke-width:2;transition:stroke .3s, opacity .3s}
+  .node.producer rect{fill:var(--producer)} .node.topic rect{fill:var(--topic)} .node.group rect{fill:var(--group)}
+  .node.store rect,.node.info rect{fill:var(--store)} .node.manual rect{fill:var(--manual)}
+  .node.ok rect{stroke:var(--ok)} .node.idle rect{stroke:var(--idle)} .node.warn rect{stroke:var(--warn)}
+  .node.down rect{stroke:var(--down)} .node.absent rect{stroke:var(--absent);stroke-dasharray:5 4;opacity:.62}
+  .node.manual rect,.node.info rect{stroke:var(--line);stroke-dasharray:4 4}
+  .node.down rect{animation:pulse 1.2s ease-in-out infinite}
+  .node.warn rect{animation:pulse 2s ease-in-out infinite}
+  @keyframes pulse{50%{stroke-width:4}}
+  .node text{font-family:inherit;fill:var(--ink)}
+  .node .ttl{font-size:13px;font-weight:700}
+  .node .ln{font-size:10.5px;fill:var(--muted)}
+  .node.down .ln:first-of-type{fill:var(--down);font-weight:700}
+  .sdot{transition:fill .3s}
+  .sdot.ok{fill:var(--ok)}.sdot.idle{fill:var(--idle)}.sdot.warn{fill:var(--warn)}.sdot.down{fill:var(--down)}.sdot.absent{fill:var(--absent)}.sdot.manual,.sdot.info{fill:var(--line)}
+
+  /* edges */
+  .edge{fill:none;stroke-width:2;transition:stroke .3s}
+  .edge.flow{stroke:var(--ok);stroke-dasharray:7 9;animation:flow var(--dur,1.2s) linear infinite}
+  .edge.idle{stroke:var(--idle);opacity:.5}
+  .edge.inactive{stroke:var(--absent);stroke-dasharray:3 6;opacity:.55}
+  .edge.planned{stroke:var(--absent);stroke-dasharray:2 7;opacity:.5}
+  .edge.blocked{stroke:var(--down);stroke-dasharray:7 9;animation:none}
+  @keyframes flow{to{stroke-dashoffset:-16}}
+  .elabel{font-size:10px;fill:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Flood pipeline: live flow</h1>
+  <span class="chip"><span class="dot" id="d-kafka"></span><span id="c-kafka">Kafka …</span></span>
+  <span class="chip"><span class="dot" id="d-brokers"></span><span id="c-brokers">brokers …</span></span>
+  <span class="chip"><span class="dot" id="d-urp"></span><span id="c-urp">under-replicated …</span></span>
+  <span class="chip"><span class="dot" id="d-dlq"></span><span id="c-dlq">dead letters …</span></span>
+  <span class="chip"><span class="dot" id="d-pg"></span><span id="c-pg">PostgreSQL …</span></span>
+  <span class="chip" id="c-demo" style="display:none">DEMO DATA</span>
+  <span class="chip" style="margin-left:auto" id="c-clock">connecting…</span>
+</header>
+<main>
+  <div class="banner" id="banner"></div>
+  <div class="canvas">
+  <svg viewBox="0 0 1120 600" id="svg" role="img" aria-label="Live pipeline diagram">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0L10 5L0 10z" fill="#9aa3af"/>
+      </marker>
+    </defs>
+    <g id="edges"></g>
+    <g id="nodes"></g>
+  </svg>
+  </div>
+  <div class="legend">
+    <span><span class="dot ok"></span>running / receiving</span>
+    <span><span class="dot" style="background:var(--idle)"></span>alive, nothing flowing</span>
+    <span><span class="dot warn"></span>degraded (missing instance, lag)</span>
+    <span><span class="dot down"></span>stopped / silent</span>
+    <span><span class="dot"></span>not running yet (build progress)</span>
+    <span>green dashes moving = messages flowing; red = data arriving but its consumer is gone</span>
+  </div>
+  <h2>Status changes</h2>
+  <table><thead><tr><th>Time</th><th>Component</th><th>Change</th></tr></thead><tbody id="log">
+    <tr><td colspan="3" style="color:var(--muted)">Nothing yet. Stop a producer, a Faust worker or a broker and it shows up here with a timestamp.</td></tr>
+  </tbody></table>
+</main>
+<script>
+// layout: x, y, w, h  (the same arrangement as the Phase I methodology diagram)
+const L = {
+  p_usgs:[20,40,130,64], p_mrms:[20,140,130,64], p_replay:[20,240,130,64],
+  t_gauge:[200,40,150,64], t_rain:[200,140,150,64], t_replay:[200,240,150,64],
+  faust:[410,40,150,264], t_agg:[630,120,170,64],
+  sink:[880,40,190,64], pg:[880,140,190,64], bi:[880,240,190,64],
+  forecaster:[410,350,150,64], t_alerts:[630,350,170,64], agent:[880,350,190,64],
+  notifier:[200,480,150,64], t_approved:[410,480,150,64], human:[630,480,170,64]
+};
+const P = {
+  e_p_usgs:"M150 72H200", e_p_mrms:"M150 172H200", e_p_replay:"M150 272H200",
+  e_gauge_faust:"M350 72H410", e_rain_faust:"M350 172H410", e_replay_faust:"M350 272H410",
+  e_faust_agg:"M560 152H630", e_agg_sink:"M800 152H830V64H880", e_agg_fore:"M690 184V325H485V350",
+  e_fore_alerts:"M560 382H630", e_alerts_sink:"M760 350V320H850V88H880", e_alerts_agent:"M800 382H880",
+  e_sink_pg:"M975 104V140", e_pg_bi:"M975 204V240", e_agent_pg:"M1070 382H1095V172H1070",
+  e_agent_human:"M975 414V512H800", e_human_appr:"M630 512H560", e_appr_notif:"M410 512H350"
+};
+const NS = "http://www.w3.org/2000/svg";
+const el = (n, a={}, t) => { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); if (t!==undefined) e.textContent = t; return e; };
+const gE = document.getElementById("edges"), gN = document.getElementById("nodes");
+const edgeEls = {}, nodeEls = {};
+for (const id in P) { const p = el("path", {d:P[id], class:"edge inactive", "marker-end":"url(#arr)"}); gE.appendChild(p); edgeEls[id] = p; }
+gE.appendChild(el("text", {x:353, y:166, class:"elabel"}, "planned"));
+function build(id, n) {
+  const [x,y,w,h] = L[id];
+  const g = el("g", {class:"node "+n.kind});
+  g.appendChild(el("rect", {x, y, width:w, height:h, rx:10}));
+  g.appendChild(el("circle", {cx:x+w-14, cy:y+14, r:5, class:"sdot absent"}));
+  const t = el("text", {x:x+12, y: n.kind==="group"&&h>200 ? y+26 : y+22, class:"ttl"}, n.title);
+  g.appendChild(t);
+  const lns = [];
+  for (let i=0;i<2;i++){ const l = el("text", {x:x+12, y:(n.kind==="group"&&h>200 ? y+46 : y+38)+i*14, class:"ln"}, ""); g.appendChild(l); lns.push(l); }
+  gN.appendChild(g); nodeEls[id] = {g, dot:g.querySelector(".sdot"), lns};
+}
+const css = (n, s) => `node ${n.kind} ${s}`;
+function fmtTime(ts){ return new Date(ts*1000).toLocaleTimeString([], {hour12:false}); }
+function setChip(id, cls, text){ document.getElementById("d-"+id).className = "dot "+cls; document.getElementById("c-"+id).textContent = text; }
+let lastMsg = 0;
+function render(v){
+  lastMsg = Date.now();
+  const bn = document.getElementById("banner");
+  if (v.error) { bn.style.display="block"; bn.textContent = "Monitor error: "+v.error; return; }
+  const c = v.cluster;
+  bn.style.display = c.kafka_ok ? "none" : "block";
+  if (!c.kafka_ok) bn.textContent = "Cannot reach Kafka" + (c.error ? ": "+c.error : "") + ". Is the stack up? (docker compose ps)";
+  setChip("kafka", c.kafka_ok?"ok":"down", c.kafka_ok?"Kafka reachable":"Kafka unreachable");
+  setChip("brokers", c.brokers_up>=c.brokers_expected?"ok":(c.brokers_up>0?"warn":"down"), `brokers ${c.brokers_up}/${c.brokers_expected}`);
+  setChip("urp", c.under_replicated+c.offline===0?"ok":(c.offline?"down":"warn"), `under-replicated ${c.under_replicated} · offline ${c.offline}`);
+  setChip("dlq", c.dlq>0?"warn":"ok", `dead letters ${c.dlq}`);
+  setChip("pg", c.pg===null?"":(c.pg?"ok":"down"), c.pg===null?"PostgreSQL ?":(c.pg?"PostgreSQL up":"PostgreSQL down"));
+  document.getElementById("c-demo").style.display = v.demo ? "inline-flex" : "none";
+  document.getElementById("c-clock").textContent = "updated " + fmtTime(v.ts);
+  for (const id in v.nodes) {
+    const n = v.nodes[id]; if (!nodeEls[id]) build(id, n);
+    const e = nodeEls[id];
+    e.g.setAttribute("class", css(n, n.status));
+    e.dot.setAttribute("class", "sdot "+n.status);
+    n.lines.slice(0,2).forEach((t,i)=>{ e.lns[i].textContent = t; });
+    if (n.lines.length<2) e.lns[1].textContent = "";
+  }
+  for (const ed of v.edges) {
+    const p = edgeEls[ed.id]; if (!p) continue;
+    p.setAttribute("class", "edge "+ed.state);
+    const dur = Math.max(0.35, Math.min(2.4, 2.4 - Math.log10(1+ed.rate)*1.1));
+    p.style.setProperty("--dur", dur+"s");
+  }
+  const body = document.getElementById("log");
+  if (v.events && v.events.length) {
+    body.innerHTML = "";
+    for (const ev of v.events) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td class="t">${fmtTime(ev.ts)}</td><td></td><td></td>`;
+      tr.children[1].textContent = ev.node;
+      tr.children[2].innerHTML = `${ev.from} → <span class="st ${String(ev.to).split(" ")[0]}"></span>`;
+      tr.children[2].lastChild.textContent = ev.to;
+      body.appendChild(tr);
+    }
+  }
+}
+// build all nodes once from the first payload; reconnect automatically
+function connect(){
+  const es = new EventSource("/events");
+  es.onmessage = m => render(JSON.parse(m.data));
+  es.onerror = () => { document.getElementById("c-clock").textContent = "reconnecting…"; };
+}
+connect();
+setInterval(()=>{ if (lastMsg && Date.now()-lastMsg > 8000) document.getElementById("c-clock").textContent = "no update for " + Math.round((Date.now()-lastMsg)/1000) + " s"; }, 2000);
+</script>
+</body>
+</html>

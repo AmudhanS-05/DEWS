@@ -3,6 +3,16 @@
 > `windowed_aggregates`, `risk_scores`, `alerts`, `feed_staleness`). The Power BI steps
 > below still apply; table names in step 5 change accordingly.
 
+# Live flow view (works now)
+
+`python -m dashboard.flow_monitor` serves the architecture diagram as a live canvas at
+http://127.0.0.1:8765: per-topic msg/s and totals, per-consumer-group instances and lag,
+producer heartbeat, broker / under-replicated partition counts and PostgreSQL row counts.
+Dashed green lines move while messages flow. Stop a producer, a Faust worker or a broker and
+the node changes colour and the change is logged with a timestamp (read recovery time off it).
+`--demo` runs it on scripted data without Kafka. Read-only: it never commits offsets.
+Producers are judged by what they publish (their topic's newest message), not by their process.
+
 # Dashboard: prototype (here) vs. Power BI (submission)
 
 ## Why two dashboards
