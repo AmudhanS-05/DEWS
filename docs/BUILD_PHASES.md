@@ -42,7 +42,7 @@ pytest -q                                          # expect: 39 passed
 
 ## Phase 1 — Infrastructure · built (compose YAML-validated, schema loads on PG16) · needs your machine
 
-`docker/README.md` has the full steps. Watch it live: `python -m dashboard.flow_monitor` (http://127.0.0.1:8765).
+`docker/README.md` has the full steps. Watch it live: `python -m dashboard.flow_monitor` (http://127.0.0.1:8765). Step-by-step commands with what to expect on screen: `docs/RUNBOOK.md`. Window duplicate check after a worker restart: `python -m tools.check_windows`.
 **Pass:** all services healthy; 8 topics with
 3 partitions, RF 3, min ISR 2; 8 tables; stopping one broker keeps the topics available.
 

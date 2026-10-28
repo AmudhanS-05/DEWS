@@ -17,20 +17,28 @@ received a message recently (the live USGS producer sends a heartbeat on every p
 Nodes whose consumer group does not exist yet (forecaster, agent, notifier) show as "not running";
 that is the build progress, not an error.
 
-Read-only: it uses a throwaway consumer and the admin API, and never commits offsets.
+Tabs: Pipeline flow (above) | Map (every gauge's newest stage against its official flood levels,
+live or replay) | Readings and alerts (latest windows and alerts from PostgreSQL, filled once the sink exists).
+The map needs config/gauge_locations.csv:  python -m tools.gauge_locations
+
+Read-only: it uses throwaway consumers and the admin API, and never commits offsets.
 """
 from __future__ import annotations
 
 import argparse
+import csv
 import json
+import math
 import os
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlparse
 
-from common import config
+from common import config, nwps
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+LOC_CSV = os.path.join(os.path.dirname(HERE), "config", "gauge_locations.csv")
 
 # ---------------------------------------------------------------- the graph (matches the Phase I diagram)
 # kind: producer | topic | group | store | manual | info
@@ -112,7 +120,10 @@ def build_view(raw: dict, live_stale_s: float = 900.0, lag_warn: int = 500) -> d
             rates[nid] = rate
             if k == "topic":
                 lines = [f"{rate:.1f} msg/s · total {tot:,}", _fmt_age(age)]
-                status = "absent" if tot == 0 else ("ok" if rate > 0 else "idle")
+                if tot == 0:                 # the topic exists (compose created it) but nothing was published yet
+                    status, lines = "idle", ["empty · waiting for a producer", ""]
+                else:
+                    status = "ok" if rate > 0 else "idle"
             elif sp["live"]:
                 if age is None:
                     status, lines = "absent", ["no data yet", "(not built or never started)"]
@@ -324,6 +335,132 @@ def probe_pg():
         return {"ok": False, "error": str(e).strip().splitlines()[0] if str(e).strip() else "error"}
 
 
+# ---------------------------------------------------------------- map: gauge locations + newest stage
+def load_locations(path: str = LOC_CSV) -> list[dict] | None:
+    if not os.path.exists(path):
+        return None
+    out = []
+    with open(path, encoding="utf-8") as f:
+        for r in csv.DictReader(f):
+            def num(k):
+                try:
+                    return float(r[k]) if r.get(k) not in (None, "") else None
+                except ValueError:
+                    return None
+            out.append({"site_no": r["site_no"], "lid": r["lid"], "name": r["name"], "lat": num("lat"), "lon": num("lon"),
+                        "county": r.get("county", ""), "cats": {c: num(c) for c in nwps.CATEGORIES}})
+    return out
+
+
+def gauge_status(stage, age_s, cats, live: bool, stale_s: float = 5400.0) -> str:
+    """normal | action | minor | moderate | major | stale | nodata (stale only applies to live data)."""
+    if stage is None:
+        return "nodata"
+    if live and age_s is not None and age_s > stale_s:
+        return "stale"
+    return nwps.category_of(stage, cats) or "normal"
+
+
+def build_gauges(locations, latest: dict, live: bool, now: float, stale_s: float = 5400.0) -> list[dict]:
+    out = []
+    for g in locations:
+        r = latest.get(g["site_no"])
+        stage = r["value"] if r else None
+        age = (now - r["reading_ts"]) if r and live else None
+        out.append({**g, "stage": stage, "age_s": age, "provisional": bool(r and "P" in (r.get("qualifiers") or [])),
+                    "reading_ts": r["reading_ts"] if r else None,
+                    "status": gauge_status(stage, age, g["cats"], live, stale_s)})
+    return out
+
+
+class LatestReadings:
+    """Newest stage per gauge, separately for live (gauge.usgs) and replay (replay.gauge)."""
+
+    def __init__(self, backfill=5000):
+        self.live, self.replay, self.backfill = {}, {}, backfill
+        self.lock = threading.Lock()
+
+    def ingest(self, topic: str, msg: dict):
+        if msg.get("type") != "reading" or msg.get("parameter") != config.PARAM_STAGE:
+            return
+        replay = topic == config.TOPIC_REPLAY_GAUGE
+        d = self.replay if replay else self.live
+        cur = d.get(msg["site_no"])
+        # live: newest reading time wins; replay: the most recently replayed reading wins (it plays history)
+        key = "fetched_ts" if replay else "reading_ts"
+        if cur is None or msg.get(key, 0) >= cur.get(key, 0):
+            with self.lock:
+                d[msg["site_no"]] = {"value": msg["value"], "reading_ts": msg["reading_ts"],
+                                     "fetched_ts": msg.get("fetched_ts", 0), "qualifiers": msg.get("qualifiers") or []}
+
+    def run(self):
+        from confluent_kafka import Consumer, TopicPartition
+        while True:
+            try:
+                conf = {"bootstrap.servers": config.KAFKA_BOOTSTRAP, "group.id": "flow-monitor-latest",
+                        "enable.auto.commit": False, "enable.partition.eof": False}
+                c = Consumer(conf)
+                parts = []
+                for t in (config.TOPIC_GAUGE, config.TOPIC_REPLAY_GAUGE):
+                    md = c.list_topics(t, timeout=5).topics[t]
+                    for pn in md.partitions:
+                        lo, hi = c.get_watermark_offsets(TopicPartition(t, pn), timeout=5)
+                        parts.append(TopicPartition(t, pn, max(lo, hi - self.backfill)))
+                c.assign(parts)
+                while True:
+                    m = c.poll(1.0)
+                    if m is None or m.error():
+                        continue
+                    try:
+                        self.ingest(m.topic(), json.loads(m.value()))
+                    except (ValueError, KeyError, TypeError):
+                        continue
+            except Exception:
+                time.sleep(5)           # broker down or restarting: reconnect and re-read the tail
+
+
+def probe_db() -> dict:
+    try:
+        import psycopg2
+        with psycopg2.connect(config.PG_DSN, connect_timeout=2) as con, con.cursor() as cur:
+            def rows(sql):
+                cur.execute(sql)
+                cols = [d[0] for d in cur.description]
+                return [{k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in zip(cols, r)} for r in cur.fetchall()]
+            return {"ok": True,
+                    "windows": rows("SELECT site_no, window_start, mode, n_readings, stage_last, rise_rate_ft_per_h, rain_3h "
+                                    "FROM windowed_aggregates ORDER BY window_start DESC LIMIT 30"),
+                    "alerts": rows("SELECT alert_id, site_no, mode, category, probability, horizon_h, status, raised_at, delivered_at "
+                                   "FROM alerts ORDER BY raised_at DESC LIMIT 30")}
+    except Exception as e:
+        return {"ok": False, "error": (str(e).strip().splitlines() or ["error"])[0][:120]}
+
+
+def demo_gauges(t: float):
+    """Fake gauges around the Texas Hill Country for --demo when config/gauge_locations.csv is missing."""
+    locs, latest = [], {}
+    now = time.time()
+    for i in range(14):
+        minor = 5.0 + (i % 4) * 2.5
+        lat, lon = 29.9 + (i * 37 % 100) / 100 * 1.1, -99.9 + (i * 53 % 100) / 100 * 2.3
+        sid = f"0810{i:04d}"
+        locs.append({"site_no": sid, "lid": f"DM{i:02d}T2", "name": f"Demo creek {i + 1}", "lat": lat, "lon": lon, "county": "Demo",
+                     "cats": {"action": minor, "minor": minor, "moderate": minor * 1.5, "major": minor * 2.0}})
+        lvl = minor * (0.35 + 0.9 * abs(math.sin(t / 25 + i)))
+        latest[sid] = {"value": round(lvl, 2), "reading_ts": now - (60 if i != 3 else 7200), "fetched_ts": now,
+                       "qualifiers": ["P"]}
+    return locs, latest
+
+
+def demo_db():
+    now = time.time()
+    iso = lambda dt: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now - dt))
+    return {"ok": True,
+            "windows": [{"site_no": "08158700", "window_start": iso(3600 * k), "mode": "SIMULATION", "n_readings": 12 - (k == 3) * 12,
+                         "stage_last": 2.8 + k * 0.4, "rise_rate_ft_per_h": 0.4, "rain_3h": None} for k in range(1, 6)],
+            "alerts": []}
+
+
 # ---------------------------------------------------------------- scripted demo (no Kafka)
 def demo_raw(t: float, t0: float) -> dict:
     """60 s cycle: 0-15 s normal, 15-30 s one Faust instance lost (lag grows), 30-45 s broker 2 down,
@@ -362,6 +499,7 @@ class State:
 
 
 STATE = State()
+CTX = {"latest": None, "demo": False, "t0": time.time(), "stale_s": 5400.0}
 
 
 def make_handler():
@@ -383,6 +521,21 @@ def make_handler():
                     self._send(200, "text/html; charset=utf-8", f.read())
             elif self.path == "/api/state":
                 self._send(200, "application/json", STATE.payload)
+            elif self.path.startswith("/api/gauges"):
+                q = parse_qs(urlparse(self.path).query)
+                live = q.get("mode", ["live"])[0] != "replay"
+                locs = load_locations()
+                now = time.time()
+                if CTX["demo"]:
+                    dl, dlatest = demo_gauges(now - CTX["t0"])
+                    locs, latest = (locs or dl), (dlatest if not locs else {})
+                else:
+                    latest = (CTX["latest"].live if live else CTX["latest"].replay) if CTX["latest"] else {}
+                body = {"locations": locs is not None, "mode": "live" if live else "replay",
+                        "gauges": build_gauges(locs, latest, live, now, CTX["stale_s"]) if locs else []}
+                self._send(200, "application/json", json.dumps(body).encode())
+            elif self.path == "/api/db":
+                self._send(200, "application/json", json.dumps(demo_db() if CTX["demo"] else probe_db()).encode())
             elif self.path == "/events":
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")
@@ -415,6 +568,10 @@ def main(argv=None):
 
     probe = None if a.demo else KafkaProbe()
     log, t0 = EventLog(), time.time()
+    CTX.update(demo=a.demo, t0=t0)
+    if not a.demo:
+        CTX["latest"] = LatestReadings()
+        threading.Thread(target=CTX["latest"].run, daemon=True).start()
 
     def loop():
         while True:

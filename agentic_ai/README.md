@@ -5,6 +5,14 @@
 > go to `alerts.approved`, which is the only topic the notifier reads. Agent decisions
 > are logged for evaluation. "station" below now means a USGS gauge (`site_no`).
 
+> **Multi-agent (decided 29 Oct 2026, design still to do):** the agent layer will be a **multi-agent
+> setup**, not a single agent. Working split to refine against the Agentic AI syllabus: a monitor/triage
+> agent (reads `alerts.flood`, decides what is worth drafting), an evidence agent (queries PostgreSQL for the
+> gauge's recent trend, history and official levels), an advisory-writer agent (plain language, states
+> probability and uncertainty), and a reviewer agent that checks the draft against the rules (official category
+> named, no "will flood", SIMULATION marked) before it reaches the human approval gate. Delivery stays with the
+> notifier. Open: orchestration pattern, tool contracts, how each agent's decision is logged for evaluation.
+
 Not started yet (see PROJECT_LOG.md / the SPA-vs-Agentic sequencing note in the
 main reply). This folder is scaffolded so the interface is decided early:
 

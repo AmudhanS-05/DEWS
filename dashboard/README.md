@@ -10,7 +10,7 @@ http://127.0.0.1:8765: per-topic msg/s and totals, per-consumer-group instances 
 producer heartbeat, broker / under-replicated partition counts and PostgreSQL row counts.
 Dashed green lines move while messages flow. Stop a producer, a Faust worker or a broker and
 the node changes colour and the change is logged with a timestamp (read recovery time off it).
-`--demo` runs it on scripted data without Kafka. Read-only: it never commits offsets.
+Tabs: **Pipeline flow**, **Map** (every gauge coloured by its official NWS level, live or replay; needs `python -m tools.gauge_locations` once; offline view when there is no internet) and **Readings & alerts** (latest windows and alerts from PostgreSQL; fills once the sink exists). `--demo` runs it on scripted data without Kafka. Read-only: it never commits offsets.
 Producers are judged by what they publish (their topic's newest message), not by their process.
 
 # Dashboard: prototype (here) vs. Power BI (submission)

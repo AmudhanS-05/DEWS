@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Flood Pipeline Flow</title>
+<title>Flood Early-Warning Console</title>
 <style>
   :root{
     --bg:#f6f7f9; --panel:#fff; --ink:#1f2933; --muted:#6b7785; --line:#d5dae1;
@@ -58,11 +58,32 @@
   .edge.blocked{stroke:var(--down);stroke-dasharray:7 9;animation:none}
   @keyframes flow{to{stroke-dashoffset:-16}}
   .elabel{font-size:10px;fill:var(--muted)}
+
+  .tabs{display:flex;gap:4px;margin:0 0 12px;border-bottom:1px solid var(--line)}
+  .tab{appearance:none;border:0;background:none;padding:8px 14px;font:inherit;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-1px}
+  .tab[aria-selected=true]{color:var(--ink);border-bottom-color:var(--idle)}
+  .tab:focus-visible{outline:2px solid var(--idle);outline-offset:2px}
+  [hidden]{display:none!important}
+  .mapwrap{display:grid;grid-template-columns:1fr 300px;gap:12px}
+  @media(max-width:860px){.mapwrap{grid-template-columns:1fr}}
+  #map,#scatter{height:520px;border:1px solid var(--line);border-radius:12px;background:#eef1f5;overflow:hidden}
+  #scatter svg{width:100%;height:100%}
+  .glist{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+  .grow{display:flex;gap:8px;align-items:center;padding:7px 10px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px}
+  .grow:hover{background:#f3f5f8}
+  .grow .sub{color:var(--muted);font-size:11.5px}
+  .gdot{width:11px;height:11px;border-radius:50%;flex:none}
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:0 0 10px;font-size:13px}
+  .seg button{border:1px solid var(--line);background:#fff;padding:4px 12px;font:inherit;cursor:pointer}
+  .seg button:first-child{border-radius:8px 0 0 8px}.seg button:last-child{border-radius:0 8px 8px 0;border-left:0}
+  .seg button[aria-pressed=true]{background:#e6eefc;border-color:var(--idle);font-weight:600}
+  .note{color:var(--muted);font-size:12.5px}
 </style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 </head>
 <body>
 <header>
-  <h1>Flood pipeline: live flow</h1>
+  <h1>Flood early-warning console</h1>
   <span class="chip"><span class="dot" id="d-kafka"></span><span id="c-kafka">Kafka …</span></span>
   <span class="chip"><span class="dot" id="d-brokers"></span><span id="c-brokers">brokers …</span></span>
   <span class="chip"><span class="dot" id="d-urp"></span><span id="c-urp">under-replicated …</span></span>
@@ -72,7 +93,13 @@
   <span class="chip" style="margin-left:auto" id="c-clock">connecting…</span>
 </header>
 <main>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tb-flow" aria-selected="true" data-tab="flow">Pipeline flow</button>
+    <button class="tab" role="tab" id="tb-map" aria-selected="false" data-tab="map">Map</button>
+    <button class="tab" role="tab" id="tb-data" aria-selected="false" data-tab="data">Readings &amp; alerts</button>
+  </div>
   <div class="banner" id="banner"></div>
+  <section id="tab-flow">
   <div class="canvas">
   <svg viewBox="0 0 1120 600" id="svg" role="img" aria-label="Live pipeline diagram">
     <defs>
@@ -89,13 +116,43 @@
     <span><span class="dot" style="background:var(--idle)"></span>alive, nothing flowing</span>
     <span><span class="dot warn"></span>degraded (missing instance, lag)</span>
     <span><span class="dot down"></span>stopped / silent</span>
-    <span><span class="dot"></span>not running yet (build progress)</span>
+    <span><span class="dot"></span>no process yet (not built or not started)</span>
     <span>green dashes moving = messages flowing; red = data arriving but its consumer is gone</span>
   </div>
   <h2>Status changes</h2>
   <table><thead><tr><th>Time</th><th>Component</th><th>Change</th></tr></thead><tbody id="log">
     <tr><td colspan="3" style="color:var(--muted)">Nothing yet. Stop a producer, a Faust worker or a broker and it shows up here with a timestamp.</td></tr>
   </tbody></table>
+  </section>
+
+  <section id="tab-map" hidden>
+    <div class="toolbar">
+      <span class="seg"><button id="m-live" aria-pressed="true">Live</button><button id="m-replay" aria-pressed="false">Replay (SIMULATION)</button></span>
+      <span class="seg"><button id="v-map" aria-pressed="true">Map</button><button id="v-scatter" aria-pressed="false">Offline view</button></span>
+      <span class="note" id="map-note"></span>
+    </div>
+    <div class="mapwrap">
+      <div><div id="map"></div><div id="scatter" hidden></div></div>
+      <div class="glist" id="glist"></div>
+    </div>
+    <div class="legend">
+      <span><span class="gdot" style="display:inline-block;background:#1f9d63"></span>below action stage</span>
+      <span><span class="gdot" style="display:inline-block;background:#e0b000"></span>action</span>
+      <span><span class="gdot" style="display:inline-block;background:#e8761a"></span>minor flood</span>
+      <span><span class="gdot" style="display:inline-block;background:#d63b3b"></span>moderate</span>
+      <span><span class="gdot" style="display:inline-block;background:#7b3fbf"></span>major</span>
+      <span><span class="gdot" style="display:inline-block;background:#a7afba"></span>no recent reading</span>
+      <span>levels are the official NWS (NWPS) stages for each gauge</span>
+    </div>
+  </section>
+
+  <section id="tab-data" hidden>
+    <div class="note" id="db-note" style="margin-bottom:8px"></div>
+    <h2 style="margin-top:4px">Latest windows (PostgreSQL)</h2>
+    <table><thead><tr><th>Gauge</th><th>Window start</th><th>Mode</th><th>Readings</th><th>Stage (ft)</th><th>Rise (ft/h)</th><th>Rain 3 h</th></tr></thead><tbody id="db-win"></tbody></table>
+    <h2>Alerts</h2>
+    <table><thead><tr><th>Raised</th><th>Gauge</th><th>Mode</th><th>Category</th><th>Probability</th><th>Horizon (h)</th><th>Status</th><th>Delivered</th></tr></thead><tbody id="db-alerts"></tbody></table>
+  </section>
 </main>
 <script>
 // layout: x, y, w, h  (the same arrangement as the Phase I methodology diagram)
@@ -185,6 +242,118 @@ function connect(){
 }
 connect();
 setInterval(()=>{ if (lastMsg && Date.now()-lastMsg > 8000) document.getElementById("c-clock").textContent = "no update for " + Math.round((Date.now()-lastMsg)/1000) + " s"; }, 2000);
+
+// ---------------------------------------------------------------- tabs
+const TABS = ["flow","map","data"];
+function showTab(t){
+  for (const n of TABS){
+    document.getElementById("tab-"+n).hidden = n!==t;
+    document.getElementById("tb-"+n).setAttribute("aria-selected", n===t);
+  }
+  try{ history.replaceState(null,"","#"+t); }catch(e){}
+  if (t==="map") { loadGauges(); setTimeout(()=>lmap&&lmap.invalidateSize(),50); }
+  if (t==="data") loadDb();
+}
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>showTab(b.dataset.tab)));
+
+// ---------------------------------------------------------------- map
+const SC = {normal:"#1f9d63",action:"#e0b000",minor:"#e8761a",moderate:"#d63b3b",major:"#7b3fbf",stale:"#a7afba",nodata:"#a7afba"};
+const SEV = {major:5,moderate:4,minor:3,action:2,normal:1,stale:0,nodata:0};
+let gmode="live", gdata=null, lmap=null, lmarkers={}, useScatter=false, fitted=false;
+const ageTxt = s => s==null?"":(s<90?Math.round(s)+" s ago":(s<5400?Math.round(s/60)+" min ago":(s/3600).toFixed(1)+" h ago"));
+function setSeg(a,b,first){ document.getElementById(a).setAttribute("aria-pressed",first); document.getElementById(b).setAttribute("aria-pressed",!first); }
+document.getElementById("m-live").onclick=()=>{gmode="live";setSeg("m-live","m-replay",true);fitted=false;loadGauges();};
+document.getElementById("m-replay").onclick=()=>{gmode="replay";setSeg("m-live","m-replay",false);loadGauges();};
+document.getElementById("v-map").onclick=()=>{useScatter=false;setSeg("v-map","v-scatter",true);drawGauges();};
+document.getElementById("v-scatter").onclick=()=>{useScatter=true;setSeg("v-map","v-scatter",false);drawGauges();};
+function ensureLeaflet(cb){
+  if (window.L) return cb(true);
+  const sc=document.createElement("script");
+  sc.src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
+  sc.onload=()=>cb(true); sc.onerror=()=>cb(false); document.head.appendChild(sc);
+}
+async function loadGauges(){
+  try{ const r=await fetch("/api/gauges?mode="+gmode); gdata=await r.json(); drawGauges(); }
+  catch(e){ document.getElementById("map-note").textContent="cannot reach the console server"; }
+}
+function popup(g){
+  const c=g.cats||{};
+  return `<b>${g.name}</b><br>${g.lid} · ${g.site_no}<br>`+
+    (g.stage==null?"no reading":`stage <b>${g.stage.toFixed(2)} ft</b>${g.provisional?" (provisional)":""}${g.age_s!=null?" · "+ageTxt(g.age_s):""}`)+
+    `<br><span style="color:#6b7785">action ${c.action??"-"} · minor ${c.minor??"-"} · moderate ${c.moderate??"-"} · major ${c.major??"-"} ft</span>`;
+}
+function drawList(gs){
+  const el=document.getElementById("glist"); el.innerHTML="";
+  gs.slice().sort((a,b)=>(SEV[b.status]-SEV[a.status])||a.name.localeCompare(b.name)).forEach(g=>{
+    const d=document.createElement("div"); d.className="grow";
+    d.innerHTML=`<span class="gdot" style="background:${SC[g.status]}"></span><div><div class="nm"></div><div class="sub"></div></div>`;
+    d.querySelector(".nm").textContent=g.name;
+    d.querySelector(".sub").textContent=(g.stage==null?"no reading":g.stage.toFixed(2)+" ft")+(g.age_s!=null?" · "+ageTxt(g.age_s):"")+" · "+g.status;
+    d.onclick=()=>{ if(lmap&&!useScatter) lmap.setView([g.lat,g.lon],12); };
+    el.appendChild(d);
+  });
+}
+function drawScatter(gs){
+  const box=document.getElementById("scatter"); const W=800,H=520,pad=40;
+  const lons=gs.map(g=>g.lon), lats=gs.map(g=>g.lat);
+  const x0=Math.min(...lons),x1=Math.max(...lons),y0=Math.min(...lats),y1=Math.max(...lats);
+  const sx=lon=>pad+(lon-x0)/((x1-x0)||1)*(W-2*pad), sy=lat=>H-pad-(lat-y0)/((y1-y0)||1)*(H-2*pad);
+  let h=`<svg viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="#eef1f5"/>`;
+  h+=`<text x="12" y="20" font-size="12" fill="#6b7785">Offline view: gauge positions only (no map tiles). Longitude → right, latitude → up.</text>`;
+  for (const g of gs){
+    const r=g.status==="major"||g.status==="moderate"||g.status==="minor"?9:7;
+    h+=`<g><circle cx="${sx(g.lon)}" cy="${sy(g.lat)}" r="${r}" fill="${SC[g.status]}" stroke="#fff" stroke-width="2"><title>${g.name}: ${g.stage==null?"no reading":g.stage.toFixed(2)+" ft"} (${g.status})</title></circle>`;
+    h+=`<text x="${sx(g.lon)+11}" y="${sy(g.lat)+4}" font-size="10" fill="#1f2933">${g.lid}</text></g>`;
+  }
+  box.innerHTML=h+"</svg>";
+}
+function drawGauges(){
+  const note=document.getElementById("map-note"), mapEl=document.getElementById("map"), scEl=document.getElementById("scatter");
+  if(!gdata) return;
+  if(!gdata.locations){
+    mapEl.hidden=false; scEl.hidden=true;
+    mapEl.innerHTML='<div style="padding:24px"><b>No gauge locations yet.</b><br>Run once on your machine, then refresh:<br><code>python -m tools.gauge_locations</code></div>';
+    document.getElementById("glist").innerHTML=""; note.textContent=""; return;
+  }
+  const gs=gdata.gauges.filter(g=>g.lat!=null);
+  const withData=gs.filter(g=>g.stage!=null).length;
+  note.textContent=`${withData}/${gs.length} gauges reporting · ${gdata.mode==="replay"?"REPLAY: SIMULATION data, not live":"live data"}`;
+  drawList(gs);
+  if(useScatter){ mapEl.hidden=true; scEl.hidden=false; drawScatter(gs); return; }
+  scEl.hidden=true; mapEl.hidden=false;
+  ensureLeaflet(ok=>{
+    if(!ok){ useScatter=true; setSeg("v-map","v-scatter",false); mapEl.hidden=true; scEl.hidden=false; drawScatter(gs);
+             note.textContent+=" · map library unreachable (offline?), showing the offline view"; return; }
+    if(!lmap){
+      mapEl.innerHTML="";
+      lmap=L.map("map",{zoomControl:true}).setView([30.3,-98.5],8);
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:17,attribution:"© OpenStreetMap contributors"}).addTo(lmap);
+    }
+    for(const g of gs){
+      const style={radius:(["minor","moderate","major"].includes(g.status)?11:8),color:"#fff",weight:2,fillColor:SC[g.status],fillOpacity:.95};
+      if(lmarkers[g.site_no]){ lmarkers[g.site_no].setStyle(style); lmarkers[g.site_no].setPopupContent(popup(g)); }
+      else lmarkers[g.site_no]=L.circleMarker([g.lat,g.lon],style).bindPopup(popup(g)).addTo(lmap);
+    }
+    if(!fitted&&gs.length){ lmap.fitBounds(gs.map(g=>[g.lat,g.lon]),{padding:[30,30]}); fitted=true; }
+  });
+}
+setInterval(()=>{ if(!document.getElementById("tab-map").hidden) loadGauges(); },5000);
+
+// ---------------------------------------------------------------- readings & alerts (PostgreSQL)
+const esc=t=>String(t??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const fmtDT=t=>t?new Date(t).toLocaleString([], {hour12:false}):"";
+async function loadDb(){
+  const note=document.getElementById("db-note");
+  try{
+    const d=await (await fetch("/api/db")).json();
+    if(!d.ok){ note.textContent="PostgreSQL not reachable: "+d.error; return; }
+    note.textContent = (d.windows.length||d.alerts.length) ? "Newest rows first." : "Connected. No rows yet: windows arrive once the Postgres sink (Phase 5) runs, alerts once the forecaster (Phase 4) runs.";
+    document.getElementById("db-win").innerHTML = d.windows.map(w=>`<tr><td>${esc(w.site_no)}</td><td>${fmtDT(w.window_start)}</td><td>${esc(w.mode)}</td><td>${esc(w.n_readings)}</td><td>${w.stage_last==null?"":(+w.stage_last).toFixed(2)}</td><td>${w.rise_rate_ft_per_h==null?"":(+w.rise_rate_ft_per_h).toFixed(2)}</td><td>${w.rain_3h==null?"":(+w.rain_3h).toFixed(1)}</td></tr>`).join("");
+    document.getElementById("db-alerts").innerHTML = d.alerts.map(a=>`<tr><td>${fmtDT(a.raised_at)}</td><td>${esc(a.site_no)}</td><td>${esc(a.mode)}</td><td>${esc(a.category)}</td><td>${a.probability==null?"":(+a.probability).toFixed(2)}</td><td>${esc(a.horizon_h)}</td><td>${esc(a.status)}</td><td>${fmtDT(a.delivered_at)}</td></tr>`).join("");
+  }catch(e){ note.textContent="cannot reach the console server"; }
+}
+setInterval(()=>{ if(!document.getElementById("tab-data").hidden) loadDb(); },5000);
+{ const h=(location.hash||"").slice(1); if(TABS.includes(h)&&h!=="flow") showTab(h); }
 </script>
 </body>
 </html>

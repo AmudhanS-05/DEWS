@@ -39,6 +39,8 @@ with a horizon and probability, and reports lead time net of feed delay.
 | `common/` | config, USGS/NWPS parsers, hydrology helpers, Kafka producer | all |
 | `tests/` | `pytest` suite (39 tests) | all |
 | `docs/BUILD_PHASES.md` | how to run and test each phase | |
+| `docs/RUNBOOK.md` | commands per step and what the console shows; who uses it; open questions | |
+| `docs/ML_HANDOFF.md` | brief for the parallel ML track | 4 |
 | `docs/MANUAL_CHECKS.md` | checks to do by hand so nothing bites us later | |
 | `PROJECT_LOG.md` / `BREADCRUMBS.md` | decisions and numbers / progress trail (local only, git-ignored) | |
 | `FAQ.md` | gauges, datasets, pooled evaluation, what the models predict | |
