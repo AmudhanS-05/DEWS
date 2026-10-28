@@ -16,7 +16,7 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1
 python -m pip install -U pip setuptools wheel     # old setuptools fails on faust-streaming's opentracing
 pip install -r requirements-dev.txt
-pytest -q                                          # expect: 35 passed, 1 skipped (0 after fetch_sample --nwps)
+pytest -q                                          # expect: 39 passed
 ```
 
 ## Phase 0 — Gate checks (decide if floods are buildable) · built + unit-tested · needs your machine
@@ -42,7 +42,7 @@ pytest -q                                          # expect: 35 passed, 1 skippe
 
 ## Phase 1 — Infrastructure · built (compose YAML-validated, schema loads on PG16) · needs your machine
 
-`docker/README.md` has the full steps. **Pass:** all services healthy; 6 topics with
+`docker/README.md` has the full steps. **Pass:** all services healthy; 8 topics with
 3 partitions, RF 3, min ISR 2; 8 tables; stopping one broker keeps the topics available.
 
 ## Phase 2 — Producers · built + unit-tested · needs your machine
@@ -54,7 +54,7 @@ python -m tools.peek gauge.usgs --n 5 --from-beginning
 **Pass:** readings arrive keyed by site_no with `fetched_at`; a second `--once`
 publishes 0 new readings (only heartbeats); `state/usgs_producer_state.json` exists.
 Replay: `python -m producers.replay_producer --site <S> --start <d> --end <d> --speed 3600`
-→ messages have `"mode": "SIMULATION"`. Throughput: add `--no-sleep`, note msg/s.
+→ messages go to `replay.gauge` (not `gauge.usgs`) and have `"mode": "SIMULATION"`. Throughput: add `--no-sleep`, note msg/s.
 
 Phase 2b (not built yet): `mrms_qpe_producer.py` → `rain.mrms` (needs the MRMS
 product choice and a catchment-boundary source, both unverified).
@@ -62,7 +62,10 @@ product choice and a catchment-boundary source, both unverified).
 ## Phase 3 — Windowing (Faust) · logic built + unit-tested; Faust app import-checked only · needs your machine
 
 ```powershell
-faust -A streams.faust_app worker -l info
+# three terminals, one Faust instance each (one group, 3 partitions)
+faust -A streams.faust_app worker -l info --web-port 6066
+faust -A streams.faust_app worker -l info --web-port 6067
+faust -A streams.faust_app worker -l info --web-port 6068
 python -m producers.replay_producer --site <S> --start <d> --end <d> --speed 36000
 python -m tools.peek aggregates.window --n 5 --from-beginning
 ```
@@ -81,13 +84,13 @@ one ML model (choice made after seeing these numbers) and `ml/forecaster_consume
 (aggregates.window → risk_scores + alerts.flood).
 
 ## Phase 5 — Storage sink + latency trace · not built
-`storage/sink.py`: consumes gauge.usgs and aggregates.window, upserts into Postgres,
+`storage/sink.py` (group `postgres-sink`): consumes aggregates.window and alerts.flood, upserts into Postgres,
 commits offsets only after the write. **Test:** row counts match topic counts after a
 replay; killing the sink mid-replay and restarting leaves no gaps and no duplicates.
 
 ## Phase 6 — Alerts, agent triage, human approval, notifier · not built
 `alerts.flood` → agent drafts an advisory → a person approves (CLI or dashboard) →
-`advisories.approved` → notifier sends to Telegram/email and records delivered_at.
+`alerts.approved` → notifier sends an email, writes a log line and records delivered_at.
 **Test:** a replayed flood produces a SIMULATION-stamped draft; nothing is sent until
 approved; delivered_at − alert_time is logged.
 

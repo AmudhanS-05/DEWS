@@ -13,8 +13,21 @@ TOPIC_GAUGE = "gauge.usgs"            # raw gauge readings, key = site_no
 TOPIC_RAIN = "rain.mrms"              # catchment rainfall, key = site_no (phase 2b)
 TOPIC_AGG = "aggregates.window"       # windowed features, key = site_no
 TOPIC_ALERTS = "alerts.flood"         # forecaster output (drafts, never sent directly)
-TOPIC_ADVISORIES = "advisories.approved"  # human-approved advisories -> notifier
+TOPIC_APPROVED = "alerts.approved"    # human-approved advisories -> notifier (the only topic it reads)
+TOPIC_REPLAY_GAUGE = "replay.gauge"   # historical gauge replay (SIMULATION), kept apart from live data
+TOPIC_REPLAY_RAIN = "replay.rain"     # historical rainfall replay (SIMULATION; with the MRMS producer, phase 2b)
 TOPIC_DLQ = "deadletter.flood"        # records that failed parsing/processing
+
+# Every topic the stack creates (docker/*.yml must list the same names)
+ALL_TOPICS = [TOPIC_GAUGE, TOPIC_RAIN, TOPIC_REPLAY_GAUGE, TOPIC_REPLAY_RAIN, TOPIC_AGG,
+              TOPIC_ALERTS, TOPIC_APPROVED, TOPIC_DLQ]
+
+# Consumer groups (one per consuming component; Faust's app id is the windowing group)
+GROUP_WINDOWING = "flood-windowing"   # Faust, 3 instances = 3 partitions
+GROUP_FORECASTER = "forecaster"
+GROUP_SINK = "postgres-sink"          # reads aggregates.window and alerts.flood
+GROUP_AGENT = "agent"
+GROUP_NOTIFIER = "notifier"
 
 # PostgreSQL (matches docker/docker-compose.yml)
 PG_DSN = os.getenv("PG_DSN", "postgresql://spa_user:spa_pass@127.0.0.1:5432/disaster_warning")

@@ -2,7 +2,7 @@
 
 > **Flood update (1 Oct 2026):** the agent consumes `alerts.flood` (or the `alerts`
 > table) and only **drafts** advisories. A person approves each one; approved advisories
-> go to `advisories.approved`, which is the only topic the notifier reads. Agent decisions
+> go to `alerts.approved`, which is the only topic the notifier reads. Agent decisions
 > are logged for evaluation. "station" below now means a USGS gauge (`site_no`).
 
 Not started yet (see PROJECT_LOG.md / the SPA-vs-Agentic sequencing note in the

@@ -1,4 +1,4 @@
-"""Replay producer: historical USGS readings -> gauge.usgs, marked SIMULATION.
+"""Replay producer: historical USGS readings -> replay.gauge, marked SIMULATION.
 
 Reads the yearly files the gate check cached under data/raw/usgs/ and publishes
 them in event-time order. Used for the demo (a past flood, shown as it unfolded),
@@ -9,7 +9,8 @@ for evaluation, and for the throughput benchmark.
     # throughput benchmark: as fast as possible, prints messages/second
     python -m producers.replay_producer --site 09510200 --start 2020-01-01 --end 2025-12-31 --no-sleep
 
-Every record carries mode = SIMULATION; downstream alerts inherit it, so a replayed
+Replay has its own topic (replay.gauge), so it never mixes with live gauge.usgs data.
+Every record also carries mode = SIMULATION; downstream alerts inherit it, so a replayed
 alert can never be mistaken for a live one.
 """
 from __future__ import annotations
@@ -49,14 +50,14 @@ def main(argv=None):
     a = p.parse_args(argv)
 
     rs = load_readings(a.site, a.start, a.end)
-    print(f"replaying {len(rs)} readings for {a.site} ({a.start}..{a.end}) -> {config.TOPIC_GAUGE}")
+    print(f"replaying {len(rs)} readings for {a.site} ({a.start}..{a.end}) -> {config.TOPIC_REPLAY_GAUGE}")
     prod = JsonProducer("replay-producer")
     wall0, prev_ts = time.perf_counter(), None
     for r in rs:
         if not a.no_sleep and prev_ts is not None and r["reading_ts"] > prev_ts:
             time.sleep((r["reading_ts"] - prev_ts) / a.speed)
         prev_ts = r["reading_ts"]
-        prod.send(config.TOPIC_GAUGE, r["site_no"], make_envelope(r, now_epoch(), "SIMULATION"))
+        prod.send(config.TOPIC_REPLAY_GAUGE, r["site_no"], make_envelope(r, now_epoch(), "SIMULATION"))
     prod.flush(60)
     dt = time.perf_counter() - wall0
     print(f"done: sent={prod.sent} failed={prod.failed} in {dt:.1f}s = {prod.sent / dt if dt else 0:.0f} msg/s")

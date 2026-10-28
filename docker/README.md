@@ -13,7 +13,7 @@ Two options. Run only one at a time (both bind 9092 and 5432).
 cd docker
 docker compose up -d
 docker compose ps                      # kafka-1/2/3 and postgres "healthy"
-docker compose logs topic-init         # shows the 6 topics, 3 partitions, ReplicationFactor: 3
+docker compose logs topic-init         # shows the 8 topics, 3 partitions, ReplicationFactor: 3
 ```
 
 On Windows the brokers can take 60–130 s to become healthy (see the reproducibility
@@ -29,8 +29,8 @@ $env:KAFKA_BOOTSTRAP="127.0.0.1:9092"; $env:TOPIC_REPLICATION_FACTOR="1"
 ## Phase 1 tests
 
 1. `docker compose ps` → every service healthy, `topic-init` exited with code 0.
-2. `docker compose logs topic-init` → `gauge.usgs`, `rain.mrms`, `aggregates.window`,
-   `alerts.flood`, `advisories.approved`, `deadletter.flood`, each `PartitionCount: 3`,
+2. `docker compose logs topic-init` → `gauge.usgs`, `rain.mrms`, `replay.gauge`, `replay.rain`,
+   `aggregates.window`, `alerts.flood`, `alerts.approved`, `deadletter.flood`, each `PartitionCount: 3`,
    `ReplicationFactor: 3`, `min.insync.replicas=2`.
 3. `docker exec -it flood-postgres psql -U spa_user -d disaster_warning -c "\dt"` →
    8 tables (alerts, catchment_rain, evaluation_runs, gauge_readings, gauges,

@@ -48,7 +48,7 @@ Items marked *unverified* are concerns I could not confirm from a source.
 - [ ] **Campus network**: test that USGS, NWPS and AWS are reachable from the room.
       If not, run the replay producer from cached data (SIMULATION stamped).
 - [ ] **Cached history present** under `data/raw/usgs/` for the demo gauge and event.
-- [ ] **Secrets**: Telegram bot token and any passwords in a local `.env`, never in git.
+- [ ] **Secrets**: SMTP app password for the notifier's email and any other passwords in a local `.env`, never in git.
 
 ## Honesty checks for the report
 - [ ] Live and replay results reported separately, never merged.

@@ -20,7 +20,7 @@ end-to-end latency (including the feed's own delay) is measured, not assumed.
 USGS IV (live) ┐
 MRMS rain*     ├─▶ producers ─▶ gauge.usgs / rain.mrms ─▶ Faust windows ─▶ aggregates.window ─▶ forecaster* ─▶ Postgres ─▶ Power BI*
 replay (hist.) ┘                                                                         │
-                                       alerts.flood ─▶ agent triage* ─▶ human approval* ─▶ advisories.approved ─▶ notifier*
+                                       alerts.flood ─▶ agent triage* ─▶ human approval* ─▶ alerts.approved ─▶ notifier* (email + log)
 ```
 `*` = not built yet. It never says a flood "will occur"; it forecasts a category crossing
 with a horizon and probability, and reports lead time net of feed delay.
@@ -37,7 +37,7 @@ with a horizon and probability, and reports lead time net of feed delay.
 | `ml/` | baselines, metrics, backtest | 4 |
 | `agentic_ai/`, `dashboard/` | agent triage + approval; Power BI / Streamlit | 6–7 |
 | `common/` | config, USGS/NWPS parsers, hydrology helpers, Kafka producer | all |
-| `tests/` | `pytest` suite (32 tests) | all |
+| `tests/` | `pytest` suite (39 tests) | all |
 | `docs/BUILD_PHASES.md` | how to run and test each phase | |
 | `docs/MANUAL_CHECKS.md` | checks to do by hand so nothing bites us later | |
 | `PROJECT_LOG.md` / `BREADCRUMBS.md` | decisions and numbers / progress trail (local only, git-ignored) | |

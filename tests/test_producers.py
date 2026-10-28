@@ -48,6 +48,8 @@ def test_envelope_fields():
 
 def test_poll_once_publishes_new_then_only_heartbeats(monkeypatch):
     monkeypatch.setattr(usgs_iv_producer, "get_json", lambda url: fixture_doc())
+    # the fixture is from 30 Sep 2026 and the tracker prunes after 72 h, so pin "now" next to it
+    monkeypatch.setattr(usgs_iv_producer, "now_epoch", lambda: 1790769600.0)   # 2026-09-30T12:00:00Z
     fp, t = FakeProducer(), tracking.ReadingTracker()
     stats, _ = usgs_iv_producer.poll_once(["09510200", "07332500"], t, fp, None)
     readings = [m for m in fp.msgs if m[2]["type"] == "reading"]
@@ -80,3 +82,24 @@ def test_backfill_url_after_downtime():
     assert "period=PT6H" in usgs_iv_producer.fetch_url(["1"], now - 3600, now)
     u = usgs_iv_producer.fetch_url(["1"], now - 24 * 3600, now)
     assert "startDT=" in u and "period" not in u
+
+
+def test_replay_goes_to_its_own_topic_marked_simulation(monkeypatch):
+    from producers import replay_producer
+    rs = usgs.parse_iv_json(fixture_doc())[:5]
+    fp = FakeProducer()
+    monkeypatch.setattr(replay_producer, "load_readings", lambda site, start, end: rs)
+    monkeypatch.setattr(replay_producer, "JsonProducer", lambda name: fp)
+    replay_producer.main(["--site", "09510200", "--start", "2021-01-01", "--end", "2021-01-02", "--no-sleep"])
+    assert len(fp.msgs) == 5
+    assert all(m[0] == config.TOPIC_REPLAY_GAUGE != config.TOPIC_GAUGE for m in fp.msgs)
+    assert all(m[2]["mode"] == "SIMULATION" for m in fp.msgs)
+
+
+def test_topic_list_matches_compose():
+    root = os.path.join(os.path.dirname(__file__), "..", "docker")
+    for fn in ("docker-compose.yml", "docker-compose.single.yml"):
+        with open(os.path.join(root, fn), encoding="utf-8") as f:
+            text = f.read()
+        line = next(l for l in text.splitlines() if "for t in " in l)
+        assert line.split("for t in ")[1].split(";")[0].split() == config.ALL_TOPICS

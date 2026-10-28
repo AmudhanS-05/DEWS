@@ -11,8 +11,8 @@ This file maps that design to the code.
 | Brief step | Implementation | File(s) |
 |---|---|---|
 | 1. Streaming variables | gage height (00065), discharge (00060), catchment rainfall (MRMS, Phase 2b) | `common/usgs.py` |
-| 2. Producers, separate topics | `gauge.usgs`, `rain.mrms` (+ `aggregates.window`, `alerts.flood`, `advisories.approved`, `deadletter.flood`) | `producers/`, `docker/docker-compose.yml` |
-| 3. Partitions + consumer groups | 3 partitions, key = `site_no`; groups: flood-windowing (Faust), forecaster, agent, notifier, dashboard | `streams/faust_app.py` |
+| 2. Producers, separate topics | 3 producers (USGS live, MRMS live, replay) → `gauge.usgs`, `rain.mrms`, `replay.gauge`, `replay.rain`; downstream `aggregates.window`, `alerts.flood`, `alerts.approved`, plus `deadletter.flood` (8 topics) | `producers/`, `docker/docker-compose.yml` |
+| 3. Partitions + consumer groups | 3 partitions, key = `site_no`; groups: `flood-windowing` (Faust, 1 group × 3 instances), `forecaster`, `postgres-sink` (reads `aggregates.window` and `alerts.flood`), `agent`, `notifier`. Power BI reads PostgreSQL, so it is not a Kafka group | `streams/faust_app.py` |
 | 4. Event-time windows + aggregation | hourly tumbling windows on the reading's own timestamp; zero-fill; late revisions | `streams/windowing.py` |
 | 5. ML / prediction | persistence and rise-rate baselines; ML model chosen after baseline numbers | `ml/` |
 | 6. PostgreSQL | readings, windows, scores, alerts, latency trace, evaluation | `storage/schema.sql` |
@@ -31,6 +31,7 @@ This file maps that design to the code.
 - **Heartbeats from the producer** drive wall-clock window closing and zero-fill, so the
   stream app never has to write state outside stream processing.
 - **Backtest uses the same window code as the stream**, so offline and live features match.
-- **Every replayed record and alert carries `mode = SIMULATION`.**
+- **Every replayed record and alert carries `mode = SIMULATION`**, and replay has its own topics (`replay.gauge`, `replay.rain`) and its own Faust state table, so it never mixes with live data.
+- **Notifier channel: email + log** (team mailbox now; a county emergency-management channel is future work).
 - **3 brokers, RF 3, min ISR 2** is the default stack; the single-broker fallback exists,
   and with it we do not claim broker-level fault tolerance.
