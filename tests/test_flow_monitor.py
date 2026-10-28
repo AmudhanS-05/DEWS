@@ -26,6 +26,7 @@ def test_healthy_flow_and_unbuilt_parts_are_absent_not_red():
     v = fm.build_view(raw())
     assert status(v, "t_gauge") == "ok" and status(v, "faust") == "ok"
     assert status(v, "forecaster") == "absent" and status(v, "p_mrms") == "absent"
+    assert status(v, "t_rain") == "idle"            # exists, empty: waiting, not broken
     assert edge(v, "e_gauge_faust") == "flow" and edge(v, "e_rain_faust") == "planned"
     assert edge(v, "e_agg_fore") == "inactive"
 
