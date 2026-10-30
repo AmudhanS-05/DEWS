@@ -63,6 +63,33 @@ India study, evaluation numbers) without the demo depending on it.
 Risk: the MRMS producer depends on GRIB2 decoding on Windows. If it slips past 1 Nov, the core is frozen without
 rainfall (stage-only baseline) and rain joins in the 3 to 9 Nov block.
 
+## Vertical slices (from now to 18 Nov)
+
+Every slice is one demoable story, cut through all tracks at once: pipeline, ML, agents, India study, console,
+Power BI and paper/slides. Each slice ends with a short demo on the laptop, one paragraph in the paper and one slide.
+
+| Slice | Story | Core pipeline | ML | Agents (AAI) | India | Paper / slides |
+|---|---|---|---|---|---|---|
+| **S1** (by 2 Nov) | One past flood end to end: the May 2019 Onion Creek (DRWT2) replay raises an alert, a person approves it, an email arrives; a Faust worker is killed during it and recovers | sink, forecaster (baseline), approval, notifier, Power BI page 1, fault drill | stage-only baseline numbers for DRWT2 in `evaluation_runs` | LangGraph skeleton: coordinator + workers reading PostgreSQL, template writer; runs on the S1 alert | step A audit script started | method section; S1 slide |
+| **S2** (by 6 Nov) | The same flood with rainfall: radar rain appears before the river rises | MRMS producer + replay rain, rain in windows | rain features, model v1 | Context worker uses rain; disagreement rule | step A table done | data section; rain figure |
+| **S3** (by 10 Nov) | A real model instead of the baseline, scored on held-out years | ML model in the forecaster; Power BI evaluation page | model v2, evaluation rows, model card | reviewer checks numbers; Ollama in place | step B: pipeline on Indian data, failure log | results table |
+| **S4** (by 14 Nov) | Full agent workflow: reactive draft in seconds, agent version later, uncertain cases, update wording | MCP server; advisories table | radius sensitivity (5/10/25 km) | episodic memory, update wording; agent evaluation | step C degradation curves | AAI deck and video; India section |
+| **S5** (by 18 Nov) | Hardened demo: every fault drill, throughput, latency report, two rehearsals | all drills, throughput run | final numbers | ablation (single vs multi-agent) | step D synthetic India | paper complete; SPA deck |
+
+## Who works where
+
+| Workstream | Where | Owns (writes only here) |
+|---|---|---|
+| Core pipeline + integration | this chat, or a Claude Code session on the laptop | `common/`, `producers/`, `streams/`, `storage/`, `alerting/`, `dashboard/`, `docker/`, `tools/`, `tests/` (its own) |
+| ML + India steps C and D | ML chat / Claude Code session | `ml/`, `india/`, `notebooks/`, `requirements-ml.txt` |
+| Agents (AAI) | AAI chat / Claude Code session | `agentic_ai/`, `requirements-agents.txt` |
+| Paper and slides (SPA, AAI) | claude.ai chats (no code) | the paper doc, decks in `presentations/` |
+
+Rules: the interfaces between workstreams are fixed in `docs/CONTRACTS.md` (change them only with a breadcrumb line);
+each workstream commits only its own folders; each adds its lines to `BREADCRUMBS.md` tagged `[core]`, `[ml]`,
+`[agents]` or `[paper]`; integration and the slice demo happen in the core workstream. `CLAUDE.md` gives every
+session the same rules.
+
 ## Phase details
 
 ### Phase 2b: MRMS rainfall producer (W1)
@@ -119,8 +146,13 @@ rainfall (stage-only baseline) and rain joins in the 3 to 9 Nov block.
 ### Phase 6b: multi-agent advisory system (AAI; W2 to W3)
 
 **Purpose.** Turn a forecaster alert (numbers) into a checked, plain-language advisory with evidence, for a duty
-officer to approve. The agents draft and check; they never send. If any agent fails or the LLM is unreachable, the
-6a template is used, so the SPA pipeline is never blocked.
+officer to approve. The agents draft and check; they never send.
+
+**Two layers (decided 30 Oct, in the AAI deck).** A **reactive layer** posts the 6a template advisory as a draft the
+moment an alert arrives (seconds, no LLM). The **deliberative layer** (the agents) then works on it and replaces the
+draft with version 2 when its reviewer passes. The officer sees "agent review pending" on version 1. If the officer
+approves version 1 first (timeliness wins), the agents' version is attached as a suggested update and is not sent
+automatically. If an agent or the LLM fails, version 1 simply stays. The SPA pipeline is never blocked.
 
 **Pattern: Coordinator, Worker, Delegator (CWD)** (AAI Units III and IV), as a **hybrid architecture** (Unit II):
 reactive (triggered by each Kafka alert) plus deliberative (the coordinator plans which workers to run).
@@ -139,12 +171,20 @@ alerts.flood ─▶ Coordinator (triage + plan + delegate)
 | Agent | Role | Tools (read-only, via MCP) | Output |
 |---|---|---|---|
 | **Coordinator** (delegator) | Consumes `alerts.flood` (group `agent`). Triage: drop duplicates and downgrades, merge alerts for the same storm, mark major-category alerts urgent. Plans which workers to call and assembles the final package. | `get_open_alerts`, `get_alert(alert_id)` | plan + final advisory package |
-| **Evidence worker** | Hydrology analyst: what is happening at this gauge and how sure we are. | `get_recent_windows(site, hours)`, `get_forecast(site)`, `get_official_levels(site)`, `get_rain(site)`, `get_past_floods(site)` | evidence JSON: trend, rise rate, rain, forecast range, similar past floods |
-| **Context worker** | Geography and impacts: who is affected and what the official level means there. | `get_gauge_info(site)` (county, location), `get_impacts(site, level)` (NWS impact statements per stage, from NWPS), `get_neighbours(site)` (upstream/downstream gauge status) | context JSON |
+| **Evidence worker** | The gauge itself: what its own readings and forecast say. | `get_recent_windows(site, hours)`, `get_forecast(site)`, `get_official_levels(site)`, `get_past_floods(site)` | evidence JSON: stage trend, rise rate, forecast range, similar past floods |
+| **Context worker** | The surroundings: radar rainfall over the catchment, upstream and downstream gauges, and what the official level means there. | `get_rain(site)`, `get_neighbours(site)` (upstream/downstream gauge status), `get_gauge_info(site)` (county, location), `get_impacts(site, level)` (NWS impact statements per stage, from NWPS) | context JSON: rain signal, neighbour signal, impacts |
 | **Advisory writer** | Writes the advisory in a fixed schema: headline, gauge, current stage, forecast and probability, lead time, official category, impacts at that level, uncertainty, provisional-data note, SIMULATION label. | none (uses evidence and context only) | draft advisory |
 | **Reviewer** (critic) | Checks the draft before a person sees it: numbers match the evidence, category matches the forecaster, no certainty language ("will flood"), probability and horizon stated, SIMULATION marked for replay, length limit. Deterministic checks first, LLM judgement second. Sends it back with reasons (reflection, AAI CO2). | `check_numbers(draft, evidence)` | pass, or fail with reasons |
 | Human approval (not an agent) | Approve, edit or reject in the console. Edits and decisions are stored. | | `alerts.approved` |
 | Notifier (service, not an agent) | Sends the approved advisory, logs delivery time. | | email + log |
+
+**When the workers disagree (conflict resolution, AAI Unit III).** Each worker reports a direction: rising or not
+rising. Evidence says "rising" when the rise rate or the forecast crosses its threshold; Context says "rising" when
+catchment rain in the last 3 h or an upstream gauge's rise passes its threshold (thresholds set from the EDA, written
+in `agentic_ai/rules.py`). If the two disagree (heavy radar rain but a flat gauge, or a rising gauge with no rain and
+no upstream rise, which can be a sensor fault), the coordinator does not let one side win silently: the advisory is
+marked **uncertain**, states both signals, and asks for a re-check at the next window. The disagreement and the
+outcome are logged in `agent_runs`, so the paper can count how often each case happened and which side was right.
 
 **Tools through MCP** (AAI Unit V): `agentic_ai/mcp_server.py` exposes the read-only PostgreSQL and NWPS tools as a
 Model Context Protocol server (stdio transport). The LangGraph agents are its client. This shows the MCP
@@ -153,17 +193,18 @@ architecture (host, client, server, transport) and keeps tools independent of th
 **Memory** (AAI Unit IV):
 - short-term (working) memory: the LangGraph state for one alert run;
 - long-term (knowledge base): gauge metadata, official levels, NWS impact statements, the 213 past floods;
-- episodic memory: past advisories, reviewer verdicts and human edits for the same gauge, retrieved as examples
-  ("last time at DRWT2 the officer removed ...").
+- episodic memory: past advisories, reviewer verdicts and human edits for the same gauge. Two uses: (1) a repeat
+  alert in the same flood episode is written as an **update** ("Update 2: Onion Creek is now forecast to reach
+  moderate stage ..."), not a fresh alarm; (2) the officer's edits are retrieved as examples of preferred wording.
+  Guard: numbers are never copied from memory; the reviewer checks every number against the current evidence only.
 
 **Sequential and parallel processing** (Unit IV): evidence and context workers run in parallel; writer and reviewer
 in sequence.
 
-**LLM:** model-agnostic through LangChain chat models (decision D2: an API model if a key is available, otherwise a
-local model through Ollama). Every call has a timeout; on failure the template advisory is used and marked
-`auto-template`.
+**LLM:** model-agnostic through LangChain chat models. Decided (D2): **Ollama on the laptop** (free, no account,
+offline). Every call has a timeout; on failure version 1 (template) stays.
 
-**Storage:** new table `agent_runs` (run_id, alert_id, agent, input summary, output, tool calls, start, end, tokens,
+**Storage:** new table `advisories` (see `docs/CONTRACTS.md`) and `agent_runs` (run_id, alert_id, agent, input summary, output, tool calls, start, end, tokens,
 verdict) and `advisories` (draft text, revisions, reviewer reasons, human edit). Schema change applied by hand with
 `psql` (no volume wipe).
 
@@ -173,6 +214,8 @@ verdict) and `advisories` (draft text, revisions, reviewer reasons, human edit).
 3. Human approval rate and edit size on replayed floods.
 4. Time and tokens per agent and per advisory; added latency on top of the SPA alert time.
 5. Ablation: single agent vs the multi-agent system on the same replayed alerts.
+6. Disagreement cases: how often, and whether "uncertain" was the right call in hindsight.
+7. Reactive vs deliberative timing: time to version 1 (template) and to version 2 (agents).
 
 **For SPA slides:** one sentence and the diagram's bottom row: "consumer group `agent` reads `alerts.flood`; nothing
 is sent without human approval".

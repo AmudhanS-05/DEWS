@@ -28,7 +28,7 @@ The console is a development and demo view. The brief names Power BI for the sub
 | 1 | Live producer loop: `python -m producers.usgs_iv_producer` (polls every 5 min) | **Flow**: USGS live green, `gauge.usgs` receiving. **Map**: most gauges green, "x/38 reporting". |
 | 2 | Ctrl-C the producer. To see it quickly, start the console with `--live-stale-s 400` (the producer beats every 5 min; default is 15 min). | **Flow**: USGS live turns red ("SILENT") and the change appears in the log with a time. |
 | 3 | Start it again. | It publishes only new readings (a few dozen), not the ~2,400-reading backfill; USGS live goes green again. |
-| 4 | Once: `pip install "aiokafka==0.12.0"` (Faust 0.11.3 crashes with newer aiokafka). Then three Faust workers, one window each: `faust -A streams.faust_app worker -l info --web-port 6066` (then `6067`, `6068`) | **Flow**: Faust windowing shows `3/3 instances`. |
+| 4 | Once: `pip install "aiokafka[lz4]==0.12.0" cramjam` (Faust 0.11.3 crashes with newer aiokafka, and needs the lz4 codec). Then three Faust workers, one window each: `faust -A streams.faust_app worker -l info --web-port 6066` (then `6067`, `6068`) | **Flow**: Faust windowing shows `3/3 instances`. |
 | 5 | Replay a flood: `python -m producers.replay_producer --site 08158700 --start 2019-05-02 --end 2019-05-06 --speed 36000` | **Flow**: replay topics flow, Faust busy, `aggregates.window` fills. **Map → Replay**: Onion Creek (DRWT2) climbs through the official levels. |
 | 6 | Check the windows: `python -m tools.peek aggregates.window --n 3 --from-beginning` then `python -m tools.check_windows --mode SIMULATION --site 08158700` | Expect `PASS: no window emitted twice`; one row per hour, zero-filled hours have `n_readings` 0. |
 | 7 | Kill one worker (Ctrl-C in its window) while replaying again (step 5 command). | **Flow**: Faust turns amber `2/3`, status log shows the change; the other two take over its partitions. |
@@ -54,3 +54,18 @@ For us to decide:
 1. MRMS catchment: circle around each gauge, radius? (start simple, say so in the report).
 2. How soon after the last message a live producer counts as silent (now 15 min).
 3. Who receives the demo email, and the email account the notifier sends from.
+
+## Remaining build steps: what to run and how to test each (commands exist once that step is built)
+
+| # | Step (slice) | Run | Test: pass when |
+|---|---|---|---|
+| 13 | Faust (S1) | `pip install "aiokafka[lz4]==0.12.0" cramjam`, then steps 4 to 8 | 3/3 instances; `aggregates.window` fills during a replay; `tools.check_windows` PASS after a worker kill |
+| 14 | New topic (S1) | `cd docker; docker compose up -d --force-recreate topic-init` | `forecasts.stage` listed; console shows 9 topics |
+| 15 | Sink (S1) | `python -m storage.sink` | after a replay, row counts in PostgreSQL match topic counts; kill it mid-replay, restart: no gaps, no duplicates (`python -m tools.check_sink`) |
+| 16 | Forecaster (S1) | `python -m ml.forecaster_consumer` | May 2019 DRWT2 replay: one forecast per window in `forecasts.stage`; one alert before the minor crossing; console Readings tab shows it |
+| 17 | Approval + email (S1) | `python -m alerting.notifier`; approve in the console | version 1 draft appears within seconds; approve → email arrives; `delivered_at` filled; reject → nothing sent |
+| 18 | Power BI (S1) | open `dashboard/powerbi/DEWS.pbix`, DirectQuery to `localhost:5432` | a new replayed reading appears within one page refresh |
+| 19 | Fault drills (S1) | `python -m tools.fault_drill --scenario faust` (also `broker`, `sink`, `postgres`, `notifier`, `producer`) | console log shows the failure and recovery; `recovery_time_s` row written |
+| 20 | Rainfall (S2) | `python -m producers.mrms_qpe_producer` and `--replay` for the May 2019 flood | `rain.mrms` has a record per gauge per hour; rain rises before stage in the console |
+| 21 | Model (S3) | forecaster picks up `ml/models/*.joblib` automatically | forecasts show `model = <name>`; evaluation rows in Power BI |
+| 22 | Agents (S1 skeleton → S4) | `ollama pull qwen2.5:7b`; `python -m agentic_ai.run` | version 2 advisory replaces version 1 after the reviewer passes; uncertain cases marked |

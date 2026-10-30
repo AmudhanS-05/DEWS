@@ -20,7 +20,7 @@
   .demo{background:#fff4d6;border-color:#f0d58a}
   main{max-width:1180px;margin:0 auto;padding:16px 20px 28px}
   .canvas{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px}
-  svg{width:100%;height:auto;display:block}
+  .canvas svg{width:100%;height:auto;display:block}
   .legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--muted);margin:10px 4px 0}
   .legend span{display:inline-flex;align-items:center;gap:6px}
   .banner{display:none;margin:0 0 12px;padding:8px 12px;border-radius:8px;background:#fde8e8;color:#8a1f1f;border:1px solid #f3b9b9}
@@ -79,7 +79,7 @@
   .seg button[aria-pressed=true]{background:#e6eefc;border-color:var(--idle);font-weight:600}
   .note{color:var(--muted);font-size:12.5px}
 </style>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="/static/leaflet/leaflet.css">
 </head>
 <body>
 <header>
@@ -156,7 +156,7 @@
 </main>
 <script>
 // layout: x, y, w, h  (the same arrangement as the Phase I methodology diagram)
-const L = {
+const LAYOUT = {
   p_usgs:[20,40,130,64], p_mrms:[20,140,130,64], p_replay:[20,240,130,64],
   t_gauge:[200,40,150,64], t_rain:[200,140,150,64], t_replay:[200,240,150,64],
   faust:[410,40,150,264], t_agg:[630,120,170,64],
@@ -179,7 +179,7 @@ const edgeEls = {}, nodeEls = {};
 for (const id in P) { const p = el("path", {d:P[id], class:"edge inactive", "marker-end":"url(#arr)"}); gE.appendChild(p); edgeEls[id] = p; }
 gE.appendChild(el("text", {x:353, y:166, class:"elabel"}, "planned"));
 function build(id, n) {
-  const [x,y,w,h] = L[id];
+  const [x,y,w,h] = LAYOUT[id];
   const g = el("g", {class:"node "+n.kind});
   g.appendChild(el("rect", {x, y, width:w, height:h, rx:10}));
   g.appendChild(el("circle", {cx:x+w-14, cy:y+14, r:5, class:"sdot absent"}));
@@ -269,7 +269,7 @@ document.getElementById("v-scatter").onclick=()=>{useScatter=true;setSeg("v-map"
 function ensureLeaflet(cb){
   if (window.L) return cb(true);
   const sc=document.createElement("script");
-  sc.src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
+  sc.src="/static/leaflet/leaflet.js";
   sc.onload=()=>cb(true); sc.onerror=()=>cb(false); document.head.appendChild(sc);
 }
 async function loadGauges(){
@@ -326,11 +326,12 @@ function drawGauges(){
   scEl.hidden=true; mapEl.hidden=false;
   ensureLeaflet(ok=>{
     if(!ok){ useScatter=true; setSeg("v-map","v-scatter",false); mapEl.hidden=true; scEl.hidden=false; drawScatter(gs);
-             note.textContent+=" · map library unreachable (offline?), showing the offline view"; return; }
+             note.textContent+=" · map library failed to load, showing the offline view"; return; }
     if(!lmap){
       mapEl.innerHTML="";
       lmap=L.map("map",{zoomControl:true}).setView([30.3,-98.5],8);
-      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:17,attribution:"© OpenStreetMap contributors"}).addTo(lmap);
+      const tl=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:17,attribution:"© OpenStreetMap contributors"}).addTo(lmap);
+      let tileErr=0; tl.on("tileerror",()=>{ if(++tileErr===4) note.textContent+=" · map tiles not loading (no internet?): gauges still shown"; });
     }
     for(const g of gs){
       const style={radius:(["minor","moderate","major"].includes(g.status)?11:8),color:"#fff",weight:2,fillColor:SC[g.status],fillOpacity:.95};

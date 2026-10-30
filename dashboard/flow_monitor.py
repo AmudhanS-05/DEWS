@@ -121,7 +121,7 @@ def build_view(raw: dict, live_stale_s: float = 900.0, lag_warn: int = 500) -> d
             if k == "topic":
                 lines = [f"{rate:.1f} msg/s · total {tot:,}", _fmt_age(age)]
                 if tot == 0:                 # the topic exists (compose created it) but nothing was published yet
-                    status, lines = "idle", ["empty · waiting for a producer", ""]
+                    status, lines = "idle", ["empty · waiting", "for a producer"]
                 else:
                     status = "ok" if rate > 0 else "idle"
             elif sp["live"]:
@@ -516,6 +516,15 @@ def make_handler():
             self.wfile.write(body)
 
         def do_GET(self):
+            if self.path.startswith("/static/"):
+                rel = os.path.normpath(urlparse(self.path).path[len("/static/"):]).replace("\\", "/")
+                full = os.path.join(HERE, "static", rel)
+                if rel.startswith("..") or not os.path.isfile(full):
+                    return self._send(404, "text/plain", b"not found")
+                ctype = {".js": "application/javascript", ".css": "text/css", ".png": "image/png"}.get(
+                    os.path.splitext(full)[1], "application/octet-stream")
+                with open(full, "rb") as f:
+                    return self._send(200, ctype, f.read())
             if self.path in ("/", "/index.html"):
                 with open(os.path.join(HERE, "flow.html"), "rb") as f:
                     self._send(200, "text/html; charset=utf-8", f.read())

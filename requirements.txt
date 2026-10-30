@@ -4,5 +4,6 @@ requests==2.32.3
 confluent-kafka==2.5.3
 faust-streaming==0.11.3
 # faust-streaming 0.11.3 breaks with aiokafka >= 0.13 ("MetadataRequest_v1 ... has no attribute 'prepare'")
-aiokafka==0.12.0
+aiokafka[lz4]==0.12.0
+cramjam==2.11.0                # lz4 codec: our producers compress with lz4; Faust/aiokafka needs it to read
 psycopg2-binary==2.9.9
