@@ -10,6 +10,8 @@ data/
 state/
 gate_output/
 _xfer/
+# secrets (SMTP password, recipients)
+.env
 # Faust local data directory (one per app id)
 *-data/
 # slide decks and other review material: kept locally, never committed

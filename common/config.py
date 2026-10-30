@@ -12,6 +12,7 @@ TOPIC_PARTITIONS = int(os.getenv("TOPIC_PARTITIONS", "3"))
 TOPIC_GAUGE = "gauge.usgs"            # raw gauge readings, key = site_no
 TOPIC_RAIN = "rain.mrms"              # catchment rainfall, key = site_no (phase 2b)
 TOPIC_AGG = "aggregates.window"       # windowed features, key = site_no
+TOPIC_FORECASTS = "forecasts.stage"     # every forecast (forecaster -> sink -> risk_scores), key = site_no
 TOPIC_ALERTS = "alerts.flood"         # forecaster output (drafts, never sent directly)
 TOPIC_APPROVED = "alerts.approved"    # human-approved advisories -> notifier (the only topic it reads)
 TOPIC_REPLAY_GAUGE = "replay.gauge"   # historical gauge replay (SIMULATION), kept apart from live data
@@ -20,12 +21,12 @@ TOPIC_DLQ = "deadletter.flood"        # records that failed parsing/processing
 
 # Every topic the stack creates (docker/*.yml must list the same names)
 ALL_TOPICS = [TOPIC_GAUGE, TOPIC_RAIN, TOPIC_REPLAY_GAUGE, TOPIC_REPLAY_RAIN, TOPIC_AGG,
-              TOPIC_ALERTS, TOPIC_APPROVED, TOPIC_DLQ]
+              TOPIC_FORECASTS, TOPIC_ALERTS, TOPIC_APPROVED, TOPIC_DLQ]
 
 # Consumer groups (one per consuming component; Faust's app id is the windowing group)
 GROUP_WINDOWING = "flood-windowing"   # Faust, 3 instances = 3 partitions
 GROUP_FORECASTER = "forecaster"
-GROUP_SINK = "postgres-sink"          # reads aggregates.window and alerts.flood
+GROUP_SINK = "postgres-sink"          # reads gauge.usgs, aggregates.window, forecasts.stage, alerts.flood
 GROUP_AGENT = "agent"
 GROUP_NOTIFIER = "notifier"
 

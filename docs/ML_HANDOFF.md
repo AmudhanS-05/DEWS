@@ -28,3 +28,7 @@
 
 ## Rules for working in the same repo
 Edit only `ml/`, `notebooks/` and a new `requirements-ml.txt`. Do not touch `common/`, `producers/`, `streams/`, `dashboard/`. Commit separately. Keep `pytest -q` green.
+
+## Second task for this track: India data study, steps C and D
+After the stage-only model exists, run steps C (degradation experiment on real US data) and D (synthetic
+"ideal India" dataset) from `docs/INDIA_STUDY.md`. Both reuse `ml/evaluate.py`. Code goes in `india/`.

@@ -1,8 +1,9 @@
-# Build plan: phases, schedule and tests (rev 4, 30 Oct 2026)
+# Build plan: phases, schedule and tests (rev 5, 30 Oct 2026)
 
 Project: Real-Time Flood & Flash-Flood Forecasting and Alerting using Apache Kafka.
 Courses: AI372IA Stream Processing and Analytics (SPA), AI373TA Agentic AI (AAI).
 Step-by-step commands with what the console shows: `docs/RUNBOOK.md`. Parallel ML track: `docs/ML_HANDOFF.md`.
+India data study (paper section): `docs/INDIA_STUDY.md`.
 Rule: a phase is done when its test passes; record it in `BREADCRUMBS.md` (one line) and numbers in `PROJECT_LOG.md`.
 
 ## Dates that drive the plan
@@ -32,35 +33,42 @@ Rule: a phase is done when its test passes; record it in `BREADCRUMBS.md` (one l
 | 0 | Gate checks, EDA | **done** (38 gauges, 213 floods, pooled PASS) |
 | 1 | 3-broker Kafka, 8 topics, PostgreSQL | **done** (verified 29 Oct: RF 3, ISR 2, broker-stop test) |
 | 2 | USGS live producer, replay producer | **done** (dedupe, heartbeats, backfill after 34 h outage verified 30 Oct) |
-| 2b | MRMS rainfall producer | to build (week 1) |
+| 2b | MRMS rainfall producer | to build (31 Oct) |
 | 3 | Faust event-time windows | built; first run crashed on an aiokafka 0.14 incompatibility, fixed by pinning `aiokafka==0.12.0`; to verify |
-| 4 | Forecaster (ML) | offline baselines done; ML model (parallel track) + streaming consumer to build |
-| 5 | PostgreSQL sink + latency trace | to build (week 1) |
-| 6a | Alert pipeline: approval, notifier (no LLM) | to build (week 2) |
-| 6b | Multi-agent advisory system (AAI) | to build (weeks 2 to 3) |
-| 7 | Console (built: flow, map, readings) + Power BI | Power BI report to build (week 2) |
-| 8 | Fault injection + evaluation | to build (week 3) |
-| 9 | Paper, demo script, rehearsal | weeks 3 to 4 |
+| 4 | Forecaster (ML) | offline baselines done; streaming consumer with baseline (30 Oct); ML model swap-in (ML track) |
+| 5 | PostgreSQL sink + latency trace | to build (30 Oct) |
+| 6a | Alert pipeline: approval, notifier (no LLM) | to build (31 Oct) |
+| 6b | Multi-agent advisory system (AAI) | 3 to 18 Nov |
+| 7 | Console (built: flow, map, readings) + Power BI | Power BI report (1 Nov) |
+| 8 | Fault injection + evaluation | drills by 2 Nov; evaluation numbers 10 to 18 Nov |
+| 9 | Paper, demo script, rehearsal | 10 to 18 Nov |
+| India | India data study (paper section) | 3 to 18 Nov, `docs/INDIA_STUDY.md` |
 
 ## Schedule
 
-Two tracks run in parallel. The **SPA core** must be complete and demo-ready by 18 Nov without depending on the
-agents or the ML track: the forecaster falls back to the rise-rate baseline and the advisory to a template.
+Two tracks run in parallel. The **SPA core** (every phase working end to end on replay, baseline forecaster, template
+advisory, email) is frozen on **2 Nov**. Everything after that adds quality (ML model, rainfall in windows, agents,
+India study, evaluation numbers) without the demo depending on it.
 
-| Week | SPA core (this chat) | ML track (separate chat) | AAI track (separate chat for slides/docs; code here) |
-|---|---|---|---|
-| **W1** 30 Oct to 5 Nov | Phase 3 verified (3 Faust workers, kill test); Phase 5 sink + latency trace; Phase 2b MRMS live producer; `forecasts.stage` topic (decision D1) | stage-only model on cached history; split, metrics, model card | design deck: problem, CWD architecture, agent roles, tools, memory (this file, section 6b) |
-| **W2** 6 to 12 Nov | Phase 4 streaming forecaster (baseline first, ML model when ready); Phase 6a approval in console + email notifier; Power BI report; MRMS rain into windows (3b) | add rainfall features; compare with stage-only; `ml/predict.py` contract | Phase 6b: MCP tool server, LangGraph graph, coordinator + workers, reviewer loop |
-| **W3** 13 to 18 Nov | Phase 8 fault drills + evaluation runs; paper results section; demo script and two full rehearsals | final model, evaluation rows | agent evaluation (faithfulness, reviewer catch rate, single vs multi-agent), video recording |
-| **19 to 26 Nov** | **Phase II demo + paper** | | AAI presentation when scheduled |
-| 27 Nov to 13 Dec | paper update; Lab CIE programs 1 to 10 | | |
+| Day | You (laptop) | This chat (code) |
+|---|---|---|
+| **Fri 30 Oct** | `pip install "aiokafka==0.12.0"`; restart console; RUNBOOK steps 4 to 8 (Faust, kill test); `docker compose up -d --force-recreate topic-init` (adds `forecasts.stage`) | Phase 5 sink + latency trace; Phase 4 streaming forecaster (rise-rate baseline) → `forecasts.stage` + `alerts.flood` |
+| **Sat 31 Oct** | replay the May 2019 flood: windows → forecasts → alert → rows in PostgreSQL; sink kill test | Phase 6a: approve / reject in the console, template advisory, email notifier; Phase 2b MRMS producer |
+| **Sun 1 Nov** | email arrives with delivery time; MRMS producer runs; Power BI report on the views | `tools/fault_drill.py`; `storage/views.sql`; latency report |
+| **Mon 2 Nov** | full core demo on replay twice; fault drills; **core frozen** | fixes only |
+| 3 to 9 Nov | | 3b rain into windows; ML model swap-in; Phase 6b agents (with Ollama); India study steps A and B |
+| 10 to 18 Nov | evaluation runs; paper; rehearsals | India study C and D (ML chat); agent evaluation; paper results |
+| **19 to 26 Nov** | **Phase II demo + paper** | |
+
+Risk: the MRMS producer depends on GRIB2 decoding on Windows. If it slips past 1 Nov, the core is frozen without
+rainfall (stage-only baseline) and rain joins in the 3 to 9 Nov block.
 
 ## Phase details
 
 ### Phase 2b: MRMS rainfall producer (W1)
 - `producers/mrms_qpe_producer.py`: every 2 to 5 min, find the newest file of the live product in the public
   `noaa-mrms-pds` bucket (HTTPS), decode the GRIB2 grid, sum rainfall over a **circle of radius R around each gauge**
-  (decided: start simple; R = 10 km first, tune once; state it in the paper), publish one record per gauge to
+  (decided: R = 10 km, mean depth over about 314 one-km cells; state it in the paper), publish one record per gauge to
   `rain.mrms` keyed by `site_no`, with product name and file time.
 - Product: a fast one for live (radar-only or Pass 1, about 3 to 16 min late); the gauge-corrected Pass 2 (about
   58 min late) for evaluation.
@@ -208,14 +216,47 @@ is sent without human approval".
 
 | # | Decision | Recommendation |
 |---|---|---|
-| D1 | Add topic `forecasts.stage` (forecaster → sink, every forecast) | Yes. Diagram: 9 topics; sink reads 4 topics |
-| D2 | LLM for the agents | API model if a key is available; else Ollama locally |
-| D3 | MRMS radius and live product | R = 10 km, radar-only or Pass 1 live, Pass 2 for evaluation |
-| D4 | Rainfall history for training | MRMS for windows around the 123 slow floods plus matched dry periods (download, sum, discard); Open-Meteo hourly as fallback |
-| D5 | Email account and recipients for the notifier | team mailbox; faculty in the demo |
+| D1 | Topic `forecasts.stage` (forecaster → sink, every forecast) | **decided (30 Oct): yes.** 9 topics; sink reads 4 |
+| D2 | LLM for the agents (only the Phase 6b agents need one) | **decided: free and simple → Ollama on the laptop** (no account, works offline on demo day); `qwen2.5:7b` with 16 GB RAM, `llama3.2:3b` with 8 GB |
+| D3 | MRMS radius and live product | **decided: R = 10 km** (mean rainfall depth over the circle); radar-only or Pass 1 live, Pass 2 for evaluation; test 5 and 25 km as a sensitivity in the ML track |
+| D4 | Rainfall history for training | **decided:** MRMS only around the 123 slow floods plus matched dry periods (download, sum, discard) |
+| D5 | Notifier email | **decided:** team address in the local `.env` (`NOTIFY_TO`), more recipients later |
 | D6 | Test years | ML track proposes; must contain flood years (e.g. 2024 to 2025) |
 
 ## Plan B (if Faust stays brittle)
 Replace the Faust app with a plain `confluent-kafka` consumer group running the same `streams/windowing.py` logic
 (already pure and unit-tested), with window state in a compacted changelog topic. Keeps every SPA requirement; costs
-about two days. Decide by 4 Nov if Phase 3 is not passing.
+about two days. Decide by 31 Oct if Phase 3 is not passing.
+
+## Appendix: commands for the finished phases
+
+One-time setup (Windows, PowerShell, repo root):
+```powershell
+python -m venv .venv; .venv\Scripts\Activate.ps1          # the team uses ..\spaenv instead
+python -m pip install -U pip setuptools wheel              # old setuptools fails on faust-streaming's opentracing
+pip install -r requirements-dev.txt                        # includes aiokafka==0.12.0 for Faust
+pytest -q                                                  # expect: 51 passed
+```
+
+Phase 0 (gate checks):
+```powershell
+python -m tools.find_gauges --bbox=-100.5,29.4,-97.4,30.9 --top 40 --write   # config/candidate_gauges.csv
+python -m tools.fetch_sample --site 08158700 --nwps DRWT2                      # real USGS + NWPS fixtures
+python -m tools.gate_check --years 10 --category minor                        # gate_output/gate_summary.csv
+python -m tools.staleness_logger --every-min 5 --hours 48                     # feed delay
+python -m tools.gauge_locations                                               # config/gauge_locations.csv (map)
+```
+EDA notebooks 01 to 03: `notebooks/README.md`; explained cell by cell in `docs/EDA_WALKTHROUGH.md`.
+
+Phase 1 (infrastructure): `docker/README.md`. Pass: services healthy; 8 topics, 3 partitions, RF 3, min ISR 2;
+8 tables; stopping one broker keeps topics available (ISR 2, back to 3 on restart).
+
+Phase 2 (producers):
+```powershell
+python -m producers.usgs_iv_producer --once
+python -m tools.peek gauge.usgs --n 5 --from-beginning
+python -m producers.replay_producer --site 08158700 --start 2019-05-02 --end 2019-05-06 --speed 36000
+python -m tools.peek replay.gauge --n 5 --from-beginning
+```
+Pass: readings keyed by `site_no`; a second poll publishes only new readings plus heartbeats; replay goes to
+`replay.gauge` with `"mode": "SIMULATION"`; after a long outage the producer backfills from its last poll.

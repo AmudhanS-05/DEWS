@@ -309,3 +309,23 @@ python -m tools.staleness_logger --every-min 5 --hours 48
 The build environment cannot reach USGS or NOAA (its proxy blocks them). Anything that downloads
 real data — `fetch_sample`, `find_gauges`, `gate_check`, `staleness_logger`, the notebooks — runs on
 your laptop or in Colab/Kaggle.
+
+
+## What would change if we did not pool the evaluation? (30 Oct 2026)
+
+Pooling = one model trained and scored on flood events from all 38 gauges together (stage taken relative to each
+gauge's own minor flood level). Not pooling = a separate model and score per gauge.
+
+- **Only 2 gauges would qualify.** The gate needs at least 10 slow floods per gauge; only DRWT2 (16) and LCPT2 (15)
+  pass. Forecasts and claims would cover 2 gauges; the other 36 would only show their current level.
+- **The test set would be nearly empty.** With a time split, a gauge's last few years are its test set. Neither DRWT2
+  nor LCPT2 reached minor stage in 2024 to 2026, so a recent test period has zero floods to detect. We would have to
+  test on earlier years (breaking "train on the past, test on the future") or use rolling-origin cross-validation.
+- **Metrics would be very noisy.** With 3 to 5 test floods per gauge, one missed flood moves recall by 20 to 33
+  points; precision, recall and F1 would have wide uncertainty.
+- **ML would barely be possible.** About 10 positive events per gauge is too few for a gradient-boosting or LSTM
+  model; we would stay with baselines or a very small model.
+- **What would get simpler:** no mixing of fast urban creeks with slow rivers, no scale or datum differences, no
+  cross-gauge correlation from the same storm, and an easier explanation.
+
+So we pool for training and evaluation, and still report results per gauge and for slow events only.
