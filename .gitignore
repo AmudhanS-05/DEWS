@@ -10,6 +10,8 @@ data/
 state/
 gate_output/
 _xfer/
+# Faust local data directory (one per app id)
+*-data/
 # slide decks and other review material: kept locally, never committed
 presentations/
 *.pptx

@@ -273,8 +273,11 @@ function ensureLeaflet(cb){
   sc.onload=()=>cb(true); sc.onerror=()=>cb(false); document.head.appendChild(sc);
 }
 async function loadGauges(){
-  try{ const r=await fetch("/api/gauges?mode="+gmode); gdata=await r.json(); drawGauges(); }
-  catch(e){ document.getElementById("map-note").textContent="cannot reach the console server"; }
+  let r;
+  try{ r=await fetch("/api/gauges?mode="+gmode); }
+  catch(e){ document.getElementById("map-note").textContent="cannot reach the console server (is python -m dashboard.flow_monitor running?)"; return; }
+  if(!r.ok){ document.getElementById("map-note").textContent=`the console server answered ${r.status}: it is older than this page, restart python -m dashboard.flow_monitor`; return; }
+  gdata=await r.json(); drawGauges();
 }
 function popup(g){
   const c=g.cats||{};
@@ -345,7 +348,9 @@ const fmtDT=t=>t?new Date(t).toLocaleString([], {hour12:false}):"";
 async function loadDb(){
   const note=document.getElementById("db-note");
   try{
-    const d=await (await fetch("/api/db")).json();
+    const resp=await fetch("/api/db");
+    if(!resp.ok){ note.textContent=`the console server answered ${resp.status}: restart python -m dashboard.flow_monitor`; return; }
+    const d=await resp.json();
     if(!d.ok){ note.textContent="PostgreSQL not reachable: "+d.error; return; }
     note.textContent = (d.windows.length||d.alerts.length) ? "Newest rows first." : "Connected. No rows yet: windows arrive once the Postgres sink (Phase 5) runs, alerts once the forecaster (Phase 4) runs.";
     document.getElementById("db-win").innerHTML = d.windows.map(w=>`<tr><td>${esc(w.site_no)}</td><td>${fmtDT(w.window_start)}</td><td>${esc(w.mode)}</td><td>${esc(w.n_readings)}</td><td>${w.stage_last==null?"":(+w.stage_last).toFixed(2)}</td><td>${w.rise_rate_ft_per_h==null?"":(+w.rise_rate_ft_per_h).toFixed(2)}</td><td>${w.rain_3h==null?"":(+w.rain_3h).toFixed(1)}</td></tr>`).join("");

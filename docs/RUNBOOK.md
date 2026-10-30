@@ -24,11 +24,11 @@ The console is a development and demo view. The brief names Power BI for the sub
 
 | # | Run | You should see on the console |
 |---|---|---|
-| 0 | `python -m tools.gauge_locations` (internet; writes `config/gauge_locations.csv`, 38 gauges) | **Map** tab: the gauges appear (street map; **Offline view** button for demo day without internet). |
+| 0 | Restart the console after every `git pull` or code update (the page reloads from disk, the server does not). `python -m tools.gauge_locations` (internet; writes `config/gauge_locations.csv`, 38 gauges) | **Map** tab: the gauges appear (street map; **Offline view** button for demo day without internet). |
 | 1 | Live producer loop: `python -m producers.usgs_iv_producer` (polls every 5 min) | **Flow**: USGS live green, `gauge.usgs` receiving. **Map**: most gauges green, "x/38 reporting". |
 | 2 | Ctrl-C the producer. To see it quickly, start the console with `--live-stale-s 400` (the producer beats every 5 min; default is 15 min). | **Flow**: USGS live turns red ("SILENT") and the change appears in the log with a time. |
 | 3 | Start it again. | It publishes only new readings (a few dozen), not the ~2,400-reading backfill; USGS live goes green again. |
-| 4 | Three Faust workers, one window each: `faust -A streams.faust_app worker -l info --web-port 6066` (then `6067`, `6068`) | **Flow**: Faust windowing shows `3/3 instances`. |
+| 4 | Once: `pip install "aiokafka==0.12.0"` (Faust 0.11.3 crashes with newer aiokafka). Then three Faust workers, one window each: `faust -A streams.faust_app worker -l info --web-port 6066` (then `6067`, `6068`) | **Flow**: Faust windowing shows `3/3 instances`. |
 | 5 | Replay a flood: `python -m producers.replay_producer --site 08158700 --start 2019-05-02 --end 2019-05-06 --speed 36000` | **Flow**: replay topics flow, Faust busy, `aggregates.window` fills. **Map → Replay**: Onion Creek (DRWT2) climbs through the official levels. |
 | 6 | Check the windows: `python -m tools.peek aggregates.window --n 3 --from-beginning` then `python -m tools.check_windows --mode SIMULATION --site 08158700` | Expect `PASS: no window emitted twice`; one row per hour, zero-filled hours have `n_readings` 0. |
 | 7 | Kill one worker (Ctrl-C in its window) while replaying again (step 5 command). | **Flow**: Faust turns amber `2/3`, status log shows the change; the other two take over its partitions. |
