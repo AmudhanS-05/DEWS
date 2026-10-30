@@ -2,7 +2,8 @@
 
 Project: Real-Time Flood & Flash-Flood Forecasting and Alerting using Apache Kafka.
 Courses: AI372IA Stream Processing and Analytics (SPA), AI373TA Agentic AI (AAI).
-Step-by-step commands with what the console shows: `docs/RUNBOOK.md`. Parallel ML track: `docs/ML_HANDOFF.md`.
+**Detailed slice plan: `docs/SLICES.md`.** Handoffs: `docs/handoffs/` (core, ML + India, agents). Interfaces:
+`docs/CONTRACTS.md`. Open steps: `docs/RUNBOOK.md`. Demo: `docs/DEMO.md`. Claude Code setup: `docs/CLAUDE_CODE_SETUP.md`.
 India data study (paper section): `docs/INDIA_STUDY.md`.
 Rule: a phase is done when its test passes; record it in `BREADCRUMBS.md` (one line) and numbers in `PROJECT_LOG.md`.
 
@@ -80,9 +81,9 @@ Power BI and paper/slides. Each slice ends with a short demo on the laptop, one 
 
 | Workstream | Where | Owns (writes only here) |
 |---|---|---|
-| Core pipeline + integration | this chat, or a Claude Code session on the laptop | `common/`, `producers/`, `streams/`, `storage/`, `alerting/`, `dashboard/`, `docker/`, `tools/`, `tests/` (its own) |
-| ML + India steps C and D | ML chat / Claude Code session | `ml/`, `india/`, `notebooks/`, `requirements-ml.txt` |
-| Agents (AAI) | AAI chat / Claude Code session | `agentic_ai/`, `requirements-agents.txt` |
+| Core pipeline + integration | Claude Code session `core` (main folder) | `common/`, `producers/`, `streams/`, `storage/`, `alerting/`, `dashboard/`, `docker/`, `tools/`, `tests/` (its own) |
+| ML + India study (steps A to D) | Claude Code session `ml` | `ml/` (not `streams/forecaster.py`), `india/`, `notebooks/`, `requirements-ml.txt` |
+| Agents (AAI) | Claude Code session `agents` | `agentic_ai/`, `requirements-agents.txt` |
 | Paper and slides (SPA, AAI) | claude.ai chats (no code) | the paper doc, decks in `presentations/` |
 
 Rules: the interfaces between workstreams are fixed in `docs/CONTRACTS.md` (change them only with a breadcrumb line);
@@ -113,7 +114,7 @@ session the same rules.
   (2/3), restart; `tools.check_windows` PASS (no window emitted twice).
 
 ### Phase 4: forecaster (W2)
-- `ml/forecaster_consumer.py`, group `forecaster`: reads `aggregates.window`, keeps each gauge's recent windows,
+- `streams/forecaster.py` (core), group `forecaster`: reads `aggregates.window`, keeps each gauge's recent windows,
   calls `ml/predict.py` (ML model when the ML track delivers it; rise-rate baseline until then), and publishes:
   - every forecast to **`forecasts.stage`** (decision D1) → sink → `risk_scores` table (Power BI risk lines);
   - an alert to `alerts.flood` only when the forecast crosses an official category within the horizon.
@@ -201,8 +202,9 @@ architecture (host, client, server, transport) and keeps tools independent of th
 **Sequential and parallel processing** (Unit IV): evidence and context workers run in parallel; writer and reviewer
 in sequence.
 
-**LLM:** model-agnostic through LangChain chat models. Decided (D2): **Ollama on the laptop** (free, no account,
-offline). Every call has a timeout; on failure version 1 (template) stays.
+**LLM:** model-agnostic through LangChain chat models, chosen by `LLM_PROVIDER` (D2): `groq` (free tier, Llama 3.3
+70B), `ollama` (`qwen2.5:7b`, offline fallback), `none` (deterministic stubs for tests). Every call has a timeout;
+on failure version 1 (template) stays. Traces go to LangSmith when its key is set (D7).
 
 **Storage:** new table `advisories` (see `docs/CONTRACTS.md`) and `agent_runs` (run_id, alert_id, agent, input summary, output, tool calls, start, end, tokens,
 verdict) and `advisories` (draft text, revisions, reviewer reasons, human edit). Schema change applied by hand with
@@ -260,7 +262,8 @@ is sent without human approval".
 | # | Decision | Recommendation |
 |---|---|---|
 | D1 | Topic `forecasts.stage` (forecaster → sink, every forecast) | **decided (30 Oct): yes.** 9 topics; sink reads 4 |
-| D2 | LLM for the agents (only the Phase 6b agents need one) | **decided: free and simple → Ollama on the laptop** (no account, works offline on demo day); `qwen2.5:7b` with 16 GB RAM, `llama3.2:3b` with 8 GB |
+| D2 | LLM for the agents (only the Phase 6b agents need one) | **revised 30 Oct:** Groq free tier (Llama 3.3 70B; no card; about 30 requests/min and 1,000/day, enough for the demo and evaluation) for quality; Ollama `qwen2.5:7b` on the laptop as the offline fallback; template v1 if both fail. Hugging Face is out: free accounts lost their monthly inference credit on 15 Oct 2026 |
+| D7 | Agent tracing and visuals | LangSmith free Developer plan (5,000 traces/month, 14-day retention) for traces; the console's Agents tab for the live animated view; Langflow not used (it would duplicate the LangGraph graph) |
 | D3 | MRMS radius and live product | **decided: R = 10 km** (mean rainfall depth over the circle); radar-only or Pass 1 live, Pass 2 for evaluation; test 5 and 25 km as a sensitivity in the ML track |
 | D4 | Rainfall history for training | **decided:** MRMS only around the 123 slow floods plus matched dry periods (download, sum, discard) |
 | D5 | Notifier email | **decided:** team address in the local `.env` (`NOTIFY_TO`), more recipients later |

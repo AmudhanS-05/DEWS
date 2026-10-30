@@ -77,6 +77,6 @@ recommendation: an open real-time API for CWC forecast stations with machine-rea
 a sub-hourly archive.
 
 ## Where it is built
-New folder `india/`. Steps A and B touch the pipeline (this chat). Steps C and D are evaluation and modelling and
-reuse `ml/evaluate.py`, so they belong to the ML chat (see `docs/ML_HANDOFF.md`). Runs after the core pipeline is
-frozen (2 Nov); results needed for the paper by 18 Nov.
+New folder `india/`, owned by the `ml` workstream for all four steps (`docs/handoffs/ML_INDIA.md`); step B replays
+the Indian data through the running core pipeline. Slice placement: A in S1 to S2, B in S2 to S3, C in S4, D in S5
+(`docs/SLICES.md`).

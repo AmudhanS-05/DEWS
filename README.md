@@ -40,7 +40,8 @@ with a horizon and probability, and reports lead time net of feed delay.
 | `tests/` | `pytest` suite (39 tests) | all |
 | `docs/BUILD_PHASES.md` | how to run and test each phase | |
 | `docs/RUNBOOK.md` | commands per step and what the console shows; who uses it; open questions | |
-| `docs/ML_HANDOFF.md` | brief for the parallel ML track | 4 |
+| `docs/SLICES.md`, `docs/handoffs/` | slice plan S1 to S5; handoffs for the core, ML + India and agents workstreams | all |
+| `docs/DEMO.md` | how to start, show and explain the demo | |
 | `docs/MANUAL_CHECKS.md` | checks to do by hand so nothing bites us later | |
 | `PROJECT_LOG.md` / `BREADCRUMBS.md` | decisions and numbers / progress trail (local only, git-ignored) | |
 | `FAQ.md` | gauges, datasets, pooled evaluation, what the models predict | |

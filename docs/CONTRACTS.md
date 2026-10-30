@@ -40,17 +40,25 @@ hour), `accum_hours`, `rain_mm` (mean depth over the 10 km circle), `n_cells`, `
 `rejected` | `superseded` | `sent`, `reviewer_verdict`, `edited_text`, `created_at`, `approved_at`, `approved_by`,
 `delivered_at`.
 
+**`agent_events`** (S1, drives the console's live Agents tab): `event_id` (serial), `run_id`, `alert_id`, `agent`
+(`coordinator` | `evidence` | `context` | `writer` | `reviewer` | `human`), `kind` = `start` | `end` | `tool_call` |
+`token_chunk` | `verdict` | `disagreement` | `revision`, `detail` (JSON: tool name, short text, verdict reasons),
+`ts`. Written by the agents as they run; read-only for the console.
+
 **`agent_runs`** (S1 skeleton, S4 full): `run_id`, `alert_id`, `agent`, `input_summary`, `output`, `tool_calls`,
 `started_at`, `ended_at`, `tokens`, `verdict`.
 
 ## ML model (S3)
 
-`ml/predict.py`: `predict(features: dict) -> dict` with keys `forecast_stage`, `p_action`, `p_minor`, `p_moderate`,
+`ml/predict.py` (called by `streams/forecaster.py`): `predict(features: dict) -> dict` with keys `forecast_stage`, `p_action`, `p_minor`, `p_moderate`,
 `p_major`, `horizon_h`, `model`. `features` = the latest `aggregates.window` record for the gauge plus the previous
 windows as `history` (oldest first) and `official_levels`. Must run in under 50 ms per call on the laptop and never
 raise (return the baseline with `model = "rise_rate"` on any error).
 
 ## Agent tools (MCP server, S4; plain Python functions in S1)
+
+Environment: `LLM_PROVIDER` = `groq` | `ollama` | `none`; `GROQ_API_KEY`; `OLLAMA_MODEL` (default `qwen2.5:7b`);
+`LANGSMITH_TRACING`, `LANGSMITH_API_KEY` (optional). All in `.env`.
 
 Read-only: `get_alert(alert_id)`, `get_recent_windows(site, hours)`, `get_forecast(site)`, `get_official_levels(site)`,
 `get_past_floods(site)`, `get_rain(site, hours)`, `get_neighbours(site)`, `get_gauge_info(site)`,
