@@ -44,6 +44,12 @@ def test_vectorised_weights_match_dataset_definition():
 
 
 def test_end_to_end_synthetic_smoke():
+    from threadpoolctl import threadpool_limits
+    with threadpool_limits(1):            # OpenMP in HistGradientBoosting stalls badly when the CPUs are busy
+        _smoke()
+
+
+def _smoke():
     gauges, rain = [], []
     for k, site in enumerate(["S1", "S2", "S3"]):
         rs = synth.hydrograph(site, days=200, seed=k, n_storms=10, rise_h=6.0)

@@ -57,7 +57,8 @@ def test_cli_writes_parquet(tmp_path, monkeypatch):
     pd = pytest.importorskip("pandas")
     pytest.importorskip("pyarrow")
     from ml import gauges
-    monkeypatch.setattr(gauges, "load_gauges", lambda *a, **k: [{"site_no": "SYN1", "lid": "X", "cats": CATS, "readings": RS}])
+    monkeypatch.setattr(gauges, "iter_gauges", lambda *a, **k: iter([{"site_no": "SYN1", "lid": "X", "cats": CATS, "readings": RS}]))
+    monkeypatch.setattr(gauges, "count_gauges", lambda *a, **k: 1)
     out = tmp_path / "d.parquet"
     dataset.main(["--out", str(out)])
     df = pd.read_parquet(out)

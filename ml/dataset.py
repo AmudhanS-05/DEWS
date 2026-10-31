@@ -171,7 +171,7 @@ def main(argv=None):
     import argparse
     import os
     import pandas as pd
-    from ml.gauges import load_gauges
+    from ml.gauges import count_gauges, iter_gauges
     from ml.progress import Timer, bar
     p = argparse.ArgumentParser(description="Build the pooled dataset from cached USGS history.")
     p.add_argument("--gauges", default="config/gauge_locations.csv")
@@ -184,16 +184,17 @@ def main(argv=None):
     if a.data_dir:
         config.DATA_DIR = a.data_dir
     timer = Timer()
-    gauges = load_gauges(a.gauges, a.gauges_only, a.start, a.end, config.DATA_DIR)
-    print(f"ml.dataset: building windows + labels for {len(gauges)} gauges ({a.start}..{a.end}) from "
+    n = count_gauges(a.gauges, a.gauges_only)
+    print(f"ml.dataset: building windows + labels for {n} gauges ({a.start}..{a.end}) from "
           f"{config.DATA_DIR}/raw/usgs -> {a.out}")
-    if not gauges:
-        raise SystemExit("ERROR: no gauge had cached data; check --data-dir and --gauges-only")
     frames = []
-    for g in bar(gauges, "gauges"):
+    for g in bar(iter_gauges(a.gauges, a.gauges_only, a.start, a.end, config.DATA_DIR), "gauges", total=n):
         col = build_site_columns(g["readings"], g["cats"])
         if col:
             frames.append(pd.DataFrame(col))
+        del g
+    if not frames:
+        raise SystemExit("ERROR: no gauge had cached data; check --data-dir and --gauges-only")
     df = pd.concat(frames, ignore_index=True).sort_values("t", kind="stable")
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
     if a.out.endswith(".csv"):

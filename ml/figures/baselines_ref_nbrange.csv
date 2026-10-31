@@ -1,0 +1,13 @@
+run_label,data_source,site_no,model,horizon_h,precision,recall,f1,false_alarms,median_lead_time_h,mae_ft,rmse_ft,notes
+diag-nb-range,replay,08156800,persistence,3.0,,0.0,,0,,0.0751414814476747,0.3589466121141512,crossings=38 detected=0 alerts=0 storms=38 lead_gross_h=NA lead_net_h=NA (feed delay 1 h)
+diag-nb-range,replay,08158700,persistence,3.0,,0.0,,0,,0.013950184838665511,0.17415187270339422,crossings=16 detected=0 alerts=0 storms=16 lead_gross_h=NA lead_net_h=NA (feed delay 1 h)
+diag-nb-range,replay,08150000,persistence,3.0,,0.0,,0,,0.02556284514627356,0.3348025319259902,crossings=9 detected=0 alerts=0 storms=9 lead_gross_h=NA lead_net_h=NA (feed delay 1 h)
+diag-nb-range,replay,08172400,persistence,3.0,,0.0,,0,,0.07425505453881612,0.3137315675270243,crossings=15 detected=0 alerts=0 storms=15 lead_gross_h=NA lead_net_h=NA (feed delay 1 h)
+diag-nb-range,replay,POOLED,persistence,3.0,,0.0,,0,,0.04722739149285747,0.30401142123337394,crossings=78 detected=0 alerts=0 storms=60 lead_gross_h=NA lead_net_h=NA (feed delay 1 h)
+diag-nb-range,replay,POOLED-SLOW,persistence,3.0,,0.0,,0,,0.04722739149285747,0.30401142123337394,crossings=38 detected=0 alerts=0 storms=31 lead_gross_h=NA lead_net_h=NA (feed delay 1 h)
+diag-nb-range,replay,08156800,rise_rate,3.0,0.1564625850340136,0.6052631578947368,0.24864864864864863,124,0.3333333333333333,0.10518347171289757,0.7051503914250759,crossings=38 detected=23 alerts=147 storms=38 lead_gross_h=0.33 lead_net_h=-0.67 (feed delay 1 h)
+diag-nb-range,replay,08158700,rise_rate,3.0,0.13636363636363635,0.1875,0.15789473684210525,19,0.9166666666666666,0.019581639892670873,0.23229695515877782,crossings=16 detected=3 alerts=22 storms=16 lead_gross_h=0.92 lead_net_h=-0.08 (feed delay 1 h)
+diag-nb-range,replay,08150000,rise_rate,3.0,0.47368421052631576,1.0,0.6428571428571429,10,0.6666666666666666,0.033008760054695885,0.40312444905228995,crossings=9 detected=9 alerts=19 storms=9 lead_gross_h=0.67 lead_net_h=-0.33 (feed delay 1 h)
+diag-nb-range,replay,08172400,rise_rate,3.0,0.23076923076923078,0.6,0.33333333333333337,30,2.0,0.07552416594404639,0.31477863197492906,crossings=15 detected=9 alerts=39 storms=15 lead_gross_h=2.00 lead_net_h=1.00 (feed delay 1 h)
+diag-nb-range,replay,POOLED,rise_rate,3.0,0.19383259911894274,0.5641025641025641,0.28852459016393445,183,0.7083333333333333,0.05832450940107768,0.45077540374190145,crossings=78 detected=44 alerts=227 storms=60 lead_gross_h=0.71 lead_net_h=-0.29 (feed delay 1 h)
+diag-nb-range,replay,POOLED-SLOW,rise_rate,3.0,0.09852216748768473,0.5263157894736842,0.16597510373443985,183,0.8333333333333334,0.05832450940107768,0.45077540374190145,crossings=38 detected=20 alerts=203 storms=31 lead_gross_h=0.83 lead_net_h=-0.17 (feed delay 1 h)

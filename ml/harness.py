@@ -189,7 +189,7 @@ def insert_rows(rows: list[dict], dsn: str = config.PG_DSN) -> None:
 def main(argv=None):
     import argparse
     import os
-    from ml.gauges import load_gauges
+    from ml.gauges import count_gauges, iter_gauges
     from ml.progress import Timer, bar
     p = argparse.ArgumentParser(description="M1.4: baseline numbers from the cached history.")
     p.add_argument("--start", default="2015-01-01")
@@ -208,12 +208,20 @@ def main(argv=None):
     horizons = [float(x) for x in a.horizons.split(",")]
     print(f"ml.harness: baselines (persistence, rise_rate) at h={horizons} on cached USGS history "
           f"{a.start}..{a.end}; reading from {config.DATA_DIR}/raw/usgs")
-    gauges = load_gauges(a.gauges, a.gauges_only, a.start, a.end, config.DATA_DIR)
-    if not gauges:
+    preps, gauges = {}, []
+    for g in bar(iter_gauges(a.gauges, a.gauges_only, a.start, a.end, config.DATA_DIR), "windows per gauge",
+                 total=count_gauges(a.gauges, a.gauges_only)):
+        prep = prepare(g["readings"], g["cats"])
+        prep["aggs"] = None                     # built-in baselines are vectorised; frees ~1 GB per gauge
+        preps[g["site_no"]] = prep
+        gauges.append({"site_no": g["site_no"], "lid": g["lid"]})
+        del g
+    if not preps:
         raise SystemExit("ERROR: no gauge could be evaluated; check --data-dir and --gauges-only")
-    rbs = {g["site_no"]: g["readings"] for g in gauges}
-    cbs = {g["site_no"]: g["cats"] for g in gauges}
-    rows = run_baselines(rbs, cbs, horizons, a.label, progress=bar)
+    rows = []
+    combos = [(n, fn, h) for n, fn in baselines.BASELINES.items() for h in horizons]
+    for name, fn, h in bar(combos, "model x horizon", len(combos)):
+        rows += evaluate_prepared(preps, name, fn, h, a.label)
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
     write_csv(rows, a.out)
     if a.insert:

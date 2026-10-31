@@ -215,7 +215,7 @@ def main(argv=None):
     from concurrent.futures import ProcessPoolExecutor, as_completed
     import pandas as pd
     from ml.dataset import primary_series
-    from ml.gauges import load_gauges
+    from ml.gauges import count_gauges, iter_gauges
     from ml.progress import Timer, bar
     p = argparse.ArgumentParser(description="M2.1: MRMS rain over circles around each gauge, event + dry hours.")
     p.add_argument("--gauges", default="config/gauge_locations.csv")
@@ -244,12 +244,10 @@ def main(argv=None):
     with open(a.gauges, encoding="utf-8") as f:
         all_g = [{"site_no": g["site_no"], "lid": g["lid"], "lat": float(g["lat"]), "lon": float(g["lon"])}
                  for g in csv.DictReader(f)]
-    gauges = load_gauges(a.gauges, a.gauges_only, a.start, a.end, config.DATA_DIR)
-    if not gauges:
-        raise SystemExit("ERROR: no gauge had cached USGS history (run python -m ml.fetch_history first)")
     events, series, action, all_cross = [], {}, {}, []
     t_lo = max(ARCHIVE_START, datetime.fromisoformat(a.start).replace(tzinfo=timezone.utc).timestamp())
-    for g in gauges:
+    for g in bar(iter_gauges(a.gauges, a.gauges_only, a.start, a.end, config.DATA_DIR), "events per gauge",
+                 total=count_gauges(a.gauges, a.gauges_only)):
         rs = primary_series(g["readings"])
         ser = sorted((r["reading_ts"], r["value"]) for r in rs)
         series[g["site_no"]] = (np.array([t for t, _ in ser]), np.array([v for _, v in ser]))
@@ -263,6 +261,9 @@ def main(argv=None):
             if a.slow_only and not slow:
                 continue
             events.append({"site_no": g["site_no"], "lid": g["lid"], "crossing_ts": ct, "slow": slow})
+        del g, rs, ser
+    if not series:
+        raise SystemExit("ERROR: no gauge had cached USGS history (run python -m ml.fetch_history first)")
     events.sort(key=lambda e: e["crossing_ts"])
     t_hi = max(float(s[0][-1]) for s in series.values() if len(s[0]))
     wins = event_windows(events, a.before_h, a.after_h)
@@ -282,9 +283,10 @@ def main(argv=None):
         with open(out_hours, encoding="utf-8") as f:
             status = {float(r["hour_ts"]): r["status"] for r in csv.DictReader(f)}
     todo = sorted(h for h in hours if h not in done and status.get(h) != "missing")
+    n_skip = len(hours) - len(todo)
     if a.max_hours:
         todo = todo[:a.max_hours]
-    print(f"  {len(hours) - len(todo)} hours already done or known missing, {len(todo)} to download "
+    print(f"  {n_skip} hours already done or known missing, {len(todo)} to download now "
           f"(~0.5 MB each, decoded in memory)")
 
     buf: list[tuple] = []
