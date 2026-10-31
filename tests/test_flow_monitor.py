@@ -147,3 +147,56 @@ def test_planned_region_has_no_gauges_and_is_marked(tmp_path):
     regs = [{"id": "x", "name": "X", "lat": 1, "lon": 2, "gauges_csv": str(tmp_path / "missing.csv"), "planned": True}]
     out = fm.regions_summary(regs, {}, True, 0.0)
     assert out[0]["planned"] is True and out[0]["n_gauges"] == 0 and out[0]["worst"] == "nodata"
+
+
+class _Fut:
+    def __init__(self, value=None, err=None):
+        self.value, self.err = value, err
+
+    def result(self):
+        if self.err:
+            raise self.err
+        return self.value
+
+
+class _Obj:
+    def __init__(self, **k):
+        self.__dict__.update(k)
+
+
+class _Admin:
+    def __init__(self, fail_list=False, fail_describe=False, ids=()):
+        self.fail_list, self.fail_describe, self.ids = fail_list, fail_describe, ids
+
+    def list_consumer_groups(self, request_timeout=5):
+        return _Fut(err=RuntimeError("broker down")) if self.fail_list else _Fut(_Obj(valid=[_Obj(group_id=i) for i in self.ids]))
+
+    def describe_consumer_groups(self, ids, request_timeout=5):
+        if self.fail_describe:
+            return {i: _Fut(err=RuntimeError("timeout")) for i in ids}
+        return {i: _Fut(_Obj(state=_Obj(name="STABLE"), members=[1])) for i in ids}
+
+    def list_consumer_group_offsets(self, reqs, request_timeout=5):
+        tp = _Obj(topic="t", partition=0, offset=4)
+        return {reqs[0].group_id: _Fut(_Obj(topic_partitions=[tp]))}
+
+
+def _probe(admin, last):
+    p = fm.KafkaProbe.__new__(fm.KafkaProbe)
+    p.admin, p.last_groups, p.resets = admin, last, 0
+    p._reset_admin = lambda: setattr(p, "resets", p.resets + 1)
+    return p
+
+
+def test_groups_keep_last_values_and_renew_the_client_when_the_admin_call_fails():
+    last = {config.GROUP_SINK: {"state": "STABLE", "members": 1, "lag": 3}}
+    for admin in (_Admin(fail_list=True), _Admin(fail_describe=True, ids=[config.GROUP_SINK])):
+        p = _probe(admin, last)
+        assert p._groups({})[config.GROUP_SINK]["members"] == 1 and p.resets == 1
+
+
+def test_groups_read_fresh_lag_and_drop_a_group_that_is_really_gone():
+    last = {config.GROUP_NOTIFIER: {"state": "STABLE", "members": 1, "lag": 0}}
+    p = _probe(_Admin(ids=[config.GROUP_SINK]), last)
+    out = p._groups({("t", 0): 10})
+    assert out[config.GROUP_SINK]["lag"] == 6 and config.GROUP_NOTIFIER not in out and p.resets == 0

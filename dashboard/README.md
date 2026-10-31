@@ -36,4 +36,4 @@ publishes to `alerts.approved`, which is the only topic the notifier sends from.
 
 Append an entry to `config/regions.json` (`id`, `name`, `provider`, `lat`, `lon`, `gauges_csv`, `enabled`) and provide
 its gauge file with the same columns as `config/gauge_locations.csv` (official action, minor, moderate and major stages
-per gauge). Readings for any gauge on the topics are matched by `site_no`, so a new area needs no code change.
+per gauge). Readings for any gauge on the topics are matched by `site_no`, so a new area needs no code change. Add `"planned": true` for an area with no gauges yet: it shows as a hollow marker.

@@ -303,30 +303,53 @@ class KafkaProbe:
         return raw
 
     def _groups(self, highs):
+        """Group status and lag. A failed admin call (a broker just went away) keeps the last known values and gets a new
+        client next cycle, so a running group never reads as "not running"; a group really gone is absent from the listing."""
         from confluent_kafka import ConsumerGroupTopicPartitions
         wanted = {config.GROUP_WINDOWING, config.GROUP_FORECASTER, config.GROUP_SINK,
                   config.GROUP_AGENT, config.GROUP_NOTIFIER}
-        out = {}
+        last = getattr(self, "last_groups", {})
         try:
             listing = self.admin.list_consumer_groups(request_timeout=5).result()
-            ids = [g.group_id for g in listing.valid if g.group_id in wanted]
-            if not ids:
-                return out
-            for gid, fut in self.admin.describe_consumer_groups(ids, request_timeout=5).items():
-                d = fut.result()
-                out[gid] = {"state": getattr(d.state, "name", str(d.state)), "members": len(d.members), "lag": 0}
-            for gid in ids:
-                offs = self.admin.list_consumer_group_offsets([ConsumerGroupTopicPartitions(gid)],
-                                                              request_timeout=5)[gid].result()
-                lag = 0
-                for tp in offs.topic_partitions:
-                    hi = highs.get((tp.topic, tp.partition))
-                    if hi is not None and tp.offset is not None and tp.offset >= 0:
-                        lag += max(0, hi - tp.offset)
-                out[gid]["lag"] = lag
         except Exception:
-            pass                       # keep whatever we collected; the next cycle retries
+            self._reset_admin()
+            return dict(last)
+        ids = [g.group_id for g in listing.valid if g.group_id in wanted]
+        out, failed = {}, False
+        if ids:
+            try:
+                futures = self.admin.describe_consumer_groups(ids, request_timeout=5)
+            except Exception:
+                futures, failed = {}, True
+            for gid in ids:
+                try:
+                    d = futures[gid].result()
+                    out[gid] = {"state": getattr(d.state, "name", str(d.state)), "members": len(d.members),
+                                "lag": last.get(gid, {}).get("lag", 0)}
+                except Exception:
+                    failed = True
+                    if gid in last:
+                        out[gid] = last[gid]
+                    continue
+                try:
+                    offs = self.admin.list_consumer_group_offsets([ConsumerGroupTopicPartitions(gid)],
+                                                                  request_timeout=5)[gid].result()
+                    lag = 0
+                    for tp in offs.topic_partitions:
+                        hi = highs.get((tp.topic, tp.partition))
+                        if hi is not None and tp.offset is not None and tp.offset >= 0:
+                            lag += max(0, hi - tp.offset)
+                    out[gid]["lag"] = lag
+                except Exception:
+                    failed = True
+        if failed:
+            self._reset_admin()
+        self.last_groups = out
         return out
+
+    def _reset_admin(self):
+        from confluent_kafka.admin import AdminClient
+        self.admin = AdminClient({"bootstrap.servers": config.KAFKA_BOOTSTRAP, "socket.timeout.ms": 4000})
 
 
 def probe_pg():
