@@ -39,7 +39,7 @@ def test_default_models(monkeypatch):
     for v in ("GROQ_MODEL", "GEMINI_MODEL", "OLLAMA_MODEL"):
         monkeypatch.delenv(v, raising=False)
     assert llm.model_name("groq") == "openai/gpt-oss-120b"
-    assert llm.model_name("gemini") == "gemini-2.5-flash" and llm.model_name("ollama") == "qwen2.5:7b"
+    assert llm.model_name("gemini") == "gemini-3.5-flash-lite" and llm.model_name("ollama") == "qwen2.5:7b"
     monkeypatch.setenv("GROQ_MODEL", "llama-3.3-70b-versatile")
     assert llm.model_name("groq") == "llama-3.3-70b-versatile"
 
@@ -57,7 +57,7 @@ def test_gemini_client_builds_with_a_key_without_network(monkeypatch):
     monkeypatch.setattr(llm, "load_env", lambda *a, **k: None)
     monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
     chat = llm._build("gemini", 5)
-    assert type(chat).__name__ == "ChatGoogleGenerativeAI" and chat.model.endswith("gemini-2.5-flash")
+    assert type(chat).__name__ == "ChatGoogleGenerativeAI" and chat.model.endswith("gemini-3.5-flash-lite")
 
 
 def test_groq_rate_limit_retries_once_on_gemini(monkeypatch):

@@ -61,7 +61,7 @@ raise (return the baseline with `model = "rise_rate"` on any error).
 
 Environment: `LLM_PROVIDER` = `groq` | `gemini` | `ollama` | `none`; `GROQ_API_KEY`; `GROQ_MODEL` (default
 `openai/gpt-oss-120b`); `LLM_FALLBACK` = `gemini` | `groq` | `none` (a failed or rate-limited call is retried once on
-it, then template v1 stays); `GEMINI_API_KEY`; `GEMINI_MODEL` (default `gemini-2.5-flash`); `OLLAMA_MODEL` (default
+it, then template v1 stays); `GEMINI_API_KEY`; `GEMINI_MODEL` (default `gemini-3.5-flash-lite`; `gemini-2.5-flash` is closed to new keys); `OLLAMA_MODEL` (default
 `qwen2.5:7b`, optional local provider); `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT` (optional,
 default `dews-agents`). All in `.env`.
 

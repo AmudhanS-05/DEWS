@@ -8,6 +8,7 @@ Any failure leaves the template v1 in place (outcome `v1_kept`). The human appro
 """
 from __future__ import annotations
 
+import json
 import threading
 import time
 import uuid
@@ -165,23 +166,27 @@ def build_graph(tools, run: Run):
         info = run.call("context", "get_gauge_info", site)
         imp = run.call("context", "get_impacts", site, a["category"])
         up = [n["rising"] for n in nb if n["relation"] == "upstream"]
+        sup = [n["rising"] for n in nb if n["relation"] in ("downstream", "nearby")]
         rain_3h = (rain["rain_3h"] or 0.0) if rain["available"] else None
-        direction, rain_sig, up_sig = rules.context_direction(rain_3h, up)
-        cx = {"rain": rain, "neighbours": nb, "gauge": info, "impacts": imp, "direction": direction,
-              "rain_signal": bool(rain_sig), "upstream_signal": bool(up_sig)}
-        run.event("context", "end", {"direction": direction, "rain_3h": rain.get("rain_3h"), "n_neighbours": len(nb)})
-        run.row("context", t0, f"surroundings of {site} up to {until}", {k: cx[k] for k in ("direction", "rain_signal", "upstream_signal")})
+        sig = rules.context_signals(rain_3h, up, sup)
+        cx = {"rain": rain, "neighbours": nb, "gauge": info, "impacts": imp, **sig,
+              "summary": advisory.context_summary(sig, rain, nb)}
+        run.event("context", "end", {"direction": sig["direction"], "kind": sig["kind"], "basis": sig["basis"],
+                                     "summary": cx["summary"], "rain_3h": rain.get("rain_3h"), "n_neighbours": len(nb)})
+        run.row("context", t0, f"surroundings of {site} up to {until}",
+                {k: cx[k] for k in ("direction", "kind", "basis", "rain_signal", "upstream_signal", "supporting_signal",
+                                    "summary")})
         return {"context": cx}
 
     def reconcile(s: State) -> dict:
         """Conflict resolution: the coordinator does not let one worker win silently."""
         ev, cx = s["evidence"], s["context"]
         dis = None
-        if rules.disagreement(ev["direction"], cx["direction"]):
+        if rules.disagreement(ev["direction"], cx["direction"], cx.get("basis", "leading")):
             rate, fst = advisory.ft(ev["rise_rate_ft_per_h"]), advisory.ft(ev["forecast_stage"])
             dis = {"evidence": ev["direction"] + f" (rise {advisory._num(rate)} ft/h, forecast {advisory._num(fst)} ft)",
                    "context": cx["direction"] + (f" (rain 3h {advisory._num(advisory.ft(cx['rain']['rain_3h']))} mm)"
-                                                 if cx["rain"]["available"] else " (upstream gauges)")}
+                                                 if cx["rain"]["available"] else " (upstream gauges, a leading signal)")}
             run.event("coordinator", "disagreement", dis)
             t0 = _now()
             run.row("coordinator", t0, "disagreement between evidence and context", dis, verdict="uncertain")
@@ -222,8 +227,11 @@ def build_graph(tools, run: Run):
                              "is misleading, certain-sounding, or inconsistent with the facts. Numbers in FACTS are "
                              "already rounded for the report (0.1 ft, whole %). The alert's category and the highest "
                              "official category the forecast crosses can differ; that is correct when the text states "
-                             "both.",
-                             f"FACTS:{facts}\n\nDRAFT:\n{s['draft']}")
+                             "both. data_source says whether the data are a replay of a historical USGS record "
+                             "(mode SIMULATION): calling such data replayed historical data is correct. Upstream "
+                             "gauges and radar rain are leading signals; downstream and nearby gauges are supporting "
+                             "context only, and saying so is correct.",
+                             f"FACTS (JSON):\n{json.dumps(facts, default=str)}\n\nDRAFT:\n{s['draft']}")
             tokens = r.tokens
             judge = (r.text or f"no reply ({r.error})")[:200]
             if r.text and r.text.upper().startswith("FAIL"):

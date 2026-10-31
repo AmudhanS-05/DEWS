@@ -72,3 +72,14 @@ def test_fallback_and_llm_failure_get_a_line():
 def test_progress_callback_errors_do_not_change_the_outcome():
     res = graph.run_alert(FakeTools(), ALERT, on_event=lambda e: 1 / 0)
     assert res["outcome"] == "saved"
+
+
+def test_reviewer_line_says_when_the_llm_judge_gave_no_reply():
+    """Laptop/cloud run 4 (31 Oct): Groq rate-limited the judge, the deterministic checks passed and PASS hid that."""
+    e = {"agent": "reviewer", "kind": "verdict", "t_s": 4.3,
+         "detail": {"verdict": "pass", "reasons": [], "attempt": 1, "max_attempts": 3,
+                    "llm_judgement": "no reply (groq: RateLimitError: 429)"}}
+    line = run.progress_line(e)
+    assert "PASS (deterministic checks only; LLM judgement no reply (groq: RateLimitError: 429))" in line
+    ok = dict(e, detail=dict(e["detail"], llm_judgement="PASS"))
+    assert run.progress_line(ok).endswith("attempt 1/3: PASS")

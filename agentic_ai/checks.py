@@ -19,11 +19,17 @@ _ANY_NUM = re.compile(r"\d+(?:\.\d+)?")
 
 # Check ids, in the order the reviewer reports them.
 CHECKS = ("numbers", "precision", "category", "official_stage", "forecast_category", "certainty", "probability",
-          "horizon", "lead_time", "rain", "missing_value", "markdown", "simulation", "live_label", "provisional",
+          "horizon", "lead_time", "rain", "missing_value", "raw_field", "context_kind", "markdown", "simulation", "live_label", "provisional",
           "uncertain", "length")
 
 _PRECISION = re.compile(r"(?<![\w.])\d+\.\d{2,}\s*(?:ft|feet|foot|mm)\b|(?<![\w.])\d+\.\d{3,}")
 _MISSING = re.compile(r"\b(?:null|None|NaN|nan|undefined)\b|(?:^|(?<=[\s:=(]))\?(?=[\s,.;)]|$)", re.M)
+# FACTS field names (snake_case such as as_of, provisional_data, rise_rate) and JSON booleans must not reach the text.
+_RAW_FIELD = re.compile(r"\b[A-Za-z]+(?:_[A-Za-z0-9]+)+\b|\b(?:true|false|True|False|TRUE|FALSE)\b"
+                        r"|provisional[\s_]*data[\s:=]*(?:not\s+available|none|yes|no)\b", re.I)
+# A downstream/nearby gauge is SUPPORTING context: never a cause or predictor of the rise at this gauge.
+_CAUSAL = re.compile(r"\b(?:downstream|nearby|neighbou?ring)\b[^.\n]{0,100}?\b(?:caus\w*|predict\w*|lead(?:s|ing)?\s+to|"
+                     r"drive[sn]?|driving|leading\s+(?:signal|indicator)|will\s+(?:push|raise|bring))\b", re.I)
 _MARKDOWN = re.compile(r"\*\*|__|^\s*#{1,6}\s", re.M)
 _NA = re.compile(r"not\s+available|unavailable", re.I)
 
@@ -147,6 +153,15 @@ def review_detailed(draft: str, alert: dict, facts: dict, confidence: str = "nor
     if miss:
         out.append(("missing_value", f"missing value written as {', '.join(repr(x) for x in miss)} "
                                      "(write 'not available')"))
+    raw = sorted({m.group(0) for m in _RAW_FIELD.finditer(draft)})
+    if raw:
+        out.append(("raw_field", f"raw field name or boolean in the text: {', '.join(repr(x) for x in raw)} "
+                                 "(use plain words, e.g. 'as of', 'data: approved per USGS')"))
+    if (facts.get("context") or {}).get("signal_kind") == "supporting":
+        m = _CAUSAL.search(draft)
+        if m:
+            out.append(("context_kind", f"downstream/nearby gauges are SUPPORTING context only, not a cause or "
+                                        f"predictor: '{m.group(0)}'"))
     if _MARKDOWN.search(draft):
         out.append(("markdown", "Markdown in a plain-text advisory (remove ** / __ / # headings)"))
     if alert["mode"] == "SIMULATION" and "SIMULATION" not in draft:

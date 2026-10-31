@@ -1,7 +1,7 @@
 """LLM provider switch (A1.4): LLM_PROVIDER = groq | gemini | ollama | none, plus LLM_FALLBACK = gemini | groq | none.
 
   groq    Groq free tier, GROQ_MODEL (default openai/gpt-oss-120b), key GROQ_API_KEY
-  gemini  Google AI Studio free tier, GEMINI_MODEL (default gemini-2.5-flash), key GEMINI_API_KEY
+  gemini  Google AI Studio free tier, GEMINI_MODEL (default gemini-3.5-flash-lite), key GEMINI_API_KEY
   ollama  local OLLAMA_MODEL (default qwen2.5:7b) at OLLAMA_HOST; optional, not needed on the laptop
   none    no model: complete() returns text=None and the agents use their deterministic path (tests always use this)
 
@@ -19,7 +19,7 @@ from agentic_ai.env import load_env
 
 PROVIDERS = ("groq", "gemini", "ollama", "none")
 GROQ_MODEL = "openai/gpt-oss-120b"
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3.5-flash-lite"   # 31 Oct: 2.5-flash 404 for new keys; 3.5-flash 504 after 30 s
 OLLAMA_MODEL = "qwen2.5:7b"
 DEFAULT_TIMEOUT_S = 30.0
 

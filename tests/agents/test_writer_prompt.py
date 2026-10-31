@@ -16,6 +16,8 @@ def test_every_check_has_a_requirement():
     ids = {i for i, _ in advisory.requirements(advisory.build_facts(ALERT, EV, CX, 1), "uncertain")}
     ids |= {i for i, _ in advisory.requirements(advisory.build_facts(LIVE, EV, CX, 1), "normal")}
     ids |= {i for i, _ in advisory.requirements(advisory.build_facts(HIGHER, EV, NO_RAIN, 1), "normal")}
+    ids |= {i for i, _ in advisory.requirements(advisory.build_facts(HIGHER, EV, {**NO_RAIN, "kind": "supporting"}, 1),
+                                                "normal")}
     assert ids == set(checks.CHECKS)
 
 

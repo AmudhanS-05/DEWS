@@ -60,7 +60,8 @@ def progress_line(e: dict) -> str | None:
                f"forecast {_f(d.get('forecast_stage'), ' ft')}{ms}")
     elif a == "context" and k == "end":
         rain = "rain data not available" if d.get("rain_3h") is None else f"rain 3 h {_f(d['rain_3h'], ' mm')}"
-        msg = f"{d['direction']}: {rain}, {d.get('n_neighbours', 0)} neighbour gauge(s){ms}"
+        msg = (f"{d['direction']}: {d['summary']}{ms}" if d.get("summary") else
+               f"{d['direction']}: {rain}, {d.get('n_neighbours', 0)} neighbour gauge(s){ms}")
     elif a == "writer" and k == "revision" and "llm_fallback" in d:
         msg = f"{d['primary']} failed ({d.get('primary_error')}); retried on {d['llm_fallback']}: {'ok' if d['ok'] else 'failed'}"
     elif a == "writer" and k == "revision" and "llm_failed" in d:
@@ -73,6 +74,8 @@ def progress_line(e: dict) -> str | None:
         msg = f"attempt {d['attempt']}/{d.get('max_attempts', 3)}: {d['verdict'].upper()}"
         if d["reasons"]:
             msg += ": " + "; ".join(d["reasons"])
+        elif str(d.get("llm_judgement") or "").startswith("no reply"):   # deterministic checks passed, judge silent
+            msg += f" (deterministic checks only; LLM judgement {d['llm_judgement'][:120]})"
     if msg is None:
         return None
     return f"[{e.get('t_s', 0):6.2f}s] {a:<11} {msg}"
