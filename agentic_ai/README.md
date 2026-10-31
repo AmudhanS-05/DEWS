@@ -74,7 +74,7 @@ certainty language; at most 900 characters.
 | `seed.py` | puts the May 2019 DRWT2 flood into PostgreSQL (measured record, see below) |
 | `schema_agents.sql` | `advisories`, `agent_events`, `agent_runs`, `gauge_impacts`, `past_floods` (also in `storage/schema.sql`) |
 | `fixtures/drwt2_2019-05_replay.json` | measured USGS record for 08158700 + 2 neighbours, run through core's windowing and forecaster |
-| `fixtures/agent_events_DRWT2.json` | recorded agent_events for the console (regenerate: `python -m tests.agents.record_fixture`) |
+| `fixtures/agent_events_DRWT2.json` | recorded agent_events for the console (regenerate: `python -m tests.agents.record_fixture --write`) |
 
 ## Set up and run (Windows laptop, PowerShell, repo folder)
 
@@ -102,7 +102,7 @@ Driftwood, 08158700), the downstream gauge 08159000 and nearby 08158840, 2019-05
 and rise-rate forecaster turn it into rows (mode SIMULATION). It is the same data a core replay writes, so the
 order does not matter. Its alert 08158700|major|2019-05-04T01:00:00Z: gauge 8.16 ft (already above MODERATE 7.0 ft),
 rising 5.5 ft/h, forecast 24.72 ft in 3 h (MAJOR is 13.0 ft), no probability (the rise-rate baseline gives none), no
-radar rain joined. Rebuild the fixture with `python -m tests.agents.make_replay_fixture` (needs network and
+radar rain joined. Rebuild the fixture with `python -m tests.agents.make_replay_fixture --write` (without `--write` it only builds a temp copy) (needs network and
 `requirements.txt`). `seed.build()` is a separate ILLUSTRATIVE shape (made-up rain and probabilities) used only by
 in-memory tests; it is never written to a database that holds replay rows.
 
