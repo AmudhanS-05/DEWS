@@ -11,8 +11,17 @@ JSON, keyed by `site_no` (USGS site number, text), and carry `mode` = `LIVE` or 
 provisional, `A` approved), `reading_time`/`reading_ts`, `fetched_at`/`fetched_ts`, `mode`, `revision`. Heartbeat:
 `site_no`, `now`/`now_ts`, `mode`. Source of truth: `producers/tracking.py`.
 
-**`rain.mrms`, `replay.rain`** (S2): `site_no`, `product`, `window_end`/`window_end_ts` (end of the accumulation
-hour), `accum_hours`, `rain_mm` (mean depth over the 10 km circle), `n_cells`, `file_time`, `fetched_ts`, `mode`.
+**`rain.mrms`, `replay.rain`** (S2, built 31 Oct): `type` = `rain` | `heartbeat`, keyed by `site_no`. Rain fields:
+`rain_id` (`site_no|product|hour_end_ts|mode`, the idempotent upsert key), `site_no`, `product` (bucket folder, e.g.
+`RadarOnly_QPE_01H_00.00` live, `MultiSensor_QPE_01H_Pass2_00.00` replay), `mode`, `accum_hours` (= 1),
+`hour_start`/`hour_start_ts`, `hour_end`/`hour_end_ts` (UTC; the file's valid time is the END of the hour),
+`window_end`/`window_end_ts` (= `hour_end`, the S2 name kept), `rain_mm` (= `rain_mm_10km`, the decided radius),
+`rain_mm_5km`, `rain_mm_10km`, `rain_mm_25km` (mean depth in mm over the cells whose centres are inside the circle;
+`null` when no cell is covered), `coverage_5km/10km/25km` (covered fraction; -3 no-coverage and 9999 missing cells are
+excluded from the mean), `n_cells_5km/10km/25km` (`n_cells` = 10 km), `file_time`/`file_ts` (S3 Last-Modified: when
+NOAA published the file), `fetched_at`/`fetched_ts`, `produced_ts`, `feed_delay_s` (`fetched_ts - hour_end_ts`, LIVE
+only, null for SIMULATION). Heartbeat (live only, every poll): `site_no`, `now`/`now_ts`, `mode`, `product`,
+`last_hour_end_ts`. Source of truth: `producers/mrms_qpe_producer.py` (`make_rain_record`).
 
 **`aggregates.window`** (built): `site_no`, `series`, `mode`, `window_start`, `window_end`, `window_start_ts`,
 `n_readings` (0 = zero-filled), `revision`, `stage_last`, `stage_max`, `stage_min`, `rise_rate_ft_per_h`,
