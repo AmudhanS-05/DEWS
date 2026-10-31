@@ -1,0 +1,4 @@
+window,n,median_total_mm,p90_total_mm,share_below_1mm,min_hours_present
+dry,102,0.07,17.6,0.65,0.95
+event_fast,52,57.27,123.99,0.0,0.92
+event_slow,50,100.89,179.6,0.0,1.0
