@@ -60,11 +60,11 @@ a model sees the same features in replay, evaluation and live.
 | What | Value | Source |
 |---|---|---|
 | Gauges / history | 38 gauges, 10 years, about 26 million stage readings, 213 minor crossings, 123 slow | gate check, 3 Oct 2026 (`FAQ.md`) |
-| Rise-rate baseline, 3 h, F1 per gauge | **under correction**: the EDA values in `FAQ.md` contain a one-hour look-ahead | `ml/MODEL_CARD.md`, open issues; corrected numbers to follow from the ML workstream |
+| Rise-rate baseline, 3 h, scored by `ml/harness.py` on stream windows (38 gauges, 2015 to 2025, replay) | pooled F1 0.28 (precision 0.18, recall 0.61, 310 crossings), slow floods only 0.21; DRWT2 0.25, LCPT2 0.42, JNCT2 0.76, AHOT2 0.25; median warning 0.8 h gross, −0.2 h net of the 1 h feed delay | `ml/figures/baselines.csv`, `ml/REFERENCE_BASELINES.md` |
 | Baseline in the pipeline, May 2019 DRWT2 replay | alert only **after** the minor crossing (no lead time) | core run, 31 Oct 2026 |
 | v0 / v1 vs rise-rate, POOLED, h = 1 to 6 | no consistent event-level gain; median net lead time around zero | `ml/MODEL_CARD.md`, "Measured results" |
 
-The rise-rate baseline, scored on the same rows, is the bar to beat. DEWS makes no comparison with NWS, NSSL FLASH or GloFAS forecasts, and claims
+The rise-rate baseline is the bar to beat; the model comparison scores it on the same rows as v0/v1. *Corrected 31 Oct 2026: earlier figures (0.65 / 0.26 / 0.64 / 0.41) included a 1 h look-ahead; evidence in `ml/REFERENCE_BASELINES.md`.* DEWS makes no comparison with NWS, NSSL FLASH or GloFAS forecasts, and claims
 nothing against them.
 
 ## Reproduce

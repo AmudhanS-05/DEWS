@@ -99,11 +99,14 @@ Only measured results are listed. Source: commit messages and `docs/breadcrumbs/
 | India data study | US side of the audit (Table 1) run on real data; India-WRIS loader and API client written | no Indian data processed yet |
 | Power BI | page 1 guide written (`dashboard/powerbi/README.md`); report not built yet | |
 | Slice check | `python -m tools.verify_slice S1` | first real run: 16 of 19 checks passed; one FAIL is the late baseline alert above |
-| Tests | `pytest -q` | 237 passed + 23 skipped without a test database; 260 passed with PostgreSQL 16 (Python 3.12, 31 Oct 2026) |
+| Tests | `pytest -q` | 243 passed + 23 skipped without a test database (Python 3.12, 31 Oct 2026, after merging ml-india 17cbf4e) |
 
-The rise-rate baseline is the bar any model must beat. The per-gauge baseline F1s quoted in `FAQ.md` are being
-corrected because they contained a one-hour look-ahead (`ml/MODEL_CARD.md`, open issues). The corrected numbers will be
-added here once the ML workstream publishes them. DEWS is not compared with, and makes no claim against, NWS, NSSL FLASH
+**The bar any model must beat** is rise-rate extrapolation at 3 h, scored by `ml/harness.py` on stream windows
+(38 gauges, 2015 to 2025, replay): pooled F1 0.28 (precision 0.18, recall 0.61, 310 minor crossings), slow floods only
+0.21; per gauge DRWT2 0.25, LCPT2 0.42, JNCT2 0.76, AHOT2 0.25; median warning 0.8 h gross, −0.2 h net of the 1 h feed
+delay. *Corrected 31 Oct 2026: earlier figures (0.65 / 0.26 / 0.64 / 0.41) included a 1 h look-ahead; evidence in `ml/REFERENCE_BASELINES.md`.*
+
+DEWS is not compared with, and makes no claim against, NWS, NSSL FLASH
 or GloFAS forecasts.
 
 ## Quick start
