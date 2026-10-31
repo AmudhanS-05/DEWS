@@ -13,9 +13,10 @@ def test_utf8_stdio_survives_a_cp1252_console(monkeypatch):
     monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(raw, encoding="cp1252"))
     monkeypatch.setattr(sys, "stderr", io.TextIOWrapper(io.BytesIO(), encoding="cp1252"))
     run.utf8_stdio()
-    print("6.8 ft ‑ 79 %")
+    print("6.8\u202fft \u2011 79\xa0%")
     sys.stdout.flush()
-    assert raw.getvalue().decode("utf-8") == "6.8 ft ‑ 79 %\n"
+    # TextIOWrapper writes os.linesep for "\n" (Windows: "\r\n"): compare the text, not the platform line ending
+    assert raw.getvalue().decode("utf-8").replace("\r\n", "\n") == "6.8\u202fft \u2011 79\xa0%\n"
 
 
 def _scripted(monkeypatch, outputs):

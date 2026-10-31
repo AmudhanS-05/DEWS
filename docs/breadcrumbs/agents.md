@@ -3,33 +3,40 @@
 ## Run locally (Windows laptop, PowerShell, from the repo folder)
 ```
 ..\spaenv\Scripts\Activate.ps1
-pip install -r requirements-agents.txt          # adds langchain-google-genai 4.4.2
+pip install -r requirements-dev.txt -r requirements-agents.txt   # no new packages in round 3
 # .env: LLM_PROVIDER=groq, GROQ_API_KEY=..., GROQ_MODEL=openai/gpt-oss-120b,
-#       LLM_FALLBACK=gemini + GEMINI_API_KEY=... (or LLM_FALLBACK=none), LANGSMITH_TRACING=true + LANGSMITH_API_KEY=...
+#       LLM_FALLBACK=gemini + GEMINI_API_KEY=AIza... (or LLM_FALLBACK=none), LANGSMITH_TRACING=true + LANGSMITH_API_KEY=...
 cd docker; docker compose up -d; cd ..
-python -m agentic_ai.seed
-python -m agentic_ai.run --alert-id '08158700|minor|2019-05-04T03:00:00Z'           # add --force to re-run
-python -m pytest -q tests/agents                                                   # always LLM_PROVIDER=none
+python -m agentic_ai.seed            # measured May 2019 record; removes the old illustrative alerts (minor/moderate)
+python -m agentic_ai.run --alert-id '08158700|major|2019-05-04T01:00:00Z'         # add --force to re-run
+python -m pytest -q tests/agents                                                  # always LLM_PROVIDER=none
 ```
-No PYTHONIOENCODING needed any more (the CLI switches the console to UTF-8). Expected output, one line per step as it
-happens (values from the seed; timings and tokens vary):
+Packages the agents add on top of requirements-dev.txt (all pinned in requirements-agents.txt): langgraph 1.2.19,
+langchain-core 1.7.3, langchain-groq 1.1.3, langchain-google-genai 4.4.2, langchain-ollama 1.1.0, langsmith 0.14.16,
+psycopg2-binary 2.9.9 (same pin as requirements.txt). The old seeded id `08158700|minor|2019-05-04T03:00:00Z` no longer
+exists after re-seeding: it was an illustrative shape whose windows core's real replay overwrote (cause of the
+22.69 ft / 42.26 ft evidence). Expected output with LLM_PROVIDER=none (measured in the cloud session, PostgreSQL 16):
 ```
-LLM_PROVIDER=groq (openai/gpt-oss-120b)  LLM_FALLBACK=gemini  LangSmith tracing: on
-[  0.04s] coordinator plan evidence -> context -> writer -> reviewer; update 1; SIMULATION (7 ms)
-[  0.06s] evidence    rising: stage 2.6 ft, rate 0.7 ft/h, forecast 6.8 ft (9 ms)
-[  0.06s] context     rising: rain 3 h 27 mm, 4 neighbour gauge(s) (16 ms)
-[  2.10s] writer      attempt 1/3: groq openai/gpt-oss-120b, 640 chars, 1500 tokens (2000 ms)
-[  3.00s] reviewer    attempt 1/3: PASS                  (a FAIL line lists the reasons, then attempt 2/3)
-[  3.01s] coordinator saved 08158700|minor|2019-05-04T03:00:00Z|2 (normal)
+LLM_PROVIDER=none  LangSmith tracing: off
+[  0.03s] coordinator plan evidence -> context -> writer -> reviewer; update 1; SIMULATION; URGENT (9 ms)
+[  0.04s] evidence    rising: stage 8.2 ft, rate 5.5 ft/h, forecast 24.7 ft (8 ms)
+[  0.04s] context     unknown: rain data not available, 4 neighbour gauge(s) (11 ms)
+[  0.05s] writer      attempt 1/3: template text, 726 chars, 0 tokens (5 ms)
+[  0.06s] reviewer    attempt 1/3: PASS
+[  0.06s] coordinator saved 08158700|major|2019-05-04T01:00:00Z|2 (normal)
 
-<the advisory text: SIMULATION ..., MINOR 5.5 ft, 79%, within 6 h, provisional>
-
-advisory 08158700|minor|2019-05-04T03:00:00Z|2  version 2  outcome saved (normal, reviewer pass after 1/3 attempt(s))  tokens ...  ... events  3.0 s
-LangSmith trace: https://smith.langchain.com/o/<org>/projects/p/<project>/r/<run>?poll=true
+SIMULATION: replayed historical data, not a real event.
+Onion Creek near Driftwood: forecast to reach MAJOR flood stage (13.0 ft) within 3 h.
+Gauge now: 8.2 ft, changing +5.5 ft/h, already above MODERATE (as of 2019-05-04T02:00:00Z).
+Forecast: 24.7 ft in 3 h; probability of reaching MAJOR: not available (rise_rate model gives none). ...
+Lead time to MAJOR: about 0.9 h at the current rise rate (an estimate, not a promise).
+Radar rain: rain data not available.
+...
+advisory 08158700|major|2019-05-04T01:00:00Z|2  version 2  outcome saved (normal, reviewer pass after 1/3 attempt(s))  tokens 0  33 events  0.06 s
 ```
-A second run without --force prints `dropped: duplicate: v2 exists (<id>), use --force to re-run` (exit 0). With
-LLM_PROVIDER=none the writer line says `template text, 760 chars, 0 tokens` and the run is saved the same way. If
-Groq fails, you see `groq failed (...); retried on gemini: ok|failed`, and if both fail the template text is used.
+With groq the writer line shows the provider, model and tokens, and a FAIL line lists the reasons before attempt 2/3.
+A second run without --force prints `dropped: duplicate: v2 exists (<id>), use --force to re-run` (exit 0). If Groq
+fails you see `groq failed (...); retried on gemini: ok|failed`, and if both fail the template text is used.
 
 [agents] 31 Oct: A1.1 `requirements-agents.txt` written (langgraph 1.2.19, langchain-groq 1.1.3, langchain-ollama 1.1.0, langsmith 0.14.16, psycopg2-binary 2.9.9); `pip install` of the same set resolved cleanly on Python 3.13 in the cloud clone (psycopg2-binary 2.9.13 there; 2.9.9 pinned to match requirements.txt, not re-installed here).
 [agents] 31 Oct: A1.2 `agentic_ai/tools.py` (all 10 read tools + get_open_alerts; writes save_advisory, log_agent_run, log_agent_event) and `python -m agentic_ai.seed` done. Tested against a REAL throwaway PostgreSQL 16 (cloud), 9 tests pass (`AGENTS_TEST_DSN` set; without it they skip). Seed = DRWT2 May 2019, SIMULATION: minor alert 08158700|minor|2019-05-04T03:00:00Z (stage 2.6 ft, forecast 6.8 ft in 6 h, p 0.79) + moderate upgrade in the same episode. CAVEAT: stage/rain/forecast values are an illustrative shape, NOT the measured USGS record (no network); official levels are real. Core: `advisories`, `agent_events`, `agent_runs` (+ `gauge_impacts`, `past_floods`, both empty until loaded; get_impacts returns [] rather than inventing NWS text) are defined in `agentic_ai/schema_agents.sql`, applied by `ensure_schema()`; fold them into storage/schema.sql when you add them. `alerts` has no stage/forecast columns, so get_alert rebuilds them from windowed_aggregates/risk_scores at raised_at.
@@ -42,3 +49,8 @@ Groq fails, you see `groq failed (...); retried on gemini: ok|failed`, and if bo
 [agents] 31 Oct: S1 fix, writer prompt: `advisory.requirements()` adds one numbered instruction per deterministic reviewer check, with the exact values (MINOR, 5.5 ft, 79%, within 6 h, SIMULATION, provisional, ...). Tests assert the ids equal `checks.CHECKS` and that every check a bad draft fails was in the prompt. 5-run live attempt count NOT measured: Groq returns 401 "Invalid API Key" for the key this cloud session injects (LangSmith 403 likewise), so the user measures it on the laptop.
 [agents] 31 Oct: CLI: stdout/stderr reconfigured to UTF-8 (errors=replace), tested by printing U+202F/U+2011 through a cp1252 stream. Live progress line per agent step (elapsed time + ms), writer `attempt n/3` with provider/model, reviewer verdict + reasons, Groq->fallback line, final line with advisory id, version, outcome, tokens, events, seconds and the LangSmith trace URL (root run id fixed per run; URL needs a working key, else "project dews-agents, run <id>"). Duplicate: "v2 exists (<id>), use --force to re-run". Measured here on real PostgreSQL 16: none -> saved v2, 1/3, 34 events, 0.08 s; groq with a rejected key + fallback gemini without key -> both fail soft in 1.4 s, template text, saved v3, 36 events, 1.82 s. Events fixture regenerated (detail gains ms, max_attempts, model).
 [agents] 31 Oct: A2.1 context worker feeds get_rain (3 h rain) and get_neighbours (upstream readings) into `rules.context_direction`. A2.2 `rules.evidence_direction / context_direction / disagreement` (pure); synthetic tests rain/no rise and rise/no rain -> disagreement -> UNCERTAIN draft naming both signals, saved; unknown context never disagrees (7 tests). A2.3 agent_events: PostgreSQL test shows each event is in the table before the next step, in event_id/ts order, only CONTRACTS agent/kind values; Groq live end to end NOT done here (key rejected). tests/agents: 74 passed with PostgreSQL 16. Full `pytest -q` not run here: core requirements (confluent-kafka, faust) do not build on this Python 3.13 container.
+[agents] 31 Oct (round 3): merged origin/claude/core (fast-forward, no conflicts). Evidence bug found: the laptop line "stage 22.69 ft, rate 6.52364 ft/h, forecast 42.2609 ft" is the REAL 2019-05-04 03:00Z window of 08158700. Verified by fetching USGS IV 08158700 2019-05-01..06 (nwis.waterservices.usgs.gov) and running core's streams.windowing.aggregate + streams.forecaster.step + ml.predict offline: that window gives exactly 22.69 / 6.52364 / 42.2609. Cause: core's replay upserts the same windowed_aggregates keys the illustrative seed used (seed values overwritten), and get_forecast took the newest row of any horizon (core's 3 h row, not the seed alert's 6 h one). Also, a Kafka-replayed alert's raised_at is wall-clock time, so "latest window before raised_at" = end of the replay. Fix: tools.anchor_window (alert's own window and horizon), seed = measured record (fixture from core's functions; alert 08158700|major|2019-05-04T01:00:00Z, 8.16 ft, forecast 24.72 ft in 3 h, p none), `--drop-illustrative`, illustrative seed refused when replay rows exist. 7 regression tests (seed + later real windows, wall-clock raised_at, other horizon, illustrative-then-replay).
+[agents] 31 Oct (round 3): category consistency + formatting: rules.category_of (official NWPS levels only); advisory states the alert category and the highest official category the forecast crosses ("forecast to reach MAJOR (13.0 ft)", "Alert category: MINOR (5.5 ft)"); new deterministic checks forecast_category, precision (0.1 ft), probability (whole % or "not available"), lead_time (hours or "not available"), rain ("rain data not available"), missing_value (null/None/NaN/?), markdown; each is a writer requirement with exact values. CLI progress rounds to 0.1 and says "rain data not available". The template crashed on probability None (every real rise-rate alert); fixed. Run.event now holds a lock: parallel evidence/context could write agent_events out of ts order (test failed ~1 in 10 runs here; 25/25 after). 10 new tests.
+[agents] 31 Oct (round 3): Windows: test_utf8_stdio_survives_a_cp1252_console compared with "\n"; now normalises \r\n (also passes with a simulated newline="\r\n" wrapper). Other agents tests checked: all file I/O has encoding="utf-8", datetimes timezone-aware; suite passes with TZ=Asia/Kolkata, TZ=America/Chicago, PGTZ=Asia/Kolkata. tests/agents: 91 passed with PostgreSQL 16, 77 passed + 14 skipped without.
+[agents] 31 Oct (round 3): live run here on the measured-record alert, raised_at set to wall-clock 2026-10-31T09:00Z like a Kafka replay: LLM_PROVIDER=none -> evidence 8.2 ft / 5.5 ft/h / 24.7 ft, saved after 1/3, 33 events, 0.06 s. LLM_PROVIDER=groq + LLM_FALLBACK=gemini -> both failed soft, template saved, 35 events, 1.22 s. NOT measured: the 5 Groq runs, the LangSmith traces and the forced Gemini fallback: GROQ_API_KEY and LANGSMITH_API_KEY are NOT set in this cloud environment (not even present), and the GEMINI_API_KEY here is rejected by Google (401 ACCESS_TOKEN_TYPE_UNSUPPORTED; the value is not an AI Studio "AIza..." key). Laptop round-3 numbers reported by the user (before these fixes; illustrative seed alert): 5 runs, 3 passed on attempt 1 and 2 on attempt 2, ~3.1k-7k tokens, 6-12 s each.
+[agents] 31 Oct (round 3, coordinator decision 4): reviewer accepts the probability as a whole % (79%) or as a decimal (0.79), value checked (81%, 79.3% and 0.97 rejected); the writer is still told to write "79%"; saved text keeps what the model wrote. tests/agents: 92 passed with PostgreSQL 16, 78 + 14 skipped without.

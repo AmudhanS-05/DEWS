@@ -6,7 +6,7 @@ UPGRADE = "08158700|moderate|2019-05-04T03:00:00Z"
 
 
 def test_seed_is_idempotent(pg_conn, seeded):
-    assert seed.load(pg_conn) == ALERT
+    assert seed.load(pg_conn, illustrative=True) == ALERT
     with pg_conn.cursor() as cur:
         cur.execute("SELECT count(*) FROM alerts")
         assert cur.fetchone()[0] == 2
@@ -105,7 +105,7 @@ def test_agent_events_stream_in_order_for_the_live_agents_tab(tools, pg_conn):
         assert (e["agent"], e["kind"]) in rows
     res = graph.run_alert(tools, ALERT, force=True, on_event=check)
     # evidence and context run in parallel threads, so a count can jump ahead, never lag behind
-    assert all(n >= i + 1 for i, n in enumerate(seen)) and seen[-1] == len(res["events"])
+    assert all(n >= i + 1 for i, n in enumerate(seen)) and seen[-1] == len(res["events"]), (seen, len(res["events"]))
     with pg_conn.cursor() as cur:
         cur.execute("SELECT agent, kind, detail, ts FROM agent_events WHERE run_id = %s ORDER BY event_id", (res["run_id"],))
         rows = cur.fetchall()

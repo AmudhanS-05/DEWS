@@ -90,14 +90,29 @@ class Tools:
             (site, u, u, mode, mode, int(hours)))
         return [_row(r) for r in reversed(rows)]
 
-    def get_forecast(self, site: str, until=None, mode: str | None = None) -> dict | None:
-        """Latest forecast row (risk_scores) at or before `until`."""
+    def get_forecast(self, site: str, until=None, mode: str | None = None, horizon_h: float | None = None) -> dict | None:
+        """Latest forecast row (risk_scores) at or before `until`; only the given horizon when `horizon_h` is set."""
         u = _ts(until)
         rows = self._q(
             "SELECT window_start, mode, model, horizon_h, forecast_stage, p_action, p_minor, p_moderate, p_major "
             "FROM risk_scores WHERE site_no = %s AND (%s::timestamptz IS NULL OR window_start + interval '1 hour' <= %s) "
-            "AND (%s::text IS NULL OR mode = %s) ORDER BY window_start DESC, id DESC LIMIT 1",
-            (site, u, u, mode, mode))
+            "AND (%s::text IS NULL OR mode = %s) AND (%s::float8 IS NULL OR horizon_h = %s) "
+            "ORDER BY window_start DESC, id DESC LIMIT 1",
+            (site, u, u, mode, mode, horizon_h, horizon_h))
+        return _row(rows[0]) if rows else None
+
+    def _forecast_rows(self, site: str, mode: str, start, end, horizon_h: float | None) -> list[dict]:
+        """Forecast rows with the stage of their window, window_start in [start, end - 1 h], oldest first."""
+        return [_row(r) for r in self._q(
+            "SELECT r.window_start, r.model, r.horizon_h, r.forecast_stage, r.p_action, r.p_minor, r.p_moderate, "
+            "r.p_major, w.stage_last FROM risk_scores r LEFT JOIN windowed_aggregates w ON w.site_no = r.site_no "
+            "AND w.window_start = r.window_start AND w.mode = r.mode WHERE r.site_no = %s AND r.mode = %s "
+            "AND r.window_start >= %s AND r.window_start + interval '1 hour' <= %s "
+            "AND (%s::float8 IS NULL OR r.horizon_h = %s) ORDER BY r.window_start, r.id",
+            (site, mode, _ts(start), _ts(end), horizon_h, horizon_h))]
+
+    def _alert_record(self, alert_id: str) -> dict | None:
+        rows = self._q("SELECT * FROM alerts WHERE alert_id = %s", (alert_id,))
         return _row(rows[0]) if rows else None
 
     def get_past_floods(self, site: str) -> dict:
@@ -157,26 +172,35 @@ class Tools:
         return [r["statement"] for r in rows]
 
     def get_alert(self, alert_id: str) -> dict | None:
-        """The alert as `alerts.flood` carried it, rebuilt from the tables (kind, levels, current stage, forecast)."""
-        rows = self._q("SELECT * FROM alerts WHERE alert_id = %s", (alert_id,))
-        if not rows:
+        """The alert as `alerts.flood` carried it, rebuilt from the tables (kind, levels, current stage, forecast).
+
+        The numbers come from the window the alert was raised on (`window_start`, `as_of` = its end), see
+        `anchor_window`: a replayed alert's `raised_at` is the wall-clock time of the replay, so "the latest window
+        before raised_at" would be the end of the replay, not the alert's own window."""
+        a = self._alert_record(alert_id)
+        if a is None:
             return None
-        a = rows[0]
-        site = a["site_no"]
-        window = self.get_recent_windows(site, 1, a["raised_at"], a["mode"])
-        fc = self.get_forecast(site, a["raised_at"], a["mode"])
-        gi = self.get_gauge_info(site)
+        site, mode = a["site_no"], a["mode"]
+        levels = self.get_official_levels(site)
         episode = alert_id.split("|")[-1]
+        rows = self._forecast_rows(site, mode, episode, a["raised_at"], a.get("horizon_h"))
+        fc = anchor_window(a, levels, rows)
+        as_of = _iso(_ts(fc["window_start"]) + timedelta(hours=1)) if fc else a["raised_at"]
+        if fc is None:
+            fc = self.get_forecast(site, as_of, mode, a.get("horizon_h"))
+        window = self.get_recent_windows(site, 1, as_of, mode)
+        gi = self.get_gauge_info(site)
         history = self.get_episode_history(alert_id)["alerts"]
-        earlier = [h for h in history if h["raised_at"] < _iso(a["raised_at"])]
+        earlier = [h for h in history if h["raised_at"] < a["raised_at"]]
         return {"alert_id": alert_id, "kind": "upgrade" if earlier else "new", "site_no": site,
-                "site_name": gi["name"], "mode": a["mode"], "category": a["category"],
+                "site_name": gi["name"], "mode": mode, "category": a["category"],
                 "probability": a["probability"], "horizon_h": a["horizon_h"],
                 "forecast_stage": fc["forecast_stage"] if fc else None,
                 "current_stage": window[-1]["stage_last"] if window else None,
-                "official_levels": self.get_official_levels(site),
+                "official_levels": levels,
                 "provisional_data": a["provisional_data"], "model": fc["model"] if fc else None,
-                "raised_at": _iso(a["raised_at"]), "episode_start": episode, "status": a["status"]}
+                "raised_at": a["raised_at"], "window_start": window[-1]["window_start"] if window else None,
+                "as_of": as_of, "episode_start": episode, "status": a["status"]}
 
     def get_open_alerts(self, mode: str | None = None) -> list[dict]:
         rows = self._q("SELECT alert_id, site_no, category, mode, raised_at, status FROM alerts "
@@ -225,6 +249,41 @@ class Tools:
                         ts: datetime | None = None) -> None:
         self._x("INSERT INTO agent_events (run_id, alert_id, agent, kind, detail, ts) "
                 "VALUES (%s,%s,%s,%s,%s, COALESCE(%s, now()))", (run_id, alert_id, agent, kind, Json(detail or {}), ts))
+
+
+def anchor_window(alert: dict, levels: dict, rows: list[dict]) -> dict | None:
+    """The forecast row the alert was raised on (pure; `rows` from `_forecast_rows`, oldest first).
+
+    1. the window that ends exactly at `raised_at` (alerts stamped with their window end, e.g. the seed);
+    2. else the first window from the episode start whose forecast reaches the alert's official category while the
+       gauge is still below it: that is when the forecaster raises it (a new alert at the episode start, an upgrade
+       later), also when `raised_at` is the wall-clock time of a replay;
+    3. else the episode-start window. None when there is no forecast row at all.
+    Several models on one window: the one whose probability matches the alert's, else the newest row."""
+    if not rows:
+        return None
+    raised = _ts(alert["raised_at"])
+    level = (levels or {}).get(alert["category"])
+
+    def pick(cands):
+        if len(cands) <= 1 or alert.get("probability") is None:
+            return cands[-1] if cands else None
+        key = f"p_{alert['category']}"
+        return min(cands, key=lambda r: abs((r.get(key) if r.get(key) is not None else 9) - alert["probability"]))
+
+    by_ws: dict[str, list[dict]] = {}
+    for r in rows:
+        by_ws.setdefault(r["window_start"], []).append(r)
+    exact = [r for r in rows if _ts(r["window_start"]) + timedelta(hours=1) == raised]
+    if exact:
+        return pick(exact)
+    if level is not None:
+        for ws, cands in by_ws.items():
+            hit = [r for r in cands if r["forecast_stage"] is not None and r["forecast_stage"] >= level
+                   and (r.get("stage_last") is None or r["stage_last"] < level)]
+            if hit:
+                return pick(hit)
+    return pick(next(iter(by_ws.values())))
 
 
 # ---------------------------------------------------------------------- gauge csv helpers

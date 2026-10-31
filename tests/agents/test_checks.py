@@ -46,19 +46,26 @@ def test_uncertain_needs_both_signals():
 
 
 # Regression: a Groq (gpt-oss-120b) draft on the user's laptop was rejected on every attempt (outcome v1_kept).
-# It wrote the probability as a decimal ("~0.79 probability") and used typographic Unicode.
+# It used typographic Unicode and wrote the probability as a decimal ("~0.79 probability"). Since round 3 the
+# writer is told to write "79%", and the reviewer still accepts the decimal 0.79 (value checked).
 LIVE_LIKE = ("SIMULATION – replayed historical data. Onion Creek at Driftwood: gauge now 2.6 ft, rising "
-             "0.7 ft/h. Forecast 6.8 ft within 6.0 h; ~0.79 probability of reaching the MINOR flood "
+             "0.7 ft/h. Forecast 6.8 ft within 6.0 h; 79 % probability of reaching the MINOR flood "
              "stage (5.5 ft). Lead‑time ≈ 4.1 h. Data are provisional.")
 
 
-def test_decimal_probability_and_unicode_draft_passes():
+def test_unicode_draft_with_narrow_nbsp_percentage_passes():
     assert checks.review(LIVE_LIKE, ALERT, FACTS) == []
 
 
-def test_percentage_with_narrow_nbsp_passes():
-    d = LIVE_LIKE.replace("~0.79 probability", "79 % probability")
+def test_decimal_probability_is_accepted_with_its_value_checked():
+    d = LIVE_LIKE.replace("79\u202f% probability", "~0.79 probability")
     assert checks.review(d, ALERT, FACTS) == []
+
+
+def test_percentage_must_match_the_alert_value():
+    for bad in ("81% probability", "79.3% probability", "~0.97 probability"):
+        r = checks.review(LIVE_LIKE.replace("79\u202f% probability", bad), ALERT, FACTS)
+        assert any(x.startswith("probability not stated") for x in r), bad
 
 
 def test_normalize_maps_typographic_characters_to_ascii():
@@ -73,7 +80,7 @@ def test_wrong_number_still_caught_through_unicode():
 
 
 def test_wrong_decimal_probability_is_not_accepted():
-    d = LIVE_LIKE.replace("~0.79 probability", "~0.97 probability")
+    d = LIVE_LIKE.replace("79\u202f% probability", "~0.97 probability")
     assert any(r.startswith("probability not stated") for r in checks.review(d, ALERT, FACTS))
 
 

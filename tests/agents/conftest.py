@@ -12,8 +12,7 @@ os.environ.pop("GROQ_API_KEY", None)
 os.environ.pop("GEMINI_API_KEY", None)
 
 
-@pytest.fixture(scope="session")
-def pg_conn():
+def _throwaway_schema():
     dsn = os.getenv("AGENTS_TEST_DSN")
     if not dsn:
         pytest.skip("AGENTS_TEST_DSN not set: PostgreSQL tests skipped")
@@ -33,9 +32,21 @@ def pg_conn():
 
 
 @pytest.fixture(scope="session")
+def pg_conn():
+    """Throwaway schema with the ILLUSTRATIVE seed (made-up rain/probabilities; exercises every branch)."""
+    yield from _throwaway_schema()
+
+
+@pytest.fixture()
+def pg_empty():
+    """A fresh throwaway schema per test (for the measured-replay seed and mixed-data regressions)."""
+    yield from _throwaway_schema()
+
+
+@pytest.fixture(scope="session")
 def seeded(pg_conn):
     from agentic_ai import seed
-    return seed.load(pg_conn)
+    return seed.load(pg_conn, illustrative=True)
 
 
 @pytest.fixture()

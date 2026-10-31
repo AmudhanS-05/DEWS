@@ -8,6 +8,7 @@ Any failure leaves the template v1 in place (outcome `v1_kept`). The human appro
 """
 from __future__ import annotations
 
+import threading
 import time
 import uuid
 from datetime import datetime, timezone
@@ -53,8 +54,14 @@ class Run:
         self.on_event = on_event          # optional callback (CLI progress lines); never allowed to break the run
         self.t_start = time.monotonic()
         self._agent_t0: dict[str, float] = {}
+        self._lock = threading.Lock()   # evidence and context run in parallel: one event at a time, so event_id
+        #                                  order = ts order = callback order (the console orders by event_id)
 
     def event(self, agent: str, kind: str, detail: dict | None = None) -> None:
+        with self._lock:
+            self._event(agent, kind, detail)
+
+    def _event(self, agent: str, kind: str, detail: dict | None = None) -> None:
         ts = datetime.now(timezone.utc)
         detail = dict(detail or {})
         now = time.monotonic()
@@ -128,9 +135,9 @@ def build_graph(tools, run: Run):
     def evidence(s: State) -> dict:
         t0, a = _now(), s["alert"]
         run.event("evidence", "start", {"site": a["site_no"]})
-        site, until, mode = a["site_no"], a["raised_at"], a["mode"]
+        site, until, mode = a["site_no"], a.get("as_of") or a["raised_at"], a["mode"]   # the alert's own window
         w = run.call("evidence", "get_recent_windows", site, 12, until=until, mode=mode)
-        fc = run.call("evidence", "get_forecast", site, until=until, mode=mode)
+        fc = run.call("evidence", "get_forecast", site, until=until, mode=mode, horizon_h=a.get("horizon_h"))
         lv = run.call("evidence", "get_official_levels", site)
         pf = run.call("evidence", "get_past_floods", site)
         stages = [x["stage_last"] for x in w if x.get("stage_last") is not None]
@@ -152,7 +159,7 @@ def build_graph(tools, run: Run):
     def context(s: State) -> dict:
         t0, a = _now(), s["alert"]
         run.event("context", "start", {"site": a["site_no"]})
-        site, until, mode = a["site_no"], a["raised_at"], a["mode"]
+        site, until, mode = a["site_no"], a.get("as_of") or a["raised_at"], a["mode"]
         rain = run.call("context", "get_rain", site, 6, until=until, mode=mode)
         nb = run.call("context", "get_neighbours", site, until=until, mode=mode)
         info = run.call("context", "get_gauge_info", site)
@@ -171,8 +178,10 @@ def build_graph(tools, run: Run):
         ev, cx = s["evidence"], s["context"]
         dis = None
         if rules.disagreement(ev["direction"], cx["direction"]):
-            dis = {"evidence": ev["direction"] + f" (rise {ev['rise_rate_ft_per_h']} ft/h, forecast {ev['forecast_stage']} ft)",
-                   "context": cx["direction"] + (f" (rain 3h {cx['rain']['rain_3h']} mm)" if cx["rain"]["available"] else " (upstream gauges)")}
+            rate, fst = advisory.ft(ev["rise_rate_ft_per_h"]), advisory.ft(ev["forecast_stage"])
+            dis = {"evidence": ev["direction"] + f" (rise {advisory._num(rate)} ft/h, forecast {advisory._num(fst)} ft)",
+                   "context": cx["direction"] + (f" (rain 3h {advisory._num(advisory.ft(cx['rain']['rain_3h']))} mm)"
+                                                 if cx["rain"]["available"] else " (upstream gauges)")}
             run.event("coordinator", "disagreement", dis)
             t0 = _now()
             run.row("coordinator", t0, "disagreement between evidence and context", dis, verdict="uncertain")
@@ -210,7 +219,10 @@ def build_graph(tools, run: Run):
         tokens, judge = 0, None
         if not reasons and llm.provider() != "none":   # LLM judgement second, only on a draft that passed the rules
             r = llm.complete("You review flood advisories. Reply 'PASS' or 'FAIL: <one reason>'. FAIL only if the text "
-                             "is misleading, certain-sounding, or inconsistent with the facts.",
+                             "is misleading, certain-sounding, or inconsistent with the facts. Numbers in FACTS are "
+                             "already rounded for the report (0.1 ft, whole %). The alert's category and the highest "
+                             "official category the forecast crosses can differ; that is correct when the text states "
+                             "both.",
                              f"FACTS:{facts}\n\nDRAFT:\n{s['draft']}")
             tokens = r.tokens
             judge = (r.text or f"no reply ({r.error})")[:200]
