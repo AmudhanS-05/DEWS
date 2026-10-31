@@ -58,29 +58,29 @@ ALERT_ROW = {"site_no": "08158700", "mode": "SIMULATION", "category": "minor", "
 
 def test_message_is_a_tagged_bulletin_with_plain_and_html_parts():
     m = notifier.build_message(dict(REC, version=8, text="Advice 42.260909090909095 ft."), ALERT_ROW, "Onion Creek", "me@example.org", ["to@example.org"])
-    assert m["Subject"] == "[SIMULATION] Flood forecast bulletin: Onion Creek near Driftwood (MINOR)"
+    assert m["Subject"] == "[SIMULATION] Flood forecast: Onion Creek near Driftwood (MINOR category)"
     plain, html_part = m.get_body(("plain",)).get_content(), m.get_body(("html",)).get_content()
-    assert "FLOOD FORECAST BULLETIN" in plain and "HEADLINE" in plain and "A. Person" in plain and "[■■□□]" in plain
-    assert "SIMULATION &mdash; REPLAYED HISTORICAL DATA" in html_part and "minor flood category forecast" in html_part
+    assert "Flood forecast for Onion Creek" in plain and "Notes" in plain and "A. Person" in plain and "SIMULATION: replayed" in plain
+    assert "replayed historical data" in html_part and "MINOR flood category" in html_part and "prefers-color-scheme: dark" in html_part
 
 
 def test_bulletin_formats_numbers_and_rounds_long_decimals_in_the_advice():
     f = bulletin.facts(dict(REC, version=8, text="Forecast 42.260909090909095 ft, 79% in 6 h"), ALERT_ROW, None)
     t = bulletin.render_text(f)
     assert "42.3 ft" in t and "42.260909" not in t and "79 %" in t
-    assert "FORECAST 3 H" in t and "OBSERVED      4.7 ft" in t
-    assert "ACTION 5.5  |  MINOR 5.5  |  MODERATE 7.0  |  MAJOR 13.0  (ft)" in t
+    assert "Forecast in 3 h:  " in t and "Latest reading:   4.7 ft" in t
+    assert "action 5.5 ft, minor 5.5 ft, moderate 7.0 ft, major 13.0 ft (NWS)" in t
 
 
 def test_v1_template_text_is_not_repeated_in_the_bulletin():
     f = bulletin.facts(dict(REC, version=1, text="TEMPLATE TEXT"), ALERT_ROW, None)
-    assert "TEMPLATE TEXT" not in bulletin.render_text(f) and "Advisory (reviewed" not in bulletin.render_text(f)
+    assert "TEMPLATE TEXT" not in bulletin.render_text(f) and "Approved advisory" not in bulletin.render_text(f)
 
 
 def test_missing_facts_are_said_to_be_missing_not_invented():
     f = bulletin.facts(dict(REC, version=8), {"category": "minor", "probability": None, "horizon_h": None, "details": None}, "Creek")
     t = bulletin.render_text(f)
-    assert "not available" in t and "PROBABILITY   not given" in t and "%" not in t.replace("79", "")
+    assert "not available" in t and "Probability:      not given" in t and "%" not in t.replace("79", "")
 
 
 def test_already_in_category_is_flagged():

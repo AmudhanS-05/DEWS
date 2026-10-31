@@ -1,5 +1,6 @@
-"""Flood forecast bulletin (C1.5): the email an approved advisory becomes, laid out like a public warning bulletin
-(headline, issuer, target, situation, forecast, official stages, approved advisory text, notes).
+"""Flood forecast bulletin (C1.5): the email an approved advisory becomes. It reads like an ordinary email: one headline
+sentence, the key figures in a small table, the approved advisory text, notes and who approved it. The HTML part follows the
+reader's light or dark mode where the mail client supports prefers-color-scheme.
 
 Facts (stages, levels, probability, model) come from the alert record, so every number is formatted the same way
 whatever wrote the advisory text. Missing facts are left out or said to be missing, never invented. The advisory
@@ -16,7 +17,6 @@ from common.nwps import CATEGORIES, category_of
 
 ISSUER = "Flood early-warning prototype (RVCE student project). Not an official NWS or government warning."
 CAT_COLOUR = {"action": "#b8942f", "minor": "#c76f1c", "moderate": "#b83d32", "major": "#7a56ad"}
-WIDTH = 66
 
 
 def ft(x) -> str:
@@ -66,7 +66,7 @@ def headline(f: dict) -> str:
 
 def subject(f: dict) -> str:
     tag = "[SIMULATION] " if f["mode"] == "SIMULATION" else ""
-    return f"{tag}Flood forecast bulletin: {f['site_name']} ({f['category'].upper()})"
+    return f"{tag}Flood forecast: {f['site_name']} ({f['category'].upper()} category)"
 
 
 def notes(f: dict) -> list[str]:
@@ -85,88 +85,69 @@ def notes(f: dict) -> list[str]:
 
 def _rows(f: dict) -> list[tuple[str, str]]:
     h = f["horizon_h"]
-    r = [("OBSERVED", ft(f["current_stage"]) + (f" ({f['now_category'].upper()})" if f["now_category"] else ""))]
-    r.append((f"FORECAST {h:g} H" if isinstance(h, (int, float)) else "FORECAST", ft(f["forecast_stage"])))
-    r.append(("PROBABILITY", f"{f['probability'] * 100:.0f} %" if isinstance(f["probability"], (int, float)) else "not given"))
-    r.append(("MODEL", f["model"] or "not recorded"))
+    r = [("Latest reading", ft(f["current_stage"]) + (f" ({f['now_category']})" if f["now_category"] else ""))]
+    r.append((f"Forecast in {h:g} h" if isinstance(h, (int, float)) else "Forecast", ft(f["forecast_stage"])))
+    r.append(("Probability", f"{f['probability'] * 100:.0f} %" if isinstance(f["probability"], (int, float)) else "not given"))
+    r.append(("Model", f["model"] or "not recorded"))
     return r
 
 
-def meter(category: str) -> str:
-    """Category meter, one block per official category up to the forecast one: action > minor > moderate > major."""
-    i = CATEGORIES.index(category) + 1 if category in CATEGORIES else 0
-    return "■" * i + "□" * (len(CATEGORIES) - i)
+def _stages(f: dict) -> list[tuple[str, float]]:
+    return [(c, f["levels"][c]) for c in CATEGORIES if c in f["levels"]]
 
 
 def render_text(f: dict) -> str:
-    bar, thin = "=" * WIDTH, "-" * WIDTH
-    out = [f"▲ FLOOD FORECAST BULLETIN ▲  v{f['version']}", bar, f"{f['category'].upper()} FLOOD CATEGORY FORECAST"]
+    out = []
     if f["mode"] == "SIMULATION":
-        out.append("[ SIMULATION: REPLAYED HISTORICAL DATA, NOT A REAL EVENT ]")
-    out += [thin, f"{'TARGET':<14}{f['site_name']} (USGS {f['site_no']})", f"{'CATEGORY':<14}{f['category'].upper()}  [{meter(f['category'])}]  action / minor / moderate / major"]
-    out += [f"{k:<14}{v}" for k, v in _rows(f)]
-    out += [thin, "HEADLINE", f"  {headline(f)}"]
-    if f["levels"]:
-        out += ["", "OFFICIAL STAGES (NWS)", "  " + "  |  ".join(f"{c.upper()} {f['levels'][c]:.1f}" for c in CATEGORIES if c in f["levels"]) + "  (ft)"]
+        out += ["SIMULATION: replayed historical data, not a real event.", ""]
+    out += [f"Flood forecast for {f['site_name']} (USGS {f['site_no']})", "", headline(f), ""]
+    rows = _rows(f) + ([("Official stages", ", ".join(f"{c} {v:.1f} ft" for c, v in _stages(f)) + " (NWS)")] if f["levels"] else [])
+    out += [f"{k + ':':<18}{v}" for k, v in rows]
     if f["advisory_text"]:
-        out += ["", "ADVISORY (REVIEWED AND APPROVED)"] + [f"  {ln}" if ln.strip() else "" for ln in f["advisory_text"].splitlines()]
-    out += ["", "NOTES"] + [f"  - {n}" for n in notes(f)] + [thin,
-            f"ISSUED {when(f['approved_at'])}  |  APPROVED BY {f['approved_by']}", f"BULLETIN {f['alert_id']}  (advisory v{f['version']})", ISSUER, bar]
+        out += ["", "Approved advisory", *f["advisory_text"].splitlines()]
+    out += ["", "Notes", *[f"- {n}" for n in notes(f)], "",
+            f"Approved by {f['approved_by']} on {when(f['approved_at'])}.", f"Reference: {f['alert_id']}, advisory v{f['version']}", ISSUER]
     return "\n".join(out)
 
 
-BLACK, AMBER, PAPER, INK, MUTED = "#101214", "#d9a441", "#e9ebee", "#1b2530", "#5b6978"
-MONO = "Consolas,Menlo,'Courier New',monospace"
-LABEL = f"font-family:{MONO};font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:{MUTED}"
-
-
-def _stripe() -> str:
-    cells = "".join(f'<td width="15" height="7" style="background:{AMBER if i % 2 == 0 else BLACK};font-size:0;line-height:0">&nbsp;</td>' for i in range(40))
-    return f'<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="border-collapse:collapse"><tr>{cells}</tr></table>'
+FONT = "-apple-system,'Segoe UI',Helvetica,Arial,sans-serif"
+DARK_CSS = """@media (prefers-color-scheme: dark){
+ .b-page{background:#0b1220!important}.b-card{background:#121b2c!important;border-color:#26344b!important}
+ .b-ink{color:#e3ebf5!important}.b-muted{color:#93a4b8!important}.b-line{border-color:#26344b!important}
+ .b-sim{background:#2a2413!important;color:#e6cf8f!important}.b-quote{border-color:#3a4c68!important}
+}"""
 
 
 def render_html(f: dict) -> str:
     e = html.escape
-    idx = CATEGORIES.index(f["category"]) + 1 if f["category"] in CATEGORIES else 0
-    meter_cells = "".join(
-        f'<td style="padding:0 3px 0 0"><div style="height:8px;background:{AMBER if i < idx else "#2a2f35"}"></div>'
-        f'<div style="font-family:{MONO};font-size:9px;letter-spacing:.14em;color:{"#e9edf1" if i < idx else "#6e7a87"};padding-top:4px;text-transform:uppercase">{c}</div></td>'
-        for i, c in enumerate(CATEGORIES))
-    sim = (f'<tr><td style="background:{BLACK};border-top:1px solid #2a2f35;padding:9px 24px;font-family:{MONO};font-size:11px;letter-spacing:.14em;color:{AMBER};font-weight:bold">'
-           '&#9650; SIMULATION &mdash; REPLAYED HISTORICAL DATA &mdash; NOT A REAL EVENT</td></tr>') if f["mode"] == "SIMULATION" else ""
-    tiles = "".join(
-        f'<td width="50%" style="padding:0 6px 6px 0"><div style="background:#f2f4f6;border-left:3px solid {AMBER};padding:9px 12px"><div style="{LABEL}">{e(k)}</div>'
-        f'<div style="font-family:{MONO};font-size:20px;font-weight:bold;color:{INK};padding-top:3px">{e(v)}</div></div></td>' + ("</tr><tr>" if n % 2 else "")
-        for n, (k, v) in enumerate(_rows(f)))
-    ladder = ""
+    accent = CAT_COLOUR.get(f["category"], "#5b7fa3")
+    sim = ('<p class="b-sim" style="margin:0 0 18px;padding:9px 12px;border-radius:6px;background:#fbf5e4;color:#6b5518;font-size:13px">'
+           '<b>Simulation.</b> This uses replayed historical data. It is not a real event.</p>') if f["mode"] == "SIMULATION" else ""
+    rows = _rows(f)
     if f["levels"]:
-        cells = "".join(
-            f'<td style="padding:7px 4px;border:1px solid #cfd6dd;text-align:center;{"background:%s;color:#fff;" % BLACK if c == f["category"] else ""}">'
-            f'<div style="font-family:{MONO};font-size:9px;letter-spacing:.14em;text-transform:uppercase;{"color:%s" % AMBER if c == f["category"] else "color:" + MUTED}">{c}</div>'
-            f'<div style="font-family:{MONO};font-weight:bold;font-size:14px">{f["levels"][c]:.1f} ft</div></td>' for c in CATEGORIES if c in f["levels"])
-        ladder = f'<div style="{LABEL};margin:20px 0 6px">Official flood stages (NWS)</div><table role="presentation" width="100%" style="border-collapse:collapse"><tr>{cells}</tr></table>'
+        stages = ", ".join(f"<b>{c} {v:.1f} ft</b>" if c == f["category"] else f"{c} {v:.1f} ft" for c, v in _stages(f))
+        rows_html = [(k, e(v)) for k, v in rows] + [("Official stages (NWS)", stages)]
+    else:
+        rows_html = [(k, e(v)) for k, v in rows]
+    table = "".join(f'<tr><td class="b-muted b-line" style="padding:7px 16px 7px 0;border-top:1px solid #e3e9ef;color:#5d6e7f;white-space:nowrap;vertical-align:top">{e(k)}</td>'
+                    f'<td class="b-ink b-line" style="padding:7px 0;border-top:1px solid #e3e9ef;color:#1a2a3a">{v}</td></tr>' for k, v in rows_html)
     adv = ""
     if f["advisory_text"]:
-        adv = (f'<div style="{LABEL};margin:20px 0 6px">Advisory (reviewed and approved)</div><div style="font-family:{MONO};font-size:12.5px;line-height:1.6;white-space:pre-wrap;'
-               f'background:#f2f4f6;border-left:3px solid {BLACK};padding:10px 14px">{e(f["advisory_text"])}</div>')
-    note_items = "".join(f"<li>{e(n)}</li>" for n in notes(f))
-    return f"""<!doctype html><html><body style="margin:0;background:{PAPER};font-family:Segoe UI,Helvetica,Arial,sans-serif;color:{INK}">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:20px 10px">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background:#fff;border:1px solid {BLACK};max-width:600px;border-collapse:collapse">
-<tr><td style="padding:0">{_stripe()}</td></tr>
-<tr><td style="background:{BLACK};padding:20px 24px 16px">
-<div style="font-family:{MONO};font-size:11px;letter-spacing:.24em;color:{AMBER}">&#9650; FLOOD FORECAST BULLETIN &nbsp;/&nbsp; V{f['version']}</div>
-<div style="font-size:26px;line-height:1.15;font-weight:800;letter-spacing:.02em;text-transform:uppercase;color:#f3f5f7;margin:8px 0 4px">{e(f['category'])} flood category forecast</div>
-<div style="font-size:13px;color:#9aa5b1;margin-bottom:14px">{e(f['site_name'])} &middot; USGS {e(f['site_no'])}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>{meter_cells}</tr></table></td></tr>
-{sim}
-<tr><td style="padding:20px 24px 6px">
-<div style="{LABEL};margin:0 0 6px">Headline</div><p style="margin:0 0 16px;font-size:15px;line-height:1.5;font-weight:600">{e(headline(f))}</p>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>{tiles}</tr></table>
-{ladder}{adv}
-<div style="{LABEL};margin:20px 0 6px">Notes</div><ul style="margin:0;padding-left:18px;font-size:13px;color:#33414f;line-height:1.55">{note_items}</ul></td></tr>
-<tr><td style="background:{BLACK};padding:14px 24px;font-family:{MONO};font-size:11px;line-height:1.7;color:#9aa5b1">
-ISSUED {e(when(f['approved_at']))} &nbsp;|&nbsp; APPROVED BY {e(f['approved_by'])}<br>BULLETIN {e(f['alert_id'])} &middot; ADVISORY V{f['version']}<br>
-<span style="color:#7b8794">{e(ISSUER)}</span></td></tr>
-<tr><td style="padding:0">{_stripe()}</td></tr>
-</table></td></tr></table></body></html>"""
+        adv = ('<p class="b-ink" style="margin:22px 0 6px;font-weight:600;color:#1a2a3a">Approved advisory</p>'
+               '<div class="b-ink b-quote" style="border-left:2px solid #cdd8e3;padding:2px 0 2px 12px;color:#1a2a3a;white-space:pre-line">' + e(f["advisory_text"]) + '</div>')
+    note_items = "".join(f'<li style="margin:3px 0">{e(n)}</li>' for n in notes(f))
+    return f"""<!doctype html><html><head><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><style>{DARK_CSS}</style></head>
+<body class="b-page" style="margin:0;padding:0;background:#f1f5f9">
+<table role="presentation" class="b-page" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9"><tr><td align="center" style="padding:20px 10px">
+<table role="presentation" class="b-card" width="100%" cellpadding="0" cellspacing="0" style="max-width:580px;background:#ffffff;border:1px solid #e0e7ee;border-top:3px solid {accent};border-radius:8px;font-family:{FONT};font-size:14px;line-height:1.55">
+<tr><td style="padding:24px 26px">
+{sim}<h1 class="b-ink" style="margin:0 0 2px;font-size:19px;line-height:1.3;font-weight:600;color:#1a2a3a">Flood forecast for {e(f['site_name'])}</h1>
+<p class="b-muted" style="margin:0 0 14px;font-size:13px;color:#5d6e7f">USGS gauge {e(f['site_no'])}</p>
+<p class="b-ink" style="margin:0 0 16px;font-size:15px;color:#1a2a3a">{e(headline(f))}</p>
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="font-size:14px;border-collapse:collapse">{table}</table>
+{adv}
+<p class="b-ink" style="margin:22px 0 4px;font-weight:600;color:#1a2a3a">Notes</p>
+<ul class="b-ink" style="margin:0;padding-left:18px;color:#33465a">{note_items}</ul>
+<p class="b-ink b-line" style="margin:22px 0 0;padding-top:14px;border-top:1px solid #e3e9ef;color:#1a2a3a">Approved by {e(f['approved_by'])} on {e(when(f['approved_at']))}.</p>
+<p class="b-muted" style="margin:6px 0 0;font-size:12px;color:#5d6e7f">Reference: {e(f['alert_id'])}, advisory v{f['version']}<br>{e(ISSUER)}</p>
+</td></tr></table></td></tr></table></body></html>"""
