@@ -250,7 +250,8 @@ evaluation uses Pass 2. One hourly CONUS grid is 3500 × 7000 cells, about 0.8 M
 - **Caveat on "rise time":** at DRWT2 the median rise time is 10.9 h, but the aligned plot shows
   the stage creeps slowly and then jumps in about the last hour. The rise-start rule finds an
   early, shallow trough, so **rise time overstates the warning that stage alone gives**. The
-  rise-rate baseline's median warning (0.8 h at DRWT2, 2 h at LCPT2) is the honest stage-only
+  rise-rate baseline's median warning (0.9 h at DRWT2, 2 h at LCPT2, gross; corrected 31 Oct 2026, see
+  `ml/REFERENCE_BASELINES.md`) is the honest stage-only
   number. Rainfall is what moves the warning earlier.
 - **Rain → stage:** at DRWT2 on 4 May 2019 about 107 mm fell in the days around the flood, much of it before the jump.
   The best rain–stage lag varies from 0 to 18 h between events, so the model needs several
@@ -259,8 +260,12 @@ evaluation uses Pass 2. One hourly CONUS grid is 3500 × 7000 cells, about 0.8 M
   (LCPT2). This is a strong feature, but it arrives late.
 - **Live feed delay (one sample):** 24–69 min. Usable warning (median rise minus delay) is
   about 10 h at DRWT2, 11 h at LCPT2 and below zero at AHOT2, before the caveat above.
-- **Baselines:** persistence never warns (recall 0). Rise-rate extrapolation at 3 h: F1 0.65 at DRWT2,
-  0.26 at LCPT2, 0.64 at JNCT2, 0.41 at AHOT2, with under 1–2 h of warning. This is the bar the ML model must beat.
+- **Baselines:** persistence never warns (recall 0). Rise-rate extrapolation at 3 h, scored by `ml/harness.py`
+  (stream windows, 38 gauges, 2015–2025): pooled F1 0.28 (precision 0.18, recall 0.61, 310 crossings), slow floods
+  only 0.21; F1 0.25 at DRWT2, 0.42 at LCPT2, 0.76 at JNCT2, 0.25 at AHOT2; median warning 0.8 h gross, −0.2 h net
+  of the 1 h feed delay. This is the bar the ML model must beat (`ml/figures/baselines.csv`).
+  *Corrected 31 Oct 2026: earlier values (0.65 / 0.26 / 0.64 / 0.41) included a 1 h look-ahead; see
+  `ml/REFERENCE_BASELINES.md`.*
 
 Notebook 01 has been rerun on DRWT2 and LCPT2 (3 Oct). Neither gauge reached minor flood stage in its 2-year window
 (peaks 5.49 ft and 13.73 ft in June 2026). Every cell and figure is explained in `docs/EDA_WALKTHROUGH.md`.
