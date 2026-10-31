@@ -21,7 +21,7 @@ from collections import defaultdict
 
 import psycopg2
 from confluent_kafka import Consumer
-from psycopg2.extras import execute_values
+from psycopg2.extras import Json, execute_values
 
 from alerting import template
 from common import config
@@ -66,7 +66,7 @@ def trace_row(m: dict):
 
 def alert_row(m: dict):
     return (m["alert_id"], m["site_no"], m.get("mode", "LIVE"), m["category"], m.get("probability"), m.get("horizon_h"),
-            m.get("provisional_data"), m["raised_at"], m.get("kind", "new"))
+            m.get("provisional_data"), m["raised_at"], Json(m), m.get("kind", "new"))
 
 
 # ---- SQL --------------------------------------------------------------------------------------------------------
@@ -95,8 +95,8 @@ SQL = {
     "advisory_retract": """UPDATE advisories a SET status = 'superseded' FROM (VALUES %s) AS v(alert_id)
         WHERE a.alert_id = v.alert_id AND a.status = 'draft'""",
     # an existing alert keeps its status (a person may already have approved it); only a retract changes it
-    "alerts": """INSERT INTO alerts (alert_id, site_no, mode, category, probability, horizon_h, provisional_data, raised_at, status)
-        VALUES %s ON CONFLICT (alert_id) DO UPDATE SET
+    "alerts": """INSERT INTO alerts (alert_id, site_no, mode, category, probability, horizon_h, provisional_data, raised_at, details, status)
+        VALUES %s ON CONFLICT (alert_id) DO UPDATE SET details = COALESCE(alerts.details, EXCLUDED.details),
         status = CASE WHEN EXCLUDED.status = 'retracted' THEN 'retracted' ELSE alerts.status END""",
 }
 
@@ -118,7 +118,7 @@ def route(topic: str, m: dict) -> list[tuple[str, tuple]]:
     elif topic == config.TOPIC_ALERTS:
         a = alert_row(m)
         status = "retracted" if a[-1] == "retract" else "draft"
-        out.append(("alerts", a[:-1] + (status,)))
+        out.append(("alerts", a[:-1] + (status,)))        # (..., details, status)
         if status == "retracted":
             out.append(("advisory_retract", (m["alert_id"],)))
         else:                                              # advisory v1 within seconds of the alert

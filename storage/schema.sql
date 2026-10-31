@@ -90,7 +90,8 @@ CREATE TABLE IF NOT EXISTS alerts (
     approved_at         TIMESTAMPTZ,
     approved_by         TEXT,
     delivered_at        TIMESTAMPTZ,
-    channel             TEXT
+    channel             TEXT,
+    details             JSONB               -- the alert record as published (stages, levels, model): facts for the bulletin
 );
 
 CREATE TABLE IF NOT EXISTS latency_trace (
@@ -195,3 +196,6 @@ CREATE TABLE IF NOT EXISTS past_floods (
 );
 
 CREATE INDEX IF NOT EXISTS agent_events_run ON agent_events (run_id, event_id);
+
+-- databases created before C1.5 gain the column
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS details JSONB;

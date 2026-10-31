@@ -3,59 +3,30 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Orbital Flood Watch</title>
-<link rel="stylesheet" href="/static/leaflet/leaflet.css">
+<title>Flood Early-Warning Console</title>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark")}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <link rel="stylesheet" href="/static/theme.css">
 </head>
 <body>
 <header>
-  <h1>Orbital Flood Watch<small>flood early-warning console</small></h1>
+  <h1>Flood early-warning console</h1>
   <span class="chip"><span class="dot" id="d-kafka"></span><span id="c-kafka">Kafka …</span></span>
   <span class="chip"><span class="dot" id="d-brokers"></span><span id="c-brokers">brokers …</span></span>
   <span class="chip"><span class="dot" id="d-urp"></span><span id="c-urp">under-replicated …</span></span>
   <span class="chip"><span class="dot" id="d-dlq"></span><span id="c-dlq">dead letters …</span></span>
   <span class="chip"><span class="dot" id="d-pg"></span><span id="c-pg">PostgreSQL …</span></span>
   <span class="chip" id="c-demo" style="display:none">DEMO DATA</span>
-  <span class="chip" style="margin-left:auto" id="c-clock">connecting…</span>
+  <span class="chip" id="c-clock" style="margin-left:auto">connecting…</span>
+  <button class="btn" id="theme-toggle" type="button" aria-label="Switch between light and dark theme" style="margin-left:0">Light</button>
 </header>
 <main>
   <div class="tabs" role="tablist">
-    <button class="tab" role="tab" id="tb-orbit" aria-selected="true" data-tab="orbit">Orbit</button>
-    <button class="tab" role="tab" id="tb-flow" aria-selected="false" data-tab="flow">Pipeline flow</button>
-    <button class="tab" role="tab" id="tb-map" aria-selected="false" data-tab="map">Flat map</button>
+    <button class="tab" role="tab" id="tb-flow" aria-selected="true" data-tab="flow">Pipeline flow</button>
+    <button class="tab" role="tab" id="tb-map" aria-selected="false" data-tab="map">Map</button>
     <button class="tab" role="tab" id="tb-data" aria-selected="false" data-tab="data">Readings &amp; alerts</button>
   </div>
   <div class="banner" id="banner"></div>
-  <section id="tab-orbit">
-    <div class="toolbar">
-      <span class="seg"><button id="o-live" aria-pressed="true">Live</button><button id="o-replay" aria-pressed="false">Replay (SIMULATION)</button></span>
-      <span class="note">Ground is a lat/lon graticule, not terrain. Pillar height = newest stage against that gauge's own official NWS major level.</span>
-    </div>
-    <div class="orbit" id="orbit">
-      <canvas id="o-canvas" aria-label="3D orbital view of every gauge" role="img"></canvas>
-      <div class="hud tl"><div class="big">Orbital flood watch</div><div id="o-mode"></div><div id="o-stat"></div></div>
-      <div class="hud tr"><span id="o-clock"></span><br>USGS gauges · official NWS stages</div>
-      <div class="ctl">
-        <button class="btn" id="o-auto" aria-pressed="true" title="slow automatic orbit">Auto-orbit</button>
-        <button class="btn" id="o-top" title="look straight down">Top-down</button>
-        <button class="btn" id="o-tilt" title="default tilt">Tilt</button>
-        <button class="btn" id="o-low" title="low angle, see the horizon">Horizon</button>
-      </div>
-      <div class="side"><div class="glass card" id="o-card"></div><div class="glass glist" id="o-list"></div></div>
-      <div class="tip" id="o-tip" hidden></div>
-    </div>
-    <div class="legend">
-      <span><span class="gdot" style="display:inline-block;color:#34d6b0;background:#34d6b0"></span>below action stage</span>
-      <span><span class="gdot" style="display:inline-block;color:#e6c04a;background:#e6c04a"></span>action</span>
-      <span><span class="gdot" style="display:inline-block;color:#ff8a3d;background:#ff8a3d"></span>minor flood</span>
-      <span><span class="gdot" style="display:inline-block;color:#ff4d4d;background:#ff4d4d"></span>moderate</span>
-      <span><span class="gdot" style="display:inline-block;color:#c084fc;background:#c084fc"></span>major</span>
-      <span><span class="gdot" style="display:inline-block;color:#46586d;background:#46586d"></span>no recent reading</span>
-      <span>a dashed red beam marks an open alert</span>
-    </div>
-  </section>
-
-  <section id="tab-flow" hidden>
+  <section id="tab-flow">
   <div class="canvas">
   <svg viewBox="0 0 1120 600" id="svg" role="img" aria-label="Live pipeline diagram">
     <defs>
@@ -84,28 +55,33 @@
   <section id="tab-map" hidden>
     <div class="toolbar">
       <span class="seg"><button id="m-live" aria-pressed="true">Live</button><button id="m-replay" aria-pressed="false">Replay (SIMULATION)</button></span>
-      <span class="seg"><button id="v-map" aria-pressed="true">Map</button><button id="v-scatter" aria-pressed="false">Offline view</button></span>
+      <span class="seg"><button id="v-2d" aria-pressed="false">2D</button><button id="v-3d" aria-pressed="true">3D</button></span>
+      <label class="tgl"><input type="checkbox" id="m-terrain"> Terrain</label>
       <span class="note" id="map-note"></span>
     </div>
-    <div class="mapwrap">
-      <div><div id="map"></div><div id="scatter" hidden></div></div>
-      <div class="glist" id="glist"></div>
+    <div class="map3d" id="map3d">
+      <canvas id="m-canvas" aria-label="Map of every gauge, 2D or 3D" role="img"></canvas>
+      <div class="hud tl"><div class="big">Gauge network</div><div id="m-mode"></div><div id="m-stat"></div></div>
+      <div class="hud tr" id="m-clock"></div>
+      <div class="ctl"><button class="btn" id="m-auto" aria-pressed="false" title="slow automatic orbit">Auto-orbit</button></div>
+      <div class="side"><div class="glass card" id="m-card"></div><div class="glass glist" id="m-list"></div></div>
+      <div class="tip" id="m-tip" hidden></div>
     </div>
     <div class="legend">
-      <span><span class="gdot" style="display:inline-block;background:#34d6b0"></span>below action stage</span>
-      <span><span class="gdot" style="display:inline-block;background:#e6c04a"></span>action</span>
-      <span><span class="gdot" style="display:inline-block;background:#ff8a3d"></span>minor flood</span>
-      <span><span class="gdot" style="display:inline-block;background:#ff4d4d"></span>moderate</span>
-      <span><span class="gdot" style="display:inline-block;background:#c084fc"></span>major</span>
-      <span><span class="gdot" style="display:inline-block;background:#46586d"></span>no recent reading</span>
-      <span>levels are the official NWS (NWPS) stages for each gauge</span>
+      <span><span class="gdot" style="display:inline-block;background:var(--s-normal)"></span>below action stage</span>
+      <span><span class="gdot" style="display:inline-block;background:var(--s-action)"></span>action</span>
+      <span><span class="gdot" style="display:inline-block;background:var(--s-minor)"></span>minor flood</span>
+      <span><span class="gdot" style="display:inline-block;background:var(--s-moderate)"></span>moderate</span>
+      <span><span class="gdot" style="display:inline-block;background:var(--s-major)"></span>major</span>
+      <span><span class="gdot" style="display:inline-block;background:var(--s-nodata)"></span>no recent reading</span>
+      <span>pillar height = stage against that gauge's own official NWS major level; ticks = official stages; dashed red beam = open alert</span>
     </div>
   </section>
 
   <section id="tab-data" hidden>
     <div class="note" id="db-note" style="margin-bottom:8px"></div>
     <h2 style="margin-top:4px">Advisories for approval</h2>
-    <div class="note" style="margin-bottom:6px">Nothing is sent until a person clicks Approve. Edit the text if needed; the notifier emails exactly what is shown when you approve.
+    <div class="note" style="margin-bottom:6px">Nothing is sent until a person clicks Approve. Edit the text if needed. The email is a flood forecast bulletin: facts from the alert plus this approved text (long decimals rounded for display).
       Approver: <input id="adv-by" size="16" placeholder="your name" aria-label="approver name"></div>
     <div id="adv-list"></div>
     <h2>Latest windows (PostgreSQL)</h2>
@@ -204,105 +180,17 @@ connect();
 setInterval(()=>{ if (lastMsg && Date.now()-lastMsg > 8000) document.getElementById("c-clock").textContent = "no update for " + Math.round((Date.now()-lastMsg)/1000) + " s"; }, 2000);
 
 // ---------------------------------------------------------------- tabs
-const TABS = ["orbit","flow","map","data"];
+const TABS = ["flow","map","data"];
 function showTab(t){
   for (const n of TABS){
     document.getElementById("tab-"+n).hidden = n!==t;
     document.getElementById("tb-"+n).setAttribute("aria-selected", n===t);
   }
   try{ history.replaceState(null,"","#"+t); }catch(e){}
-  if (window.Orbit) { if (t==="orbit") Orbit.show(); else Orbit.hide(); }
-  if (t==="map") { loadGauges(); setTimeout(()=>lmap&&lmap.invalidateSize(),50); }
+  if (window.Map3D) { if (t==="map") Map3D.show(); else Map3D.hide(); }
   if (t==="data") { loadDb(); if (typeof loadAdvisories==="function") loadAdvisories(); }
 }
 document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>showTab(b.dataset.tab)));
-
-// ---------------------------------------------------------------- map
-const SC = {normal:"#34d6b0",action:"#e6c04a",minor:"#ff8a3d",moderate:"#ff4d4d",major:"#c084fc",stale:"#5b6b80",nodata:"#46586d"};
-const SEV = {major:5,moderate:4,minor:3,action:2,normal:1,stale:0,nodata:0};
-let gmode="live", gdata=null, lmap=null, lmarkers={}, useScatter=false, fitted=false;
-const ageTxt = s => s==null?"":(s<90?Math.round(s)+" s ago":(s<5400?Math.round(s/60)+" min ago":(s/3600).toFixed(1)+" h ago"));
-function setSeg(a,b,first){ document.getElementById(a).setAttribute("aria-pressed",first); document.getElementById(b).setAttribute("aria-pressed",!first); }
-document.getElementById("m-live").onclick=()=>{gmode="live";setSeg("m-live","m-replay",true);fitted=false;loadGauges();};
-document.getElementById("m-replay").onclick=()=>{gmode="replay";setSeg("m-live","m-replay",false);loadGauges();};
-document.getElementById("v-map").onclick=()=>{useScatter=false;setSeg("v-map","v-scatter",true);drawGauges();};
-document.getElementById("v-scatter").onclick=()=>{useScatter=true;setSeg("v-map","v-scatter",false);drawGauges();};
-function ensureLeaflet(cb){
-  if (window.L) return cb(true);
-  const sc=document.createElement("script");
-  sc.src="/static/leaflet/leaflet.js";
-  sc.onload=()=>cb(true); sc.onerror=()=>cb(false); document.head.appendChild(sc);
-}
-async function loadGauges(){
-  let r;
-  try{ r=await fetch("/api/gauges?mode="+gmode); }
-  catch(e){ document.getElementById("map-note").textContent="cannot reach the console server (is python -m dashboard.flow_monitor running?)"; return; }
-  if(!r.ok){ document.getElementById("map-note").textContent=`the console server answered ${r.status}: it is older than this page, restart python -m dashboard.flow_monitor`; return; }
-  gdata=await r.json(); drawGauges();
-}
-function popup(g){
-  const c=g.cats||{};
-  return `<b>${g.name}</b><br>${g.lid} · ${g.site_no}<br>`+
-    (g.stage==null?"no reading":`stage <b>${g.stage.toFixed(2)} ft</b>${g.provisional?" (provisional)":""}${g.age_s!=null?" · "+ageTxt(g.age_s):""}`)+
-    `<br><span style="color:#7f93a8">action ${c.action??"-"} · minor ${c.minor??"-"} · moderate ${c.moderate??"-"} · major ${c.major??"-"} ft</span>`;
-}
-function drawList(gs){
-  const el=document.getElementById("glist"); el.innerHTML="";
-  gs.slice().sort((a,b)=>(SEV[b.status]-SEV[a.status])||a.name.localeCompare(b.name)).forEach(g=>{
-    const d=document.createElement("div"); d.className="grow";
-    d.innerHTML=`<span class="gdot" style="background:${SC[g.status]}"></span><div><div class="nm"></div><div class="sub"></div></div>`;
-    d.querySelector(".nm").textContent=g.name;
-    d.querySelector(".sub").textContent=(g.stage==null?"no reading":g.stage.toFixed(2)+" ft")+(g.age_s!=null?" · "+ageTxt(g.age_s):"")+" · "+g.status;
-    d.onclick=()=>{ if(lmap&&!useScatter) lmap.setView([g.lat,g.lon],12); };
-    el.appendChild(d);
-  });
-}
-function drawScatter(gs){
-  const box=document.getElementById("scatter"); const W=800,H=520,pad=40;
-  const lons=gs.map(g=>g.lon), lats=gs.map(g=>g.lat);
-  const x0=Math.min(...lons),x1=Math.max(...lons),y0=Math.min(...lats),y1=Math.max(...lats);
-  const sx=lon=>pad+(lon-x0)/((x1-x0)||1)*(W-2*pad), sy=lat=>H-pad-(lat-y0)/((y1-y0)||1)*(H-2*pad);
-  let h=`<svg viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="#0a1522"/>`;
-  h+=`<text x="12" y="20" font-size="12" fill="#7f93a8">Offline view: gauge positions only (no map tiles). Longitude → right, latitude → up.</text>`;
-  for (const g of gs){
-    const r=g.status==="major"||g.status==="moderate"||g.status==="minor"?9:7;
-    h+=`<g><circle cx="${sx(g.lon)}" cy="${sy(g.lat)}" r="${r}" fill="${SC[g.status]}" stroke="#04070d" stroke-width="2"><title>${g.name}: ${g.stage==null?"no reading":g.stage.toFixed(2)+" ft"} (${g.status})</title></circle>`;
-    h+=`<text x="${sx(g.lon)+11}" y="${sy(g.lat)+4}" font-size="10" fill="#dbe7f3">${g.lid}</text></g>`;
-  }
-  box.innerHTML=h+"</svg>";
-}
-function drawGauges(){
-  const note=document.getElementById("map-note"), mapEl=document.getElementById("map"), scEl=document.getElementById("scatter");
-  if(!gdata) return;
-  if(!gdata.locations){
-    mapEl.hidden=false; scEl.hidden=true;
-    mapEl.innerHTML='<div style="padding:24px"><b>No gauge locations yet.</b><br>Run once on your machine, then refresh:<br><code>python -m tools.gauge_locations</code></div>';
-    document.getElementById("glist").innerHTML=""; note.textContent=""; return;
-  }
-  const gs=gdata.gauges.filter(g=>g.lat!=null);
-  const withData=gs.filter(g=>g.stage!=null).length;
-  note.textContent=`${withData}/${gs.length} gauges reporting · ${gdata.mode==="replay"?"REPLAY: SIMULATION data, not live":"live data"}`;
-  drawList(gs);
-  if(useScatter){ mapEl.hidden=true; scEl.hidden=false; drawScatter(gs); return; }
-  scEl.hidden=true; mapEl.hidden=false;
-  ensureLeaflet(ok=>{
-    if(!ok){ useScatter=true; setSeg("v-map","v-scatter",false); mapEl.hidden=true; scEl.hidden=false; drawScatter(gs);
-             note.textContent+=" · map library failed to load, showing the offline view"; return; }
-    if(!lmap){
-      mapEl.innerHTML="";
-      lmap=L.map("map",{zoomControl:true}).setView([30.3,-98.5],8);
-      const tl=L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:17,attribution:"© OpenStreetMap contributors"}).addTo(lmap);
-      let tileErr=0; tl.on("tileerror",()=>{ if(++tileErr===4) note.textContent+=" · map tiles not loading (no internet?): gauges still shown"; });
-    }
-    for(const g of gs){
-      const style={radius:(["minor","moderate","major"].includes(g.status)?11:8),color:"#04070d",weight:2,fillColor:SC[g.status],fillOpacity:.95};
-      if(lmarkers[g.site_no]){ lmarkers[g.site_no].setStyle(style); lmarkers[g.site_no].setPopupContent(popup(g)); }
-      else lmarkers[g.site_no]=L.circleMarker([g.lat,g.lon],style).bindPopup(popup(g)).addTo(lmap);
-    }
-    if(!fitted&&gs.length){ lmap.fitBounds(gs.map(g=>[g.lat,g.lon]),{padding:[30,30]}); fitted=true; }
-  });
-}
-setInterval(()=>{ if(!document.getElementById("tab-map").hidden) loadGauges(); },5000);
 
 // ---------------------------------------------------------------- readings & alerts (PostgreSQL)
 const esc=t=>String(t??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
@@ -370,8 +258,20 @@ async function loadAdvisories(){
   }catch(e){ box.innerHTML=`<div class="note">cannot reach the console server</div>`; }
 }
 setInterval(()=>{ if(!document.getElementById("tab-data").hidden) loadAdvisories(); },5000);
-{ const h=(location.hash||"").slice(1); showTab(TABS.includes(h)?h:"orbit"); }
+{ const h=(location.hash||"").slice(1); if(TABS.includes(h)&&h!=="flow") showTab(h); }
 </script>
-<script src="/static/orbit.js"></script>
+<script>
+(function(){
+  const btn=document.getElementById("theme-toggle"), root=document.documentElement;
+  const sync=()=>{ btn.textContent=root.dataset.theme==="light"?"Dark":"Light"; };
+  btn.addEventListener("click",()=>{
+    root.dataset.theme=root.dataset.theme==="light"?"dark":"light";
+    try{ localStorage.setItem("theme",root.dataset.theme); }catch(e){}
+    sync(); document.dispatchEvent(new Event("themechange"));
+  });
+  sync();
+})();
+</script>
+<script src="/static/map3d.js"></script>
 </body>
 </html>

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from alerting import approval, notifier, template
+from alerting import approval, bulletin, notifier, template
 from common import config
 from storage import sink
 
@@ -50,10 +50,42 @@ REC = {"alert_id": ALERT["alert_id"], "advisory_id": ALERT["alert_id"] + "|1", "
        "approved_by": "A. Person", "approved_at": "2026-10-31T10:05:00+00:00", "mode": "SIMULATION"}
 
 
-def test_message_is_tagged_simulation_and_carries_the_approved_text():
-    m = notifier.build_message(REC, "Onion Creek", "minor", "me@example.org", ["to@example.org"])
-    assert m["Subject"].startswith("[SIMULATION] Flood advisory: Onion Creek")
-    assert "Flood text" in m.get_content() and "A. Person" in m.get_content()
+DETAILS = {"kind": "new", "site_name": "Onion Creek near Driftwood", "current_stage": 4.7, "forecast_stage": 6.8123456, "model": "rise_rate",
+           "official_levels": LEVELS}
+ALERT_ROW = {"site_no": "08158700", "mode": "SIMULATION", "category": "minor", "probability": 0.79, "horizon_h": 3,
+             "provisional_data": True, "details": DETAILS}
+
+
+def test_message_is_a_tagged_bulletin_with_plain_and_html_parts():
+    m = notifier.build_message(dict(REC, version=8, text="Advice 42.260909090909095 ft."), ALERT_ROW, "Onion Creek", "me@example.org", ["to@example.org"])
+    assert m["Subject"] == "[SIMULATION] Flood forecast bulletin: Onion Creek near Driftwood (MINOR)"
+    plain, html_part = m.get_body(("plain",)).get_content(), m.get_body(("html",)).get_content()
+    assert "FLOOD FORECAST BULLETIN" in plain and "■ Headline" in plain and "A. Person" in plain
+    assert "SIMULATION: replayed historical data" in html_part and "Forecast to reach MINOR flood category" in html_part
+
+
+def test_bulletin_formats_numbers_and_rounds_long_decimals_in_the_advice():
+    f = bulletin.facts(dict(REC, version=8, text="Forecast 42.260909090909095 ft, 79% in 6 h"), ALERT_ROW, None)
+    t = bulletin.render_text(f)
+    assert "42.3 ft" in t and "42.260909" not in t and "79 %" in t
+    assert "Forecast stage in 3 h" in t and "Observed stage            4.7 ft" in t
+    assert "Action    5.5 ft" in t and "Major     13.0 ft" in t
+
+
+def test_v1_template_text_is_not_repeated_in_the_bulletin():
+    f = bulletin.facts(dict(REC, version=1, text="TEMPLATE TEXT"), ALERT_ROW, None)
+    assert "TEMPLATE TEXT" not in bulletin.render_text(f) and "Advisory (reviewed" not in bulletin.render_text(f)
+
+
+def test_missing_facts_are_said_to_be_missing_not_invented():
+    f = bulletin.facts(dict(REC, version=8), {"category": "minor", "probability": None, "horizon_h": None, "details": None}, "Creek")
+    t = bulletin.render_text(f)
+    assert "not available" in t and "not given by this model" in t and "%" not in t.replace("79", "")
+
+
+def test_already_in_category_is_flagged():
+    f = bulletin.facts(REC, dict(ALERT_ROW, details=dict(DETAILS, current_stage=8.0)), None)
+    assert any("already in the MODERATE category" in n for n in bulletin.notes(f))
 
 
 def test_retry_succeeds_on_third_attempt_and_gives_up_after_the_limit():

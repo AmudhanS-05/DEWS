@@ -18,7 +18,6 @@ python -m dashboard.flow_monitor            # http://127.0.0.1:8765; restart it 
 | 7 | S1 | `docker stats --no-stream`; `w32tm /query /status` | memory comfortable; clock recently synced |
 | 8 | S1 | Overnight: `python -m tools.staleness_logger --every-min 5 --hours 48` (laptop awake, on mains) | 48 h of polls in `gate_output/staleness_log.csv` |
 | 10 | S1 | `python -m streams.forecaster` | the 2019 replay gives one forecast per window and one alert before the minor crossing |
-| 11 | S1 | `python -m alerting.notifier`; approve the draft in Readings & alerts | v1 draft within seconds; email arrives; `delivered_at` filled; rejecting sends nothing |
 | 12 | S1 | Power BI page 1 (guide in `dashboard/powerbi/README.md`) | a new replayed reading appears within one page refresh |
 | 13 | S1 | `python -m tools.fault_drill --scenario faust` (also `broker`, `sink`, `postgres`, `notifier`, `producer`) | failure and recovery in the console log; `recovery_time_s` row written |
 | 14 | S1 | `python -m agentic_ai.run --alert-id <id>` (agents workstream) | v2 advisory replaces v1; events visible in the Agents tab |

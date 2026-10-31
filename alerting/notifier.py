@@ -23,6 +23,7 @@ from email.message import EmailMessage
 import psycopg2
 from confluent_kafka import Consumer, TopicPartition
 
+from alerting import bulletin
 from common import config
 from common.envfile import load_env
 from common.kafka_io import JsonProducer
@@ -41,13 +42,14 @@ def smtp_settings(env=os.environ) -> dict:
             "port": int(env.get("SMTP_PORT") or 587), "user": env["SMTP_USER"], "password": env["SMTP_PASSWORD"]}
 
 
-def build_message(rec: dict, site_name: str | None, category: str | None, sender: str, to: list[str]) -> EmailMessage:
-    tag = "[SIMULATION] " if rec.get("mode") == "SIMULATION" else ""
+def build_message(rec: dict, alert: dict | None, site_name: str | None, sender: str, to: list[str]) -> EmailMessage:
+    """Multipart email (plain text + HTML) laid out as a flood forecast bulletin (alerting/bulletin.py)."""
+    f = bulletin.facts(rec, alert, site_name)
     msg = EmailMessage()
-    msg["Subject"] = f"{tag}Flood advisory: {site_name or rec['alert_id'].split('|')[0]}" + (f" ({category})" if category else "")
+    msg["Subject"] = bulletin.subject(f)
     msg["From"], msg["To"] = sender, ", ".join(to)
-    body = rec["text"] + f"\n\nApproved by {rec['approved_by']} at {rec['approved_at']}.\nAlert {rec['alert_id']}, advisory v{rec['version']}."
-    msg.set_content(body, charset="utf-8")
+    msg.set_content(bulletin.render_text(f), charset="utf-8")
+    msg.add_alternative(bulletin.render_html(f), subtype="html", charset="utf-8")
     return msg
 
 
@@ -87,16 +89,20 @@ def mark_delivered(conn, rec: dict, when: datetime) -> None:
 
 
 def alert_info(conn, alert_id: str):
+    """(gauge name, alert row as dict) for the bulletin; (None, None) if the alert is unknown."""
     with conn.cursor() as cur:
-        cur.execute("SELECT g.name, a.category FROM alerts a LEFT JOIN gauges g USING (site_no) WHERE a.alert_id = %s", (alert_id,))
+        cur.execute("SELECT g.name, a.site_no, a.mode, a.category, a.probability, a.horizon_h, a.provisional_data, a.details "
+                    "FROM alerts a LEFT JOIN gauges g USING (site_no) WHERE a.alert_id = %s", (alert_id,))
         r = cur.fetchone()
-    return (r[0], r[1]) if r else (None, None)
+    if not r:
+        return None, None
+    return r[0], dict(zip(("site_no", "mode", "category", "probability", "horizon_h", "provisional_data", "details"), r[1:]))
 
 
 def handle(rec: dict, conn, cfg: dict, dry_run: bool, send=smtp_send, sleep=time.sleep, dlq=None) -> str:
     """Send one approved record. Returns 'sent' | 'dry-run' | 'failed'."""
-    name, cat = alert_info(conn, rec["alert_id"])
-    msg = build_message(rec, name, cat, cfg["user"], cfg["to"])
+    name, alert = alert_info(conn, rec["alert_id"])
+    msg = build_message(rec, alert, name, cfg["user"], cfg["to"])
     if dry_run:
         log.info("DRY RUN: would send to %s: %s", ", ".join(cfg["to"]), msg["Subject"])
         return "dry-run"
