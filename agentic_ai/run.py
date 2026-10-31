@@ -21,6 +21,74 @@ SINK_WAIT_TRIES = 5     # the alert may reach PostgreSQL (sink) a moment after i
 SINK_WAIT_S = 2.0
 
 
+def utf8_stdio() -> None:
+    """Windows consoles default to cp1252; model text can hold U+202F and similar. Never crash on printing."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
+def _f(v, unit=""):
+    return "?" if v is None else f"{v:g}{unit}" if isinstance(v, (int, float)) else f"{v}{unit}"
+
+
+def progress_line(e: dict) -> str | None:
+    """One line per agent step as it happens (None for events that are not a step, e.g. tool calls, text chunks)."""
+    a, k, d = e["agent"], e["kind"], e["detail"]
+    ms = f" ({d['ms']} ms)" if "ms" in d else ""
+    msg = None
+    if a == "coordinator" and k == "end":
+        if "plan" in d:
+            msg = f"plan {' -> '.join(d['plan'])}; update {d['update_n']}; {d['mode']}{'; URGENT' if d.get('urgent') else ''}{ms}"
+        elif "dropped" in d:
+            msg = f"dropped: {d['dropped']}"
+        elif "saved" in d:
+            msg = f"saved {d['saved']} ({d.get('confidence')})"
+        elif "error" in d:
+            msg = f"error: {d['error']}; template v1 stays"
+        elif "kept" in d:
+            msg = "reviewer failed after the last attempt; template v1 stays"
+    elif a == "coordinator" and k == "disagreement":
+        msg = f"DISAGREEMENT evidence: {d['evidence']} | context: {d['context']} -> UNCERTAIN"
+    elif a == "evidence" and k == "end":
+        msg = (f"{d['direction']}: stage {_f(d.get('stage_last'), ' ft')}, rate {_f(d.get('rise_rate_ft_per_h'), ' ft/h')}, "
+               f"forecast {_f(d.get('forecast_stage'), ' ft')}{ms}")
+    elif a == "context" and k == "end":
+        msg = f"{d['direction']}: rain 3 h {_f(d.get('rain_3h'), ' mm')}, {d.get('n_neighbours', 0)} neighbour gauge(s){ms}"
+    elif a == "writer" and k == "revision" and "llm_fallback" in d:
+        msg = f"{d['primary']} failed ({d.get('primary_error')}); retried on {d['llm_fallback']}: {'ok' if d['ok'] else 'failed'}"
+    elif a == "writer" and k == "revision" and "llm_failed" in d:
+        msg = f"LLM failed ({d['llm_failed']}); using the deterministic template text"
+    elif a == "writer" and k == "end":
+        src = f"{d['provider']} {d.get('model') or ''}".strip() if d.get("llm") else "template text"
+        msg = (f"attempt {d['attempt']}/{d.get('max_attempts', 3)}: {src}, {d['chars']} chars, {d['tokens']} tokens"
+               f"{' (fallback from ' + d['fallback_from'] + ')' if d.get('fallback_from') else ''}{ms}")
+    elif a == "reviewer" and k == "verdict":
+        msg = f"attempt {d['attempt']}/{d.get('max_attempts', 3)}: {d['verdict'].upper()}"
+        if d["reasons"]:
+            msg += ": " + "; ".join(d["reasons"])
+    if msg is None:
+        return None
+    return f"[{e.get('t_s', 0):6.2f}s] {a:<11} {msg}"
+
+
+def final_line(res: dict, trace_url: str | None = None) -> str:
+    """advisory id, version, outcome, tokens and the LangSmith link when tracing is on."""
+    if res["outcome"] == "saved":
+        s = (f"advisory {res['advisory_id']}  version {res.get('version')}  outcome saved ({res.get('confidence')}, "
+             f"reviewer pass after {res.get('attempts')}/3 attempt(s))")
+    elif res["outcome"] == "dropped":
+        s = f"alert {res['alert_id']}  outcome dropped: {res.get('drop_reason')}"
+    else:
+        s = f"alert {res['alert_id']}  outcome {res['outcome']}: template v1 stays ({res['alert_id']}|1)"
+    s += f"  tokens {res.get('tokens', 0)}  {len(res['events'])} events  {res.get('elapsed_s', 0):g} s"
+    if res.get("trace_run_id"):
+        s += f"\nLangSmith trace: {trace_url or 'project ' + str(res.get('trace_project')) + ', run ' + res['trace_run_id']}"
+    return s
+
+
 def summarize(res: dict) -> str:
     s = f"{res['alert_id']}: {res['outcome']}"
     if res.get("advisory_id"):
@@ -77,17 +145,26 @@ def main(argv=None) -> int:
     ap.add_argument("--alert-id")
     ap.add_argument("--force", action="store_true")
     ap.add_argument("--dsn")
+    ap.add_argument("--quiet", action="store_true", help="no per-step progress lines")
     args = ap.parse_args(argv)
+    utf8_stdio()
     t = tracing.configure()
-    print(f"LLM_PROVIDER={llm.provider()}  LangSmith tracing: {t['reason']}")
+    prov = llm.provider()
+    fb = llm.fallback()
+    print(f"LLM_PROVIDER={prov}{' (' + llm.model_name(prov) + ')' if llm.model_name(prov) else ''}"
+          f"{'  LLM_FALLBACK=' + fb if fb != 'none' else ''}  LangSmith tracing: {t['reason']}", flush=True)
     conn = connect(args.dsn)
     ensure_schema(conn)
     tools = Tools(conn)
     if args.alert_id:
-        res = graph.run_alert(tools, args.alert_id, force=args.force)
-        print(summarize(res))
-        if res.get("draft"):
-            print("\n" + res["draft"])
+        def show(e):
+            line = progress_line(e)
+            if line:
+                print(line, flush=True)
+        res = graph.run_alert(tools, args.alert_id, force=args.force, on_event=None if args.quiet else show)
+        if res.get("draft") and res["outcome"] != "dropped":
+            print("\n" + res["draft"] + "\n")
+        print(final_line(res, tracing.trace_url(res.get("trace_run_id"), res.get("trace_project"))), flush=True)
         return 0 if res["outcome"] in ("saved", "dropped") else 1
     consume(tools, args.force)
     return 0

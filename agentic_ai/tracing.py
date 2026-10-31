@@ -31,3 +31,19 @@ def run_config(run_id: str, alert_id: str, mode: str | None = None) -> dict:
     """LangGraph config: a readable run name plus tags and metadata that make traces searchable by alert and mode."""
     return {"run_name": f"advisory {alert_id}", "tags": ["dews", "agents"] + ([mode] if mode else []),
             "metadata": {"run_id": run_id, "alert_id": alert_id, "mode": mode}}
+
+
+def trace_url(trace_run_id: str | None, project: str | None) -> str | None:
+    """LangSmith web URL of a root run (one lookup of tenant and project ids). None when off or unreachable."""
+    if not trace_run_id or not project:
+        return None
+    try:
+        from types import SimpleNamespace
+
+        from langchain_core.tracers.langchain import wait_for_all_tracers
+        from langsmith import Client
+        wait_for_all_tracers()   # upload the run before pointing at it
+        run = SimpleNamespace(id=trace_run_id, session_id=None, session_name=None, address=None)
+        return Client(timeout_ms=10_000)._construct_run_url(run=run, project_name=project)
+    except Exception:  # noqa: BLE001 - a missing link must never fail the run
+        return None
