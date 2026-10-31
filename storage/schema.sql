@@ -73,6 +73,9 @@ CREATE TABLE IF NOT EXISTS risk_scores (
     computed_at         TIMESTAMPTZ DEFAULT now()
 );
 
+-- One forecast per gauge, window, model and horizon: lets the sink upsert (at-least-once delivery, no duplicates)
+CREATE UNIQUE INDEX IF NOT EXISTS risk_scores_uniq ON risk_scores (site_no, window_start, mode, model, horizon_h);
+
 CREATE TABLE IF NOT EXISTS alerts (
     alert_id            TEXT PRIMARY KEY,
     site_no             TEXT NOT NULL,
