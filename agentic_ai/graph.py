@@ -138,14 +138,12 @@ def build_graph(tools, run: Run):
         rate = last.get("rise_rate_ft_per_h")
         level = (lv or a["official_levels"]).get(a["category"])
         fstage = fc["forecast_stage"] if fc else a.get("forecast_stage")
-        rising = bool((rate is not None and rate >= rules.EVIDENCE_RISE_RATE_FT_H)
-                      or (fstage is not None and level is not None and fstage >= level))
         ev = {"stage_last": last.get("stage_last"), "rise_rate_ft_per_h": rate, "stage_12h_ago": stages[0] if stages else None,
               "n_windows": len(w), "forecast_stage": fstage, "horizon_h": fc["horizon_h"] if fc else a["horizon_h"],
               "p_action": fc and fc["p_action"], "p_minor": fc and fc["p_minor"], "p_moderate": fc and fc["p_moderate"],
               "p_major": fc and fc["p_major"], "model": fc["model"] if fc else a.get("model"),
               "official_levels": lv, "past_floods_n": pf["n"], "median_rise_h": pf["median_rise_h"],
-              "direction": "rising" if rising else "not rising"}
+              "direction": rules.evidence_direction(rate, fstage, level)}
         run.event("evidence", "end", {"direction": ev["direction"], "stage_last": ev["stage_last"], "rise_rate_ft_per_h": rate,
                                       "forecast_stage": fstage})
         run.row("evidence", t0, f"gauge {site} up to {until}", ev)
@@ -159,12 +157,9 @@ def build_graph(tools, run: Run):
         nb = run.call("context", "get_neighbours", site, until=until, mode=mode)
         info = run.call("context", "get_gauge_info", site)
         imp = run.call("context", "get_impacts", site, a["category"])
-        up = [n for n in nb if n["relation"] == "upstream" and n["rising"] is not None]
-        rain_known = bool(rain["available"])
-        known = rain_known or bool(up)
-        rain_sig = rain_known and (rain["rain_3h"] or 0) >= rules.CONTEXT_RAIN_3H_MM
-        up_sig = any(n["rising"] for n in up)
-        direction = "unknown" if not known else ("rising" if (rain_sig or up_sig) else "not rising")
+        up = [n["rising"] for n in nb if n["relation"] == "upstream"]
+        rain_3h = (rain["rain_3h"] or 0.0) if rain["available"] else None
+        direction, rain_sig, up_sig = rules.context_direction(rain_3h, up)
         cx = {"rain": rain, "neighbours": nb, "gauge": info, "impacts": imp, "direction": direction,
               "rain_signal": bool(rain_sig), "upstream_signal": bool(up_sig)}
         run.event("context", "end", {"direction": direction, "rain_3h": rain.get("rain_3h"), "n_neighbours": len(nb)})
@@ -175,7 +170,7 @@ def build_graph(tools, run: Run):
         """Conflict resolution: the coordinator does not let one worker win silently."""
         ev, cx = s["evidence"], s["context"]
         dis = None
-        if cx["direction"] != "unknown" and ev["direction"] != cx["direction"]:
+        if rules.disagreement(ev["direction"], cx["direction"]):
             dis = {"evidence": ev["direction"] + f" (rise {ev['rise_rate_ft_per_h']} ft/h, forecast {ev['forecast_stage']} ft)",
                    "context": cx["direction"] + (f" (rain 3h {cx['rain']['rain_3h']} mm)" if cx["rain"]["available"] else " (upstream gauges)")}
             run.event("coordinator", "disagreement", dis)

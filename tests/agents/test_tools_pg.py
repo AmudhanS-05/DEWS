@@ -88,3 +88,30 @@ def test_graph_on_real_postgres_writes_v2_events_and_runs(tools, pg_conn):
         assert cur.fetchone() == (len(res["events"]), 5)
         cur.execute("SELECT count(*) FROM agent_runs WHERE run_id = %s", (res["run_id"],))
         assert cur.fetchone()[0] >= 5
+
+
+def test_agent_events_stream_in_order_for_the_live_agents_tab(tools, pg_conn):
+    """A2.3: each event is in PostgreSQL before the next step runs (the console polls agent_events), in event_id
+    order with non-decreasing ts, and only the agent/kind values of docs/CONTRACTS.md."""
+    from agentic_ai import graph
+    seen = []
+
+    def check(e):
+        with pg_conn.cursor() as cur:
+            cur.execute("SELECT agent, kind FROM agent_events WHERE run_id = (SELECT run_id FROM agent_events "
+                        "ORDER BY event_id DESC LIMIT 1) ORDER BY event_id")
+            rows = cur.fetchall()
+        seen.append(len(rows))
+        assert (e["agent"], e["kind"]) in rows
+    res = graph.run_alert(tools, ALERT, force=True, on_event=check)
+    # evidence and context run in parallel threads, so a count can jump ahead, never lag behind
+    assert all(n >= i + 1 for i, n in enumerate(seen)) and seen[-1] == len(res["events"])
+    with pg_conn.cursor() as cur:
+        cur.execute("SELECT agent, kind, detail, ts FROM agent_events WHERE run_id = %s ORDER BY event_id", (res["run_id"],))
+        rows = cur.fetchall()
+    assert {r[0] for r in rows} <= {"coordinator", "evidence", "context", "writer", "reviewer", "human"}
+    assert {r[1] for r in rows} <= {"start", "end", "tool_call", "token_chunk", "verdict", "disagreement", "revision"}
+    assert all(isinstance(r[2], dict) for r in rows) and [r[3] for r in rows] == sorted(r[3] for r in rows)
+    v = [r[2] for r in rows if r[1] == "verdict"]
+    assert v and {"verdict", "reasons", "attempt", "max_attempts"} <= set(v[-1])
+    assert all("ms" in r[2] for r in rows if r[1] == "end" and r[0] != "coordinator")
