@@ -1,0 +1,8 @@
+# Agents workstream (AAI). Install on top of requirements-dev.txt:  pip install -r requirements-agents.txt
+# Pins are the versions the tests ran against (Python 3.12/3.13).
+langgraph==1.2.19
+langchain-core==1.7.3
+langchain-groq==1.1.3        # LLM_PROVIDER=groq (free tier, Llama 3.3 70B)
+langchain-ollama==1.1.0      # LLM_PROVIDER=ollama (qwen2.5:7b, offline fallback)
+langsmith==0.14.16           # optional tracing: LANGSMITH_TRACING=true + LANGSMITH_API_KEY in .env
+psycopg2-binary==2.9.9

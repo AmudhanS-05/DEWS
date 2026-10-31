@@ -1,0 +1,2 @@
+# Agents breadcrumbs (cloud session; core merges these lines into BREADCRUMBS.md)
+[agents] 31 Oct: A1.1 `requirements-agents.txt` written (langgraph 1.2.19, langchain-groq 1.1.3, langchain-ollama 1.1.0, langsmith 0.14.16, psycopg2-binary 2.9.9); `pip install` of the same set resolved cleanly on Python 3.13 in the cloud clone (psycopg2-binary 2.9.13 there; 2.9.9 pinned to match requirements.txt, not re-installed here).
