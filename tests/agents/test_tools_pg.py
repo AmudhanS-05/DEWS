@@ -75,3 +75,16 @@ def test_writes_save_advisory_log_run_and_event(tools, pg_conn):
         assert cur.fetchone() == ("writer", "start", {"x": 1})
         cur.execute("SELECT agent, tokens, verdict FROM agent_runs WHERE run_id='r1'")
         assert cur.fetchone() == ("writer", 5, "pass")
+
+
+def test_graph_on_real_postgres_writes_v2_events_and_runs(tools, pg_conn):
+    from agentic_ai import graph
+    res = graph.run_alert(tools, UPGRADE, force=True)
+    assert res["outcome"] == "saved" and res["verdict"] == "pass"
+    with pg_conn.cursor() as cur:
+        cur.execute("SELECT status, source, reviewer_verdict FROM advisories WHERE advisory_id = %s", (res["advisory_id"],))
+        assert cur.fetchone() == ("draft", "agents", "pass")
+        cur.execute("SELECT count(*), count(DISTINCT agent) FROM agent_events WHERE run_id = %s", (res["run_id"],))
+        assert cur.fetchone() == (len(res["events"]), 5)
+        cur.execute("SELECT count(*) FROM agent_runs WHERE run_id = %s", (res["run_id"],))
+        assert cur.fetchone()[0] >= 5
