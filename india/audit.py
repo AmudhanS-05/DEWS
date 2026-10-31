@@ -56,7 +56,7 @@ def write_csv(rows: list[dict], path: str) -> None:
 
 
 def main(argv=None):
-    from ml.gauges import load_gauges
+    from ml.gauges import count_gauges, iter_gauges
     from ml.progress import Timer, bar
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--gauges", default="config/gauge_locations.csv")
@@ -70,16 +70,16 @@ def main(argv=None):
         config.DATA_DIR = a.data_dir
     timer = Timer()
     print(f"india.audit: auditing cached USGS series {a.start}..{a.end} from {config.DATA_DIR}/raw/usgs -> {a.out}")
-    gauges = load_gauges(a.gauges, a.gauges_only, a.start, a.end, config.DATA_DIR)
-    if not gauges:
-        raise SystemExit(f"ERROR: 0 gauges audited, nothing written. Reasons are listed above (skip lines); "
-                         f"data dir = {config.DATA_DIR}/raw/usgs, gauge list = {a.gauges}")
     rows = []
-    for g in bar(gauges, "stations"):
+    for g in bar(iter_gauges(a.gauges, a.gauges_only, a.start, a.end, config.DATA_DIR), "stations",
+                 total=count_gauges(a.gauges, a.gauges_only)):
         r = audit_station(g["readings"], g["cats"]["minor"])
         rows.append(r)
         print(f"  {r['site_no']} {g['lid']}: interval {r['interval_min']} min, {r['archive_days']:.0f} days, "
               f"missing {r['missing_pct']:.1f}%, longest gap {r['longest_gap_h']} h, events {r['events']}")
+    if not rows:
+        raise SystemExit(f"ERROR: 0 gauges audited, nothing written. Reasons are listed above (skip lines); "
+                         f"data dir = {config.DATA_DIR}/raw/usgs, gauge list = {a.gauges}")
     write_csv(rows, a.out)
     print(f"done: {len(rows)} stations -> {a.out} in {timer.elapsed()}")
 

@@ -1,8 +1,7 @@
 # Model card: flood-crossing forecaster (workstream `ml`)
 
-Status (31 Oct 2026): code for v0 (stage only) and v1 (stage + MRMS rain) is written and tested on synthetic data
-only. **No model has been trained on real data yet and no skill is claimed.** Results go in "Measured results" below
-only after a real run, with the command that produced them.
+Status (31 Oct 2026): v0 (stage only) and v1 (stage + MRMS rain) trained once on real replayed data (cloud session).
+**Neither beats the rise-rate baseline consistently on events; no skill is claimed.** See "Measured results".
 
 ## What the models predict
 For each hourly window (built by `streams/windowing.py`, the same code the stream uses) and each horizon h = 1..6 h:
@@ -50,8 +49,24 @@ is scored on the same rows.
 Caveat: v0/v1 rows are a case-control sample (flood windows + matched dry windows), not the continuous stream, so
 precision and false-alarm counts are not those of a year of live operation.
 
-## Measured results
-None yet (see `docs/breadcrumbs/ml.md` for the state of each run).
+## Measured results (31 Oct 2026, replay, commands above; rows in ml/figures/model_v1_vs_v0*.csv)
+Rows: 38 gauges, hourly windows with 24 h of rain, Oct 2020 to Oct 2026 (102 minor crossings + 102 dry windows).
+POOLED F1 by horizon (rise-rate = the same rows):
+
+| split (train / test crossings) | model | 1 h | 2 h | 3 h | 4 h | 5 h | 6 h |
+|---|---|---|---|---|---|---|---|
+| 2024-01-01 (39 / 63) | v0 stage | 0.07 | 0.10 | 0.25 | NA | 0.22 | 0.21 |
+| | v1 stage + rain | 0.10 | NA | 0.22 | 0.26 | NA | 0.27 |
+| | rise-rate | 0.34 | 0.31 | 0.27 | 0.26 | 0.23 | 0.23 |
+| 2025-01-01 (55 / 47) | v0 stage | 0.19 | 0.10 | NA | 0.31 | 0.19 | 0.23 |
+| | v1 stage + rain | 0.16 | 0.12 | 0.27 | 0.25 | 0.30 | 0.28 |
+| | rise-rate | 0.34 | 0.32 | 0.26 | 0.27 | 0.24 | 0.24 |
+
+NA = no alert raised at the chosen tau. Row-level average precision (y_cross_h, base rate 0.07 to 0.4 %): v1 above
+v0 at 5 of 6 horizons (2024 split) and 4 of 6 (2025 split). Median lead time about 0.4 to 1.2 h gross, about -0.6 to
++0.2 h net of the 1 h feed delay. Only `--split 2024-01-01` models are kept in ml/models/.
+Open issues: tau chosen on a validation slice with few crossings is unstable; the 3 h rise-rate bar from FAQ.md
+contains a one-hour look-ahead (see docs/breadcrumbs/ml.md), use ml/figures/baselines.csv instead.
 
 ## Limits
 - Not compared with, and never claimed better than, NSSL FLASH, GloFAS or NWS forecasts.

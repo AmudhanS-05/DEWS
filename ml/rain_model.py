@@ -194,7 +194,7 @@ def build_rows(gauges: list[dict], rain, radius_km: float, lag_h: float, progres
     frames, info = [], {}
     rain = rain[rain.radius_km == radius_km]
     by_site = {s: g.sort_values("hour_ts") for s, g in rain.groupby("site_no")}
-    for g in prog(gauges, "gauges"):
+    for g in prog(gauges, "gauges"):            # any iterable: ml.gauges.iter_gauges loads one gauge at a time
         prep = harness.prepare(g["readings"], g["cats"])
         info[g["site_no"]] = {"thr": prep["thr"], "crossings": prep["crossings"], "lid": g["lid"]}
         col = build_site_columns(g["readings"], g["cats"], wins=prep["aggs"])
@@ -207,6 +207,7 @@ def build_rows(gauges: list[dict], rain, radius_km: float, lag_h: float, progres
         df = df[df["rain_24h"].notna()].copy()
         df["minor"] = g["cats"]["minor"]
         frames.append(df)
+        del prep, col
     if not frames:
         return pd.DataFrame(), info
     df = pd.concat(frames, ignore_index=True).sort_values(["t", "site_no"], kind="stable").reset_index(drop=True)
@@ -223,7 +224,7 @@ def main(argv=None):
     import joblib
     import pandas as pd
     from common import config
-    from ml.gauges import load_gauges
+    from ml.gauges import count_gauges, iter_gauges
     from ml.progress import Timer, bar
     p = argparse.ArgumentParser(description="M2.2: v1 (stage + rain) vs v0 (stage only) on the MRMS hours.")
     p.add_argument("--gauges", default="config/gauge_locations.csv")
@@ -250,10 +251,9 @@ def main(argv=None):
     if not os.path.exists(rain_path):
         raise SystemExit(f"ERROR: {rain_path} missing; run python -m ml.mrms_history first")
     rain = pd.read_parquet(rain_path)
-    gauges = load_gauges(a.gauges, a.gauges_only, a.start, a.end, config.DATA_DIR)
-    if not gauges:
-        raise SystemExit("ERROR: no gauge had cached USGS history")
-    df, info = build_rows(gauges, rain, a.radius_km, a.rain_lag_h, progress=bar)
+    gauges = iter_gauges(a.gauges, a.gauges_only, a.start, a.end, config.DATA_DIR)
+    df, info = build_rows(gauges, rain, a.radius_km, a.rain_lag_h,
+                          progress=lambda it, desc, total=None: bar(it, desc, count_gauges(a.gauges, a.gauges_only)))
     if df.empty:
         raise SystemExit("ERROR: no window has 24 h of rain; check the M2.1 output")
     split = _ts(a.split)
