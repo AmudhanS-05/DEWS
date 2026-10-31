@@ -23,12 +23,13 @@ import psycopg2
 from confluent_kafka import Consumer
 from psycopg2.extras import execute_values
 
+from alerting import template
 from common import config
 
 log = logging.getLogger("sink")
 
 TOPICS = [config.TOPIC_GAUGE, config.TOPIC_REPLAY_GAUGE, config.TOPIC_AGG, config.TOPIC_FORECASTS, config.TOPIC_ALERTS]
-GROUP = "flood-sink"
+GROUP = config.GROUP_SINK
 
 
 # ---- pure mappers: one Kafka record -> one table row (or None to skip) -------------------------------------------
@@ -87,6 +88,12 @@ SQL = {
     "latency_trace": """INSERT INTO latency_trace (trace_id, site_no, mode, reading_time, fetched_at, window_close_time,
         forecast_time) VALUES %s ON CONFLICT (trace_id) DO UPDATE SET fetched_at = EXCLUDED.fetched_at,
         window_close_time = EXCLUDED.window_close_time, forecast_time = EXCLUDED.forecast_time""",
+    # v1 is written once; later versions come from the agents, a person's edits never get overwritten
+    "advisories": """INSERT INTO advisories (advisory_id, alert_id, version, source, text) VALUES %s
+        ON CONFLICT (advisory_id) DO NOTHING""",
+    # a withdrawn alert makes its unapproved drafts moot (approved ones need a human-written retraction)
+    "advisory_retract": """UPDATE advisories a SET status = 'superseded' FROM (VALUES %s) AS v(alert_id)
+        WHERE a.alert_id = v.alert_id AND a.status = 'draft'""",
     # an existing alert keeps its status (a person may already have approved it); only a retract changes it
     "alerts": """INSERT INTO alerts (alert_id, site_no, mode, category, probability, horizon_h, provisional_data, raised_at, status)
         VALUES %s ON CONFLICT (alert_id) DO UPDATE SET
@@ -112,6 +119,10 @@ def route(topic: str, m: dict) -> list[tuple[str, tuple]]:
         a = alert_row(m)
         status = "retracted" if a[-1] == "retract" else "draft"
         out.append(("alerts", a[:-1] + (status,)))
+        if status == "retracted":
+            out.append(("advisory_retract", (m["alert_id"],)))
+        else:                                              # advisory v1 within seconds of the alert
+            out.append(("advisories", (m["alert_id"] + "|1", m["alert_id"], 1, "template", template.render_v1(m))))
     return out
 
 
@@ -119,7 +130,8 @@ def write_batch(conn, rows: dict[str, list[tuple]]) -> int:
     """Upsert all rows in one transaction. Rows within one statement are de-duplicated by the caller."""
     n = 0
     with conn.cursor() as cur:
-        for table in ("gauge_readings", "windowed_aggregates", "risk_scores", "latency_trace", "alerts"):
+        for table in ("gauge_readings", "windowed_aggregates", "risk_scores", "latency_trace", "alerts", "advisories",
+                      "advisory_retract"):
             batch = rows.get(table)
             if batch:
                 execute_values(cur, SQL[table], batch, page_size=500)
@@ -131,7 +143,7 @@ def write_batch(conn, rows: dict[str, list[tuple]]) -> int:
 def last_wins(table: str, batch: list[tuple]) -> list[tuple]:
     """ON CONFLICT cannot touch the same key twice in one statement: keep the newest row per key."""
     keys = {"gauge_readings": (0, 1, 2, 3, 7), "windowed_aggregates": (0, 1, 3), "risk_scores": (0, 1, 2, 3, 4),
-            "latency_trace": (0,), "alerts": (0,)}[table]
+            "latency_trace": (0,), "alerts": (0,), "advisories": (0,), "advisory_retract": (0,)}[table]
     d: dict = {}
     for r in batch:
         d[tuple(r[i] for i in keys)] = r

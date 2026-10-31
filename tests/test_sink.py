@@ -30,10 +30,10 @@ def test_reading_routes_to_gauge_readings():
 def test_window_forecast_and_alert_routes():
     assert sink.route(config.TOPIC_AGG, AGG)[0][0] == "windowed_aggregates"
     assert [t for t, _ in sink.route(config.TOPIC_FORECASTS, FC)] == ["risk_scores", "latency_trace"]
-    (t, row), = sink.route(config.TOPIC_ALERTS, ALERT)
-    assert t == "alerts" and row[-1] == "draft"
-    (t, row), = sink.route(config.TOPIC_ALERTS, dict(ALERT, kind="retract"))
-    assert row[-1] == "retracted"
+    (t, row), (t2, _) = sink.route(config.TOPIC_ALERTS, ALERT)
+    assert (t, t2) == ("alerts", "advisories") and row[-1] == "draft"
+    (t, row), (t2, _) = sink.route(config.TOPIC_ALERTS, dict(ALERT, kind="retract"))
+    assert (t, t2) == ("alerts", "advisory_retract") and row[-1] == "retracted"
 
 
 def test_missing_field_raises_for_the_caller_to_skip():

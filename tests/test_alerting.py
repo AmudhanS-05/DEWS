@@ -1,0 +1,191 @@
+import os
+import uuid
+from pathlib import Path
+
+import pytest
+
+from alerting import approval, notifier, template
+from common import config
+from storage import sink
+
+ROOT = Path(__file__).resolve().parent.parent
+LEVELS = {"action": 5.5, "minor": 5.5, "moderate": 7.0, "major": 13.0}
+ALERT = {"alert_id": "08158700|minor|2019-05-04T03:00:00Z", "kind": "new", "site_no": "08158700",
+         "site_name": "Onion Creek near Driftwood", "mode": "SIMULATION", "category": "minor", "probability": None,
+         "horizon_h": 3, "forecast_stage": 6.8, "current_stage": 4.7, "official_levels": LEVELS,
+         "provisional_data": True, "model": "rise_rate", "raised_at": "2026-10-31T10:00:00Z"}
+
+
+# ---- template (pure) ---------------------------------------------------------------------------------------------
+
+def test_v1_says_simulation_numbers_and_missing_probability():
+    t = template.render_v1(ALERT)
+    assert t.startswith("SIMULATION:")
+    assert "MINOR flood stage (5.5 ft) within 3 h" in t and "Gauge now: 4.7 ft." in t
+    assert "no probability from this model" in t and "%" not in t           # never invented
+    assert "Official stages: action 5.5, minor 5.5, moderate 7.0, major 13.0 ft." in t
+    assert "provisional" in t and "not sent until approved" in t
+
+
+def test_v1_with_probability_upgrade_and_already_in_category():
+    t = template.render_v1(dict(ALERT, probability=0.79, kind="upgrade", category="major", current_stage=8.2, mode="LIVE"))
+    assert t.startswith("UPGRADE: ") and "79%" in t and "(already at MODERATE)" in t and "SIMULATION" not in t
+
+
+# ---- sink routing of alerts ---------------------------------------------------------------------------------------
+
+def test_sink_creates_v1_draft_for_new_alert_and_supersedes_on_retract():
+    routed = dict()
+    for table, row in sink.route(config.TOPIC_ALERTS, ALERT):
+        routed[table] = row
+    assert routed["advisories"][0] == ALERT["alert_id"] + "|1" and routed["advisories"][3] == "template"
+    assert routed["advisories"][4] == template.render_v1(ALERT)
+    r = dict(sink.route(config.TOPIC_ALERTS, dict(ALERT, kind="retract")))
+    assert "advisories" not in r and r["advisory_retract"] == (ALERT["alert_id"],)
+
+
+# ---- notifier (no database) ---------------------------------------------------------------------------------------
+
+REC = {"alert_id": ALERT["alert_id"], "advisory_id": ALERT["alert_id"] + "|1", "version": 1, "text": "Flood text  ok",
+       "approved_by": "A. Person", "approved_at": "2026-10-31T10:05:00+00:00", "mode": "SIMULATION"}
+
+
+def test_message_is_tagged_simulation_and_carries_the_approved_text():
+    m = notifier.build_message(REC, "Onion Creek", "minor", "me@example.org", ["to@example.org"])
+    assert m["Subject"].startswith("[SIMULATION] Flood advisory: Onion Creek")
+    assert "Flood text" in m.get_content() and "A. Person" in m.get_content()
+
+
+def test_retry_succeeds_on_third_attempt_and_gives_up_after_the_limit():
+    calls = []
+
+    def flaky(msg, cfg):
+        calls.append(1)
+        if len(calls) < 3:
+            raise OSError("smtp down")
+
+    waits = []
+    assert notifier.send_with_retry(flaky, None, {}, attempts=3, backoff_s=2, sleep=waits.append) == (True, None)
+    assert len(calls) == 3 and waits == [2, 4]
+    ok, err = notifier.send_with_retry(lambda m, c: (_ for _ in ()).throw(OSError("nope")), None, {}, attempts=2,
+                                       backoff_s=0, sleep=lambda s: None)
+    assert ok is False and "OSError: nope" in err
+
+
+def test_missing_smtp_settings_are_named_not_printed():
+    with pytest.raises(RuntimeError, match="SMTP_PASSWORD"):
+        notifier.smtp_settings({"NOTIFY_TO": "a@b", "SMTP_HOST": "h", "SMTP_USER": "u"})
+
+
+# ---- approval and delivery against PostgreSQL ---------------------------------------------------------------------
+
+class FakeProducer:
+    def __init__(self, fail=False):
+        self.sent, self.fail, self.failed = [], fail, 0
+
+    def send(self, topic, key, value):
+        self.sent.append((topic, key, value))
+
+    def flush(self, timeout=0):
+        return 1 if self.fail else 0
+
+
+@pytest.fixture()
+def conn():
+    dsn = os.getenv("AGENTS_TEST_DSN")
+    if not dsn:
+        pytest.skip("AGENTS_TEST_DSN not set: PostgreSQL tests skipped")
+    import psycopg2
+    schema = "alert_t_" + uuid.uuid4().hex[:8]
+    c = psycopg2.connect(dsn, connect_timeout=5)
+    c.autocommit = True
+    with c.cursor() as cur:
+        cur.execute(f"CREATE SCHEMA {schema}")
+        cur.execute(f"SET search_path TO {schema}")
+        for f in ("schema.sql", "views.sql"):
+            cur.execute((ROOT / "storage" / f).read_text(encoding="utf-8"))
+    c.autocommit = False
+    # put the alert and its v1 draft in through the sink's own write path
+    rows = {}
+    for table, row in sink.route(config.TOPIC_ALERTS, ALERT):
+        rows.setdefault(table, []).append(row)
+    sink.write_batch(c, rows)
+    yield c
+    c.rollback()
+    c.autocommit = True
+    with c.cursor() as cur:
+        cur.execute(f"DROP SCHEMA {schema} CASCADE")
+    c.close()
+
+
+ADV = ALERT["alert_id"] + "|1"
+
+
+def status(conn, table="advisories", key="advisory_id", val=ADV):
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT status FROM {table} WHERE {key} = %s", (val,))
+        return cur.fetchone()[0]
+
+
+def test_v1_draft_is_listed_pending(conn):
+    (a,) = approval.list_advisories(conn)
+    assert a["status"] == "draft" and a["version"] == 1 and a["source"] == "template"
+
+
+def test_approve_publishes_exactly_the_edited_text_and_marks_rows(conn):
+    prod = FakeProducer()
+    approval.edit(conn, ADV, "Edited by a person.")
+    rec = approval.approve(conn, prod, ADV, "A. Person")
+    assert len(prod.sent) == 1 and prod.sent[0][0] == config.TOPIC_APPROVED
+    assert prod.sent[0][2]["text"] == "Edited by a person." and rec["mode"] == "SIMULATION"
+    assert status(conn) == "approved" and status(conn, "alerts", "alert_id", ALERT["alert_id"]) == "approved"
+    with pytest.raises(approval.ApprovalError):          # cannot approve twice
+        approval.approve(conn, prod, ADV, "A. Person")
+    assert len(prod.sent) == 1
+
+
+def test_reject_sends_nothing(conn):
+    prod = FakeProducer()
+    approval.reject(conn, ADV, "A. Person")
+    assert status(conn) == "rejected" and prod.sent == []
+    with pytest.raises(approval.ApprovalError):
+        approval.approve(conn, prod, ADV, "A. Person")
+    assert prod.sent == []
+
+
+def test_failed_publish_rolls_the_approval_back(conn):
+    with pytest.raises(approval.ApprovalError):
+        approval.approve(conn, FakeProducer(fail=True), ADV, "A. Person")
+    assert status(conn) == "draft"
+
+
+def test_approver_name_required(conn):
+    with pytest.raises(approval.ApprovalError):
+        approval.approve(conn, FakeProducer(), ADV, "  ")
+
+
+def test_delivery_marks_sent_and_failure_leaves_approved_and_dead_letters(conn):
+    prod = FakeProducer()
+    rec = approval.approve(conn, prod, ADV, "A. Person")
+    cfg = {"user": "me@example.org", "to": ["to@example.org"], "host": "h", "port": 587, "password": "x"}
+    sent = []
+    assert notifier.handle(rec, conn, cfg, dry_run=True, send=lambda m, c: sent.append(m)) == "dry-run" and sent == []
+    assert status(conn) == "approved"
+    dead = []
+    bad = lambda m, c: (_ for _ in ()).throw(OSError("smtp down"))          # noqa: E731
+    assert notifier.handle(rec, conn, cfg, False, send=bad, sleep=lambda s: None, dlq=dead.append) == "failed"
+    assert status(conn) == "approved" and len(dead) == 1
+    assert notifier.handle(rec, conn, cfg, False, send=lambda m, c: sent.append(m), sleep=lambda s: None) == "sent"
+    assert len(sent) == 1 and status(conn) == "sent"
+    with conn.cursor() as cur:
+        cur.execute("SELECT delivered_at, channel FROM alerts WHERE alert_id = %s", (ALERT["alert_id"],))
+        d, ch = cur.fetchone()
+    assert d is not None and ch == "email"
+
+
+def test_retract_supersedes_unapproved_draft(conn):
+    rows = {}
+    for table, row in sink.route(config.TOPIC_ALERTS, dict(ALERT, kind="retract")):
+        rows.setdefault(table, []).append(row)
+    sink.write_batch(conn, rows)
+    assert status(conn) == "superseded" and status(conn, "alerts", "alert_id", ALERT["alert_id"]) == "retracted"

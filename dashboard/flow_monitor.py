@@ -21,7 +21,9 @@ Tabs: Pipeline flow (above) | Map (every gauge's newest stage against its offici
 live or replay) | Readings and alerts (latest windows and alerts from PostgreSQL, filled once the sink exists).
 The map needs config/gauge_locations.csv:  python -m tools.gauge_locations
 
-Read-only: it uses throwaway consumers and the admin API, and never commits offsets.
+Read-only for Kafka monitoring (throwaway consumers and the admin API, no offsets committed). The one write path is
+the approval panel in Readings & alerts: Approve / Edit / Reject call alerting/approval.py, which publishes to
+alerts.approved only after a person clicks Approve.
 """
 from __future__ import annotations
 
@@ -436,6 +438,56 @@ def probe_db() -> dict:
         return {"ok": False, "error": (str(e).strip().splitlines() or ["error"])[0][:120]}
 
 
+def pg_conn():
+    import psycopg2
+    return psycopg2.connect(config.PG_DSN, connect_timeout=3)
+
+
+def approval_api(action: str, body: dict) -> tuple[int, dict]:
+    """Run an approval action; returns (http status, json body). Never raises."""
+    from alerting import approval
+    if CTX["demo"]:
+        return 400, {"error": "demo mode has no database"}
+    try:
+        conn = pg_conn()
+        try:
+            adv = body.get("advisory_id", "")
+            by = (body.get("by") or "").strip()
+            if action == "approve":
+                if CTX.get("producer") is None:
+                    from common.kafka_io import JsonProducer
+                    CTX["producer"] = JsonProducer("console-approval")
+                rec = approval.approve(conn, CTX["producer"], adv, by, body.get("text"))
+                return 200, {"ok": True, "approved": rec["advisory_id"]}
+            if action == "reject":
+                approval.reject(conn, adv, by or "console")
+                return 200, {"ok": True}
+            if action == "edit":
+                approval.edit(conn, adv, body.get("text", ""))
+                return 200, {"ok": True}
+            return 404, {"error": "unknown action"}
+        finally:
+            conn.close()
+    except approval.ApprovalError as e:
+        return 409, {"error": str(e)}
+    except Exception as e:
+        return 500, {"error": (str(e).strip().splitlines() or ["error"])[0][:160]}
+
+
+def advisories_api() -> dict:
+    from alerting import approval
+    if CTX["demo"]:
+        return {"ok": True, "advisories": []}
+    try:
+        conn = pg_conn()
+        try:
+            return {"ok": True, "advisories": approval.list_advisories(conn)}
+        finally:
+            conn.close()
+    except Exception as e:
+        return {"ok": False, "error": (str(e).strip().splitlines() or ["error"])[0][:120]}
+
+
 def demo_gauges(t: float):
     """Fake gauges around the Texas Hill Country for --demo when config/gauge_locations.csv is missing."""
     locs, latest = [], {}
@@ -515,6 +567,18 @@ def make_handler():
             self.end_headers()
             self.wfile.write(body)
 
+        def do_POST(self):
+            path = urlparse(self.path).path
+            if not path.startswith("/api/advisory/"):
+                return self._send(404, "text/plain", b"not found")
+            try:
+                n = int(self.headers.get("Content-Length", 0))
+                body = json.loads(self.rfile.read(n) or b"{}")
+            except (ValueError, json.JSONDecodeError):
+                return self._send(400, "application/json", b'{"error":"bad json"}')
+            code, out = approval_api(path.rsplit("/", 1)[-1], body)
+            self._send(code, "application/json", json.dumps(out).encode())
+
         def do_GET(self):
             if self.path.startswith("/static/"):
                 rel = os.path.normpath(urlparse(self.path).path[len("/static/"):]).replace("\\", "/")
@@ -543,6 +607,8 @@ def make_handler():
                 body = {"locations": locs is not None, "mode": "live" if live else "replay",
                         "gauges": build_gauges(locs, latest, live, now, CTX["stale_s"]) if locs else []}
                 self._send(200, "application/json", json.dumps(body).encode())
+            elif self.path == "/api/advisories":
+                self._send(200, "application/json", json.dumps(advisories_api()).encode())
             elif self.path == "/api/db":
                 self._send(200, "application/json", json.dumps(demo_db() if CTX["demo"] else probe_db()).encode())
             elif self.path == "/events":

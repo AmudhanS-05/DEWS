@@ -41,7 +41,7 @@ HORIZON_H = float(os.getenv("FORECAST_HORIZON_H", "3"))
 RETRACT_AFTER = int(os.getenv("FORECAST_RETRACT_AFTER", "2"))
 END_AFTER = int(os.getenv("FORECAST_END_AFTER", "6"))
 HISTORY_WINDOWS = 24
-GROUP = "flood-forecaster"
+GROUP = config.GROUP_FORECASTER
 STATE_FILE = Path(config.STATE_DIR) / "forecaster_state.json"
 GAUGES_CSV = Path(__file__).resolve().parent.parent / "config" / "gauge_locations.csv"
 

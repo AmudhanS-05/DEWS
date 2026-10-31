@@ -148,7 +148,11 @@
 
   <section id="tab-data" hidden>
     <div class="note" id="db-note" style="margin-bottom:8px"></div>
-    <h2 style="margin-top:4px">Latest windows (PostgreSQL)</h2>
+    <h2 style="margin-top:4px">Advisories for approval</h2>
+    <div class="note" style="margin-bottom:6px">Nothing is sent until a person clicks Approve. Edit the text if needed; the notifier emails exactly what is shown when you approve.
+      Approver: <input id="adv-by" size="16" placeholder="your name" aria-label="approver name"></div>
+    <div id="adv-list"></div>
+    <h2>Latest windows (PostgreSQL)</h2>
     <table><thead><tr><th>Gauge</th><th>Window start</th><th>Mode</th><th>Readings</th><th>Stage (ft)</th><th>Rise (ft/h)</th><th>Rain 3 h</th></tr></thead><tbody id="db-win"></tbody></table>
     <h2>Alerts</h2>
     <table><thead><tr><th>Raised</th><th>Gauge</th><th>Mode</th><th>Category</th><th>Probability</th><th>Horizon (h)</th><th>Status</th><th>Delivered</th></tr></thead><tbody id="db-alerts"></tbody></table>
@@ -252,7 +256,7 @@ function showTab(t){
   }
   try{ history.replaceState(null,"","#"+t); }catch(e){}
   if (t==="map") { loadGauges(); setTimeout(()=>lmap&&lmap.invalidateSize(),50); }
-  if (t==="data") loadDb();
+  if (t==="data") { loadDb(); if (typeof loadAdvisories==="function") loadAdvisories(); }
 }
 document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>showTab(b.dataset.tab)));
 
@@ -359,6 +363,44 @@ async function loadDb(){
   }catch(e){ note.textContent="cannot reach the console server"; }
 }
 setInterval(()=>{ if(!document.getElementById("tab-data").hidden) loadDb(); },5000);
+
+// ---------------------------------------------------------------- advisories: Approve / Edit / Reject
+const byInput=document.getElementById("adv-by");
+try{ byInput.value=localStorage.getItem("approver")||""; }catch(e){}
+byInput.addEventListener("input",()=>{ try{ localStorage.setItem("approver",byInput.value); }catch(e){} });
+let advEditing=false;   // do not redraw while a person is typing in a text box
+async function advAct(id,action){
+  const ta=document.getElementById("ta-"+id), msg=document.getElementById("msg-"+id);
+  const body={advisory_id:id, by:byInput.value, text:ta?ta.value:undefined};
+  if(action==="approve" && !byInput.value.trim()){ msg.textContent="enter the approver name first"; return; }
+  if(action==="approve" && !confirm("Approve and send this advisory by email?")) return;
+  const r=await fetch("/api/advisory/"+action,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const d=await r.json().catch(()=>({error:"bad answer"}));
+  msg.textContent = r.ok ? (action==="edit"?"saved":action+"d") : (d.error||"failed");
+  advEditing=false; if(r.ok && action!=="edit") loadAdvisories();
+}
+async function loadAdvisories(){
+  if(advEditing) return;
+  const box=document.getElementById("adv-list");
+  try{
+    const d=await (await fetch("/api/advisories")).json();
+    if(!d.ok){ box.innerHTML=`<div class="note">${esc(d.error)}</div>`; return; }
+    box.innerHTML = d.advisories.length ? d.advisories.map(a=>{
+      const pending=a.status==="draft", text=a.edited_text||a.text;
+      return `<div style="border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px;background:var(--panel)">
+        <div><b>${esc(a.site_no)}</b> ${esc(a.category)} · ${esc(a.mode)} · v${esc(a.version)} (${esc(a.source)}) · <b>${esc(a.status)}</b>
+          ${a.confidence==="uncertain"?"· <b>UNCERTAIN</b>":""}${a.reviewer_verdict?" · reviewer: "+esc(a.reviewer_verdict):""}
+          ${a.delivered_at?" · delivered "+fmtDT(a.delivered_at):""}</div>
+        ${pending?`<textarea id="ta-${esc(a.advisory_id)}" rows="7" style="width:100%;margin:6px 0;font:inherit" onfocus="advEditing=true">${esc(text)}</textarea>
+          <button onclick="advAct('${esc(a.advisory_id)}','approve')">Approve</button>
+          <button onclick="advAct('${esc(a.advisory_id)}','edit')">Save edit</button>
+          <button onclick="advAct('${esc(a.advisory_id)}','reject')">Reject</button>
+          <span id="msg-${esc(a.advisory_id)}" class="note"></span>`
+        :`<pre style="white-space:pre-wrap;margin:6px 0;font:inherit">${esc(text)}</pre>`}
+      </div>`; }).join("") : `<div class="note">No advisories yet: they appear within seconds of an alert.</div>`;
+  }catch(e){ box.innerHTML=`<div class="note">cannot reach the console server</div>`; }
+}
+setInterval(()=>{ if(!document.getElementById("tab-data").hidden) loadAdvisories(); },5000);
 { const h=(location.hash||"").slice(1); if(TABS.includes(h)&&h!=="flow") showTab(h); }
 </script>
 </body>
