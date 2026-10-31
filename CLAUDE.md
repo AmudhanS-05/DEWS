@@ -29,4 +29,4 @@ Read first: your handoff in `docs/handoffs/`, `docs/SLICES.md` (tasks and done-c
 - Kafka + PostgreSQL: `cd docker; docker compose up -d` (3 brokers, 9 topics, 9 tables after S1).
 - Console: `python -m dashboard.flow_monitor` → http://127.0.0.1:8765 (restart it after code changes).
 - Known pins: `aiokafka[lz4]==0.12.0` and `cramjam` for faust-streaming 0.11.3.
-- Agents: `LLM_PROVIDER` = `groq` | `ollama` | `none` (tests always `none`).
+- Agents: `LLM_PROVIDER` = `groq` | `gemini` | `ollama` | `none` (tests always `none`); Groq model `openai/gpt-oss-120b`.
