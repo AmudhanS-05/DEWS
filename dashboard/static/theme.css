@@ -85,7 +85,6 @@ button.btn:hover,.adv button:hover{border-color:var(--accent)}
 .tgl input{accent-color:var(--accent)}
 input,textarea{background:var(--panel);border:1px solid var(--line2);color:var(--ink);border-radius:6px;padding:4px 8px;font:inherit}
 .note{color:var(--muted);font-size:12.5px}
-#theme-toggle{margin-left:auto}
 
 /* advisories */
 .adv{border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:10px;background:var(--panel)}
@@ -103,7 +102,7 @@ input,textarea{background:var(--panel);border:1px solid var(--line2);color:var(-
 .hud .big{font-size:12px;color:var(--ink);letter-spacing:.14em;font-weight:650}
 .map3d .ctl{position:absolute;left:14px;bottom:14px;display:flex;gap:6px}
 .glass{background:color-mix(in srgb,var(--panel) 88%,transparent);border:1px solid var(--line);border-radius:10px;backdrop-filter:blur(8px)}
-.map3d .side{position:absolute;right:14px;top:14px;bottom:14px;width:280px;display:flex;flex-direction:column;gap:10px;pointer-events:none}
+.map3d .side{position:absolute;right:14px;top:44px;bottom:14px;width:280px;display:flex;flex-direction:column;gap:10px;pointer-events:none}
 .map3d .side>*{pointer-events:auto}
 .card{padding:12px 14px}
 .card .nm{font-weight:650;font-size:14px}
@@ -121,3 +120,49 @@ input,textarea{background:var(--panel);border:1px solid var(--line2);color:var(-
 .tip{position:absolute;pointer-events:none;padding:5px 9px;border-radius:6px;font-size:12px;background:var(--panel);border:1px solid var(--line2);color:var(--ink);white-space:nowrap;transform:translate(12px,-120%);box-shadow:var(--shadow)}
 @media(max-width:900px){.map3d .side{display:none}.hud.tr{right:16px}}
 @media (prefers-reduced-motion:reduce){.edge.flow,.node.down rect,.node.warn rect{animation:none}}
+
+/* sun / moon theme switch */
+.themesw{position:relative;width:60px;height:28px;border-radius:999px;border:1px solid var(--line2);background:var(--bg2);display:inline-flex;align-items:center;justify-content:space-between;padding:0 7px;cursor:pointer;color:var(--muted)}
+.themesw .ico{width:16px;height:16px;position:relative;z-index:1;transition:color .2s}
+.themesw .knob{position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;background:var(--accent);transition:transform .25s}
+.themesw[aria-checked=true] .knob{transform:translateX(32px)}
+.themesw[aria-checked=true] .moon,.themesw[aria-checked=false] .sun{color:var(--accent-ink)}
+
+/* ops-room HUD */
+.topbar{position:absolute;left:0;right:0;top:0;height:30px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 16px;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);
+  background:color-mix(in srgb,var(--panel) 78%,transparent);border-bottom:1px solid var(--line);backdrop-filter:blur(6px);pointer-events:none;z-index:2}
+.topbar .proto{color:var(--warn);letter-spacing:.18em}
+.topbar .tb-r{display:flex;gap:16px;align-items:center}
+.topbar .status b{margin-left:6px;font-weight:650}
+.map3d .left{position:absolute;left:14px;top:44px;bottom:62px;width:214px;display:flex;flex-direction:column;gap:10px;pointer-events:none;overflow:hidden}
+.map3d .left>*{pointer-events:auto}
+.panel{padding:8px 10px}
+.panel .ph{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line);padding-bottom:5px;margin-bottom:6px}
+.lrow{display:grid;grid-template-columns:16px 1fr auto;gap:6px;align-items:center;font-size:12.5px;padding:2px 0;cursor:pointer;user-select:none}
+.lrow input{accent-color:var(--accent);margin:0}
+.lrow em{font-style:normal;color:var(--muted);font-size:11px}
+.brief{flex:1;min-height:0;overflow:auto}
+#m-brief{font-size:12px;line-height:1.55}
+#m-brief .k{color:var(--muted);font-size:10px;letter-spacing:.1em;text-transform:uppercase;display:block;margin-top:6px}
+.dock{position:absolute;left:calc(50% - 33px);bottom:12px;transform:translateX(-50%);display:flex;flex-wrap:nowrap;white-space:nowrap;gap:14px;align-items:center;padding:6px 12px;z-index:2}
+.dock .seg button{padding:4px 9px}
+.dock .dk{display:inline-flex;align-items:center;gap:8px;font-size:12px}
+.dock .dk>span:first-child{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.dock select{max-width:200px}
+.coords{position:absolute;left:14px;bottom:10px;width:214px;line-height:1.5;font-size:10px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;pointer-events:none;font-variant-numeric:tabular-nums}
+@media(max-width:1100px){.map3d .left,.dock{display:none}}
+.map3d canvas.vp-night{filter:sepia(1) hue-rotate(78deg) saturate(1.7) brightness(.95) contrast(1.1)}
+.map3d canvas.vp-mono{filter:grayscale(1) contrast(1.12)}
+.map3d canvas.vp-thermal{filter:url(#f-thermal) contrast(1.15)}
+
+/* alert banner and advisory heads: black band, amber hazard stripe, terse uppercase readout */
+.alertbar{display:flex;align-items:center;gap:10px;padding:9px 20px;background:#101214;color:#d9a441;font:600 12px ui-monospace,"Cascadia Mono",Consolas,monospace;letter-spacing:.14em;text-transform:uppercase;
+  border-bottom:1px solid #2a2f35;position:relative}
+.alertbar::before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:repeating-linear-gradient(135deg,#d9a441 0 10px,#101214 10px 20px)}
+.alertbar #alert-text{flex:1}
+.alertbar .blink{animation:blink 1.4s steps(2,start) infinite}
+.alertbar .btn{background:transparent;color:#d9a441;border-color:#d9a441;letter-spacing:.1em;text-transform:uppercase}
+@keyframes blink{to{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.alertbar .blink{animation:none}}
+.advhead{font:600 11px ui-monospace,"Cascadia Mono",Consolas,monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.advhead b{color:var(--ink)}

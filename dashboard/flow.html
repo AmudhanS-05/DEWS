@@ -17,8 +17,12 @@
   <span class="chip"><span class="dot" id="d-pg"></span><span id="c-pg">PostgreSQL …</span></span>
   <span class="chip" id="c-demo" style="display:none">DEMO DATA</span>
   <span class="chip" id="c-clock" style="margin-left:auto">connecting…</span>
-  <button class="btn" id="theme-toggle" type="button" aria-label="Switch between light and dark theme" style="margin-left:0">Light</button>
+  <button class="themesw" id="theme-toggle" type="button" role="switch" aria-checked="true" aria-label="Dark theme" title="Switch between light (sun) and dark (moon)">
+    <svg class="ico sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    <svg class="ico moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.6A8.2 8.2 0 0 1 9.4 4 8.2 8.2 0 1 0 20 14.6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+    <span class="knob"></span></button>
 </header>
+<div class="alertbar" id="alert-bar" role="alert" hidden><span class="blink" aria-hidden="true">&#9650;</span><span id="alert-text"></span><button class="btn" id="alert-go" type="button">Review</button></div>
 <main>
   <div class="tabs" role="tablist">
     <button class="tab" role="tab" id="tb-flow" aria-selected="true" data-tab="flow">Pipeline flow</button>
@@ -55,18 +59,40 @@
   <section id="tab-map" hidden>
     <div class="toolbar">
       <span class="seg"><button id="m-live" aria-pressed="true">Live</button><button id="m-replay" aria-pressed="false">Replay (SIMULATION)</button></span>
-      <span class="seg"><button id="v-2d" aria-pressed="false">2D</button><button id="v-3d" aria-pressed="true">3D</button></span>
+      <span class="seg"><button id="v-globe" aria-pressed="true">Globe</button><button id="v-2d" aria-pressed="false">2D</button><button id="v-3d" aria-pressed="false">3D</button></span>
       <label class="tgl"><input type="checkbox" id="m-terrain"> Terrain</label>
       <span class="note" id="map-note"></span>
     </div>
     <div class="map3d" id="map3d">
-      <canvas id="m-canvas" aria-label="Map of every gauge, 2D or 3D" role="img"></canvas>
-      <div class="hud tl"><div class="big">Gauge network</div><div id="m-mode"></div><div id="m-stat"></div></div>
-      <div class="hud tr" id="m-clock"></div>
-      <div class="ctl"><button class="btn" id="m-auto" aria-pressed="false" title="slow automatic orbit">Auto-orbit</button></div>
+      <canvas id="m-canvas" aria-label="Globe and map of every monitored gauge" role="img"></canvas>
+      <div class="topbar">
+        <span>Flood early-warning · gauge network</span>
+        <span class="proto">Prototype · not an official warning</span>
+        <span class="tb-r"><span id="m-clock"></span><span class="status">Status <b id="m-status">NORMAL</b></span></span>
+      </div>
+      <div class="left">
+        <div class="glass panel">
+          <div class="ph">Data layers</div>
+          <label class="lrow"><input type="checkbox" data-layer="gauges" checked><span>Gauges</span><em id="n-gauges"></em></label>
+          <label class="lrow"><input type="checkbox" data-layer="alerts" checked><span>Open alerts</span><em id="n-alerts"></em></label>
+          <label class="lrow"><input type="checkbox" data-layer="sweep" checked><span>Radar sweep</span><em></em></label>
+          <label class="lrow"><input type="checkbox" data-layer="rings" checked><span>Range rings</span><em></em></label>
+          <label class="lrow"><input type="checkbox" data-layer="grid" checked><span>Graticule</span><em></em></label>
+          <label class="lrow"><input type="checkbox" data-layer="labels" checked><span>Labels</span><em></em></label>
+        </div>
+        <div class="glass panel brief"><div class="ph">Scene brief</div><div id="m-brief"></div></div>
+      </div>
       <div class="side"><div class="glass card" id="m-card"></div><div class="glass glist" id="m-list"></div></div>
+      <div class="dock glass">
+        <label class="dk"><span>Location</span><select id="m-region" aria-label="Monitored area"></select></label>
+        <span class="dk"><span>Visual</span><span class="seg" id="m-presets">
+          <button data-preset="standard" aria-pressed="true">Standard</button><button data-preset="night" aria-pressed="false">Night</button><button data-preset="mono" aria-pressed="false">Mono</button><button data-preset="thermal" aria-pressed="false">Thermal</button></span></span>
+        <button class="btn" id="m-auto" aria-pressed="false" title="slow automatic rotation">Auto-rotate</button>
+      </div>
+      <div class="coords" id="m-coords"></div>
       <div class="tip" id="m-tip" hidden></div>
     </div>
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="f-thermal" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0 0 0 1 0"/><feComponentTransfer><feFuncR type="table" tableValues="0.02 0.12 0.45 0.85 0.98"/><feFuncG type="table" tableValues="0.02 0.05 0.12 0.55 0.92"/><feFuncB type="table" tableValues="0.10 0.35 0.40 0.10 0.65"/></feComponentTransfer></filter></svg>
     <div class="legend">
       <span><span class="gdot" style="display:inline-block;background:var(--s-normal)"></span>below action stage</span>
       <span><span class="gdot" style="display:inline-block;background:var(--s-action)"></span>action</span>
@@ -244,8 +270,8 @@ async function loadAdvisories(){
     if(!d.ok){ box.innerHTML=`<div class="note">${esc(d.error)}</div>`; return; }
     box.innerHTML = d.advisories.length ? d.advisories.map(a=>{
       const pending=a.status==="draft", text=a.edited_text||a.text;
-      return `<div class="adv">
-        <div><b>${esc(a.site_no)}</b> ${esc(a.category)} · ${esc(a.mode)} · v${esc(a.version)} (${esc(a.source)}) · <b>${esc(a.status)}</b>
+      return `<div class="adv" style="border-top:3px solid var(--s-${esc(a.category)})">
+        <div class="advhead"><b>&#9650; ${esc(String(a.category).toUpperCase())}</b> · ${esc(a.site_no)} · ${a.mode==="SIMULATION"?"<b>SIMULATION</b>":esc(a.mode)} · v${esc(a.version)} (${esc(a.source)}) · <b>${esc(String(a.status).toUpperCase())}</b>
           ${a.confidence==="uncertain"?"· <b>UNCERTAIN</b>":""}${a.reviewer_verdict?" · reviewer: "+esc(a.reviewer_verdict):""}
           ${a.delivered_at?" · delivered "+fmtDT(a.delivered_at):""}</div>
         ${pending?`<textarea id="ta-${esc(a.advisory_id)}" rows="7" onfocus="advEditing=true">${esc(text)}</textarea>
@@ -263,7 +289,7 @@ setInterval(()=>{ if(!document.getElementById("tab-data").hidden) loadAdvisories
 <script>
 (function(){
   const btn=document.getElementById("theme-toggle"), root=document.documentElement;
-  const sync=()=>{ btn.textContent=root.dataset.theme==="light"?"Dark":"Light"; };
+  const sync=()=>{ const dark=root.dataset.theme!=="light"; btn.setAttribute("aria-checked",dark); btn.setAttribute("aria-label",dark?"Dark theme (moon)":"Light theme (sun)"); };
   btn.addEventListener("click",()=>{
     root.dataset.theme=root.dataset.theme==="light"?"dark":"light";
     try{ localStorage.setItem("theme",root.dataset.theme); }catch(e){}
@@ -272,6 +298,25 @@ setInterval(()=>{ if(!document.getElementById("tab-data").hidden) loadAdvisories
   sync();
 })();
 </script>
+<script>
+// alert banner: any advisory awaiting approval, on every tab
+(function(){
+  const bar=document.getElementById("alert-bar"), txt=document.getElementById("alert-text"), base=document.title;
+  document.getElementById("alert-go").addEventListener("click",()=>showTab("data"));
+  async function poll(){
+    try{
+      const d=await (await fetch("/api/advisories")).json(); if(!d.ok) return;
+      const pend=d.advisories.filter(a=>a.status==="draft");
+      if(!pend.length){ bar.hidden=true; document.title=base; return; }
+      const top=pend[0], sim=pend.every(a=>a.mode==="SIMULATION");
+      txt.textContent=` ${pend.length} ADVISORY${pend.length>1?" ARE":" IS"} AWAITING APPROVAL · ${String(top.category).toUpperCase()} FLOOD CATEGORY FORECAST · ${top.site_no}`+(sim?" · SIMULATION":"");
+      bar.hidden=false; document.title="("+pend.length+") "+base;
+    }catch(e){}
+  }
+  poll(); setInterval(poll,6000);
+})();
+</script>
+<script src="/static/globe.js"></script>
 <script src="/static/map3d.js"></script>
 </body>
 </html>

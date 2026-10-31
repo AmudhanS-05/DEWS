@@ -101,3 +101,24 @@ def test_build_gauges_flags_provisional_and_age():
     g = fm.build_gauges(locs, latest, True, now=1100.0)[0]
     assert g["status"] == "minor" and g["provisional"] and g["age_s"] == 100.0
     assert fm.build_gauges(locs, {}, True, now=1100.0)[0]["status"] == "nodata"
+
+
+def test_regions_load_and_summarise(tmp_path):
+    import json
+
+    from dashboard import flow_monitor as fm
+    p = tmp_path / "regions.json"
+    p.write_text(json.dumps([{"id": "a", "name": "A", "lat": 1, "lon": 2, "gauges_csv": "config/gauge_locations.csv"},
+                             {"id": "off", "name": "Off", "lat": 1, "lon": 2, "gauges_csv": "x.csv", "enabled": False},
+                             {"name": "no id", "lat": 1, "lon": 2}]))
+    regs = fm.load_regions(str(p))
+    assert [r["id"] for r in regs] == ["a"]
+    latest = {"08158700": {"value": 6.0, "reading_ts": 1.0, "qualifiers": []}}
+    (s,) = fm.regions_summary(regs, latest, False, 2.0)
+    assert s["n_gauges"] >= 30 and s["n_reporting"] == 1 and s["worst"] in ("minor", "action", "moderate", "major", "normal")
+    assert s["n_flooding"] == (1 if s["worst"] in ("minor", "moderate", "major") else 0)
+
+
+def test_missing_regions_file_falls_back_to_the_default_network():
+    from dashboard import flow_monitor as fm
+    assert fm.load_regions("no/such/file.json")[0]["id"] == "default"

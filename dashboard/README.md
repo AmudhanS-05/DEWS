@@ -58,3 +58,12 @@ Fall back to `streamlit_app.py` and say so explicitly in the report — it's a
 legitimate real-time dashboard, just not the specific tool named in the brief.
 Note the substitution and the reason in `PROJECT_LOG.md` so it's not a surprise
 in the viva.
+
+## Map: globe, regions, 2D/3D, terrain
+
+The Map tab opens on a globe with one marker per monitored area. Double-click a marker (or Enter region) to fly in; Globe returns. In a
+region you can switch 2D / 3D and turn Terrain on (real elevation, needs internet for basemap and elevation tiles).
+
+Add another monitored area: append an entry to `config/regions.json` (`id`, `name`, `provider`, `lat`, `lon`, `gauges_csv`, `enabled`) and
+provide its gauge file with the same columns as `config/gauge_locations.csv` (official action/minor/moderate/major stages per gauge).
+Readings for any gauge on the topics are matched by `site_no`, so a new area needs no code change.

@@ -338,6 +338,39 @@ def probe_pg():
 
 
 # ---------------------------------------------------------------- map: gauge locations + newest stage
+REGIONS_JSON = os.path.join(os.path.dirname(HERE), "config", "regions.json")
+
+
+def load_regions(path: str = REGIONS_JSON) -> list[dict]:
+    """Monitored areas shown on the globe. Add an entry (and its gauge CSV, same columns as gauge_locations.csv) to monitor
+    another area; fields: id, name, provider, lat, lon, gauges_csv (relative to the repo root), enabled."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            regs = json.load(f)
+    except (OSError, ValueError):
+        regs = [{"id": "default", "name": "Gauge network", "provider": "", "lat": 30.2, "lon": -98.3,
+                 "gauges_csv": "config/gauge_locations.csv", "enabled": True}]
+    return [r for r in regs if r.get("enabled", True) and r.get("id") and r.get("lat") is not None and r.get("lon") is not None]
+
+
+def region_csv(region: dict) -> str:
+    return os.path.join(os.path.dirname(HERE), region["gauges_csv"])
+
+
+def regions_summary(regions: list[dict], latest: dict, live: bool, now: float, stale_s: float = 5400.0) -> list[dict]:
+    """Per region: gauge count, how many report, and the worst official category right now (for the globe markers)."""
+    sev = {"major": 5, "moderate": 4, "minor": 3, "action": 2, "normal": 1, "stale": 0, "nodata": 0}
+    out = []
+    for r in regions:
+        locs = load_locations(region_csv(r)) or []
+        gs = build_gauges(locs, latest, live, now, stale_s) if locs else []
+        worst = max((g["status"] for g in gs), key=lambda k: sev.get(k, 0), default="nodata")
+        out.append({"id": r["id"], "name": r["name"], "provider": r.get("provider", ""), "lat": r["lat"], "lon": r["lon"],
+                    "n_gauges": len(gs), "n_reporting": sum(1 for g in gs if g["stage"] is not None),
+                    "n_flooding": sum(1 for g in gs if sev.get(g["status"], 0) >= 3), "worst": worst})
+    return out
+
+
 def load_locations(path: str = LOC_CSV) -> list[dict] | None:
     if not os.path.exists(path):
         return None
@@ -597,7 +630,8 @@ def make_handler():
             elif self.path.startswith("/api/gauges"):
                 q = parse_qs(urlparse(self.path).query)
                 live = q.get("mode", ["live"])[0] != "replay"
-                locs = load_locations()
+                reg = next((r for r in load_regions() if r["id"] == q.get("region", [""])[0]), None)
+                locs = load_locations(region_csv(reg)) if reg else load_locations()
                 now = time.time()
                 if CTX["demo"]:
                     dl, dlatest = demo_gauges(now - CTX["t0"])
@@ -607,6 +641,12 @@ def make_handler():
                 body = {"locations": locs is not None, "mode": "live" if live else "replay",
                         "gauges": build_gauges(locs, latest, live, now, CTX["stale_s"]) if locs else []}
                 self._send(200, "application/json", json.dumps(body).encode())
+            elif self.path.startswith("/api/regions"):
+                q = parse_qs(urlparse(self.path).query)
+                live = q.get("mode", ["live"])[0] != "replay"
+                latest = {} if CTX["demo"] or not CTX["latest"] else (CTX["latest"].live if live else CTX["latest"].replay)
+                self._send(200, "application/json", json.dumps({"mode": "live" if live else "replay",
+                           "regions": regions_summary(load_regions(), latest, live, time.time(), CTX["stale_s"])}).encode())
             elif self.path == "/api/advisories":
                 self._send(200, "application/json", json.dumps(advisories_api()).encode())
             elif self.path == "/api/db":
