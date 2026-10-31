@@ -7,28 +7,47 @@
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark")}catch(e){document.documentElement.dataset.theme="dark"}</script>
 <link rel="stylesheet" href="/static/theme.css">
 </head>
-<body>
-<header>
-  <h1>Flood early-warning console</h1>
-  <span class="chip"><span class="dot" id="d-kafka"></span><span id="c-kafka">Kafka …</span></span>
-  <span class="chip"><span class="dot" id="d-brokers"></span><span id="c-brokers">brokers …</span></span>
-  <span class="chip"><span class="dot" id="d-urp"></span><span id="c-urp">under-replicated …</span></span>
-  <span class="chip"><span class="dot" id="d-dlq"></span><span id="c-dlq">dead letters …</span></span>
-  <span class="chip"><span class="dot" id="d-pg"></span><span id="c-pg">PostgreSQL …</span></span>
+<body class="landing on-map">
+<header id="hdr">
+  <button class="brand" id="brand" type="button" title="Back to the landing page"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 14.5c3-2 5.5-2 8.5 0s5.500 2 8.500 0" fill="none" stroke="currentColor" stroke-width="1.600"/></svg>Flood early warning</button>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tb-flow" aria-selected="false" data-tab="flow">Pipeline flow</button>
+    <button class="tab" role="tab" id="tb-map" aria-selected="false" data-tab="map">Map</button>
+    <button class="tab" role="tab" id="tb-data" aria-selected="false" data-tab="data">Readings &amp; alerts</button>
+    <button class="tab" role="tab" id="tb-metrics" aria-selected="false" data-tab="metrics">Metrics</button>
+    <button class="tab" role="tab" id="tb-agents" aria-selected="false" data-tab="agents">Agents</button>
+  </div>
+  <span class="chips">
+  <span class="chip" title="Kafka connection"><span class="dot" id="d-kafka"></span><span id="c-kafka">Kafka</span></span>
+  <span class="chip" title="Kafka brokers up"><span class="dot" id="d-brokers"></span><span id="c-brokers">brokers</span></span>
+  <span class="chip" title="Under-replicated and offline partitions"><span class="dot" id="d-urp"></span><span id="c-urp">URP</span></span>
+  <span class="chip" title="Messages in the dead-letter topic"><span class="dot" id="d-dlq"></span><span id="c-dlq">DLQ</span></span>
+  <span class="chip" title="PostgreSQL connection"><span class="dot" id="d-pg"></span><span id="c-pg">PG</span></span>
   <span class="chip" id="c-demo" style="display:none">DEMO DATA</span>
-  <span class="chip" id="c-clock" style="margin-left:auto">connecting…</span>
+  <span class="chip" id="c-clock">connecting…</span>
+  </span>
   <button class="themesw" id="theme-toggle" type="button" role="switch" aria-checked="true" aria-label="Dark theme" title="Switch between light (sun) and dark (moon)">
     <svg class="ico sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
     <svg class="ico moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.6A8.2 8.2 0 0 1 9.4 4 8.2 8.2 0 1 0 20 14.6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
     <span class="knob"></span></button>
 </header>
-<div class="alertbar" id="alert-bar" role="alert" hidden><span class="blink" aria-hidden="true">&#9650;</span><span id="alert-text"></span><button class="btn" id="alert-go" type="button">Review</button></div>
-<main>
-  <div class="tabs" role="tablist">
-    <button class="tab" role="tab" id="tb-flow" aria-selected="true" data-tab="flow">Pipeline flow</button>
-    <button class="tab" role="tab" id="tb-map" aria-selected="false" data-tab="map">Map</button>
-    <button class="tab" role="tab" id="tb-data" aria-selected="false" data-tab="data">Readings &amp; alerts</button>
+<div class="alertbar glass" id="alert-bar" role="status" hidden><span class="pulse" id="alert-dot" aria-hidden="true"></span><span id="alert-text"></span><button class="btn" id="alert-go" type="button">Review</button></div>
+<section id="landing" class="l-page" aria-label="Welcome">
+  <div class="l-hero">
+    <div class="l-kicker">Apache Kafka · stream processing · agentic AI</div>
+    <h2 class="l-title">Flood early warning</h2>
+    <p class="l-lead">Live river gauges, streamed through Kafka, forecast against official NWS flood categories. An alert goes out only after a person approves it.</p>
+    <div class="l-stats glass">
+      <div><b id="ls-areas">–</b><span>monitored area(s)</span></div>
+      <div><b id="ls-gauges">–</b><span>gauges</span></div>
+      <div><b id="ls-reporting">–</b><span>reporting live</span></div>
+      <div><b id="ls-pending">–</b><span>awaiting approval</span></div>
+    </div>
+    <div class="l-cta"><button class="l-go" id="l-enter" type="button">Enter the globe <span aria-hidden="true">→</span></button><button class="l-alt" id="l-flow" type="button">Pipeline flow</button></div>
   </div>
+  <div class="l-foot">Prototype, not an official warning · RVCE AI372IA and AI373TA</div>
+</section>
+<main>
   <div class="banner" id="banner"></div>
   <section id="tab-flow">
   <div class="canvas">
@@ -57,17 +76,17 @@
   </section>
 
   <section id="tab-map" hidden>
-    <div class="toolbar">
-      <span class="seg"><button id="m-live" aria-pressed="true">Live</button><button id="m-replay" aria-pressed="false">Replay (SIMULATION)</button></span>
-      <span class="seg"><button id="v-globe" aria-pressed="true">Globe</button><button id="v-2d" aria-pressed="false">2D</button><button id="v-3d" aria-pressed="false">3D</button></span>
-      <label class="tgl"><input type="checkbox" id="m-terrain"> Terrain</label>
-      <span class="note" id="map-note"></span>
-    </div>
     <div class="map3d" id="map3d">
       <canvas id="m-canvas" aria-label="Globe and map of every monitored gauge" role="img"></canvas>
       <div class="topbar">
-        <span>Flood early-warning · gauge network</span>
         <span class="proto">Prototype · not an official warning</span>
+        <span class="toolbar glass">
+          <span class="seg icons"><button id="v-globe" aria-pressed="true" aria-label="Globe view" title="Globe"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18M4.600 7h14.800M4.600 17h14.800"/></svg></button><button id="v-flat" aria-pressed="false" aria-label="Flat map view" title="Flat map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.500l6-2.500 6 2.500 6-2.500v13.500l-6 2.500-6-2.500-6 2.500z"/><path d="M9 4v13.500M15 6.500v13.500"/></svg></button></span>
+          <span class="seg"><button id="m-live" aria-pressed="true">Live</button><button id="m-replay" aria-pressed="false">Replay (SIMULATION)</button></span>
+          <label class="tgl"><input type="checkbox" id="m-tilt"> Tilt</label>
+          <label class="tgl"><input type="checkbox" id="m-terrain"> Terrain</label>
+          <label class="tgl"><input type="checkbox" id="m-imagery"> Satellite</label>
+        </span>
         <span class="tb-r"><span id="m-clock"></span><span class="status">Status <b id="m-status">NORMAL</b></span></span>
       </div>
       <div class="left">
@@ -80,6 +99,16 @@
           <label class="lrow"><input type="checkbox" data-layer="grid" checked><span>Graticule</span><em></em></label>
           <label class="lrow"><input type="checkbox" data-layer="labels" checked><span>Labels</span><em></em></label>
         </div>
+        <div class="glass panel">
+          <div class="ph">Official categories</div>
+          <div class="lkey"><i style="background:var(--s-normal)"></i>below action stage</div>
+          <div class="lkey"><i style="background:var(--s-action)"></i>action</div>
+          <div class="lkey"><i style="background:var(--s-minor)"></i>minor flood</div>
+          <div class="lkey"><i style="background:var(--s-moderate)"></i>moderate</div>
+          <div class="lkey"><i style="background:var(--s-major)"></i>major</div>
+          <div class="lkey"><i style="background:var(--s-nodata)"></i>no recent reading</div>
+          <div class="note" style="font-size:10.5px;margin-top:4px" title="Pillar height is the stage against that gauge's own official NWS major level. Ticks are the official stages. A dashed red beam is an open alert.">Pillar = stage vs that gauge's official major level; dashed red beam = open alert</div>
+        </div>
         <div class="glass panel brief"><div class="ph">Scene brief</div><div id="m-brief"></div></div>
       </div>
       <div class="side"><div class="glass card" id="m-card"></div><div class="glass glist" id="m-list"></div></div>
@@ -88,20 +117,12 @@
         <span class="dk"><span>Visual</span><span class="seg" id="m-presets">
           <button data-preset="standard" aria-pressed="true">Standard</button><button data-preset="night" aria-pressed="false">Night</button><button data-preset="mono" aria-pressed="false">Mono</button><button data-preset="thermal" aria-pressed="false">Thermal</button></span></span>
         <button class="btn" id="m-auto" aria-pressed="false" title="slow automatic rotation">Auto-rotate</button>
+        <span class="note" id="map-note"></span>
       </div>
       <div class="coords" id="m-coords"></div>
       <div class="tip" id="m-tip" hidden></div>
     </div>
     <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="f-thermal" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0.33 0.33 0.33 0 0  0 0 0 1 0"/><feComponentTransfer><feFuncR type="table" tableValues="0.02 0.12 0.45 0.85 0.98"/><feFuncG type="table" tableValues="0.02 0.05 0.12 0.55 0.92"/><feFuncB type="table" tableValues="0.10 0.35 0.40 0.10 0.65"/></feComponentTransfer></filter></svg>
-    <div class="legend">
-      <span><span class="gdot" style="display:inline-block;background:var(--s-normal)"></span>below action stage</span>
-      <span><span class="gdot" style="display:inline-block;background:var(--s-action)"></span>action</span>
-      <span><span class="gdot" style="display:inline-block;background:var(--s-minor)"></span>minor flood</span>
-      <span><span class="gdot" style="display:inline-block;background:var(--s-moderate)"></span>moderate</span>
-      <span><span class="gdot" style="display:inline-block;background:var(--s-major)"></span>major</span>
-      <span><span class="gdot" style="display:inline-block;background:var(--s-nodata)"></span>no recent reading</span>
-      <span>pillar height = stage against that gauge's own official NWS major level; ticks = official stages; dashed red beam = open alert</span>
-    </div>
   </section>
 
   <section id="tab-data" hidden>
@@ -114,6 +135,26 @@
     <table><thead><tr><th>Gauge</th><th>Window start</th><th>Mode</th><th>Readings</th><th>Stage (ft)</th><th>Rise (ft/h)</th><th>Rain 3 h</th></tr></thead><tbody id="db-win"></tbody></table>
     <h2>Alerts</h2>
     <table><thead><tr><th>Raised</th><th>Gauge</th><th>Mode</th><th>Category</th><th>Probability</th><th>Horizon (h)</th><th>Status</th><th>Delivered</th></tr></thead><tbody id="db-alerts"></tbody></table>
+  </section>
+
+  <section id="tab-metrics" hidden>
+    <h2 style="margin-top:4px">Throughput</h2>
+    <table><thead><tr><th>Topic</th><th class="r">Messages/s</th><th>Rate, since this page opened</th><th class="r">Total</th><th>Newest message</th></tr></thead><tbody id="mx-topics"><tr><td colspan="5" class="note">waiting for the first update…</td></tr></tbody></table>
+    <h2>Consumer lag</h2>
+    <table><thead><tr><th>Group</th><th class="r">Instances</th><th>State</th><th class="r">Lag (messages)</th><th>Lag, since this page opened</th></tr></thead><tbody id="mx-groups"></tbody></table>
+    <h2>Latency waterfall</h2>
+    <div class="note" style="margin-bottom:6px">From the latency_waterfall view. Live and replay stay apart, and gross and net of feed delay are separate rows. A stage with no timestamps yet reads "not measured yet", not zero. Bars use a log scale; read the figures for exact values.</div>
+    <div id="mx-water"></div>
+  </section>
+
+  <section id="tab-agents" hidden>
+    <h2 style="margin-top:4px">Agent graph</h2>
+    <div class="note" id="ag-note" style="margin-bottom:8px"></div>
+    <div class="canvas agraph" id="ag-graph"></div>
+    <h2>Time per agent, last run</h2>
+    <table><thead><tr><th>Agent</th><th class="r">Starts</th><th class="r">Time</th><th class="r">Tool calls</th><th class="r">Tokens</th><th>Verdict</th></tr></thead><tbody id="ag-agents"></tbody></table>
+    <h2>Events, last run (newest first, token stream left out)</h2>
+    <table><thead><tr><th>Time</th><th>Agent</th><th>Kind</th><th>Detail</th></tr></thead><tbody id="ag-events"></tbody></table>
   </section>
 </main>
 <script>
@@ -156,19 +197,19 @@ function fmtTime(ts){ return new Date(ts*1000).toLocaleTimeString([], {hour12:fa
 function setChip(id, cls, text){ document.getElementById("d-"+id).className = "dot "+cls; document.getElementById("c-"+id).textContent = text; }
 let lastMsg = 0;
 function render(v){
-  lastMsg = Date.now();
+  lastMsg = Date.now(); window.lastView = v; if (window.onMetrics) window.onMetrics(v.metrics);
   const bn = document.getElementById("banner");
   if (v.error) { bn.style.display="block"; bn.textContent = "Monitor error: "+v.error; return; }
   const c = v.cluster;
   bn.style.display = c.kafka_ok ? "none" : "block";
   if (!c.kafka_ok) bn.textContent = "Cannot reach Kafka" + (c.error ? ": "+c.error : "") + ". Is the stack up? (docker compose ps)";
-  setChip("kafka", c.kafka_ok?"ok":"down", c.kafka_ok?"Kafka reachable":"Kafka unreachable");
+  setChip("kafka", c.kafka_ok?"ok":"down", c.kafka_ok?"Kafka":"Kafka down");
   setChip("brokers", c.brokers_up>=c.brokers_expected?"ok":(c.brokers_up>0?"warn":"down"), `brokers ${c.brokers_up}/${c.brokers_expected}`);
-  setChip("urp", c.under_replicated+c.offline===0?"ok":(c.offline?"down":"warn"), `under-replicated ${c.under_replicated} · offline ${c.offline}`);
-  setChip("dlq", c.dlq>0?"warn":"ok", `dead letters ${c.dlq}`);
-  setChip("pg", c.pg===null?"":(c.pg?"ok":"down"), c.pg===null?"PostgreSQL ?":(c.pg?"PostgreSQL up":"PostgreSQL down"));
+  setChip("urp", c.under_replicated+c.offline===0?"ok":(c.offline?"down":"warn"), `URP ${c.under_replicated}${c.offline?" · offline "+c.offline:""}`);
+  setChip("dlq", c.dlq>0?"warn":"ok", `DLQ ${c.dlq.toLocaleString()}`);
+  setChip("pg", c.pg===null?"":(c.pg?"ok":"down"), c.pg===null?"PG ?":(c.pg?"PG":"PG down"));
   document.getElementById("c-demo").style.display = v.demo ? "inline-flex" : "none";
-  document.getElementById("c-clock").textContent = "updated " + fmtTime(v.ts);
+  document.getElementById("c-clock").textContent = fmtTime(v.ts);
   for (const id in v.nodes) {
     const n = v.nodes[id]; if (!nodeEls[id]) build(id, n);
     const e = nodeEls[id];
@@ -206,15 +247,17 @@ connect();
 setInterval(()=>{ if (lastMsg && Date.now()-lastMsg > 8000) document.getElementById("c-clock").textContent = "no update for " + Math.round((Date.now()-lastMsg)/1000) + " s"; }, 2000);
 
 // ---------------------------------------------------------------- tabs
-const TABS = ["flow","map","data"];
+const TABS = window.CONSOLE_TABS = ["flow","map","data","metrics","agents"];
 function showTab(t){
   for (const n of TABS){
     document.getElementById("tab-"+n).hidden = n!==t;
     document.getElementById("tb-"+n).setAttribute("aria-selected", n===t);
   }
+  document.body.classList.remove("landing"); document.body.classList.toggle("on-map", t==="map");
   try{ history.replaceState(null,"","#"+t); }catch(e){}
   if (window.Map3D) { if (t==="map") Map3D.show(); else Map3D.hide(); }
   if (t==="data") { loadDb(); if (typeof loadAdvisories==="function") loadAdvisories(); }
+  if (window.onTabShown) window.onTabShown(t);
 }
 document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>showTab(b.dataset.tab)));
 
@@ -270,9 +313,9 @@ async function loadAdvisories(){
     if(!d.ok){ box.innerHTML=`<div class="note">${esc(d.error)}</div>`; return; }
     box.innerHTML = d.advisories.length ? d.advisories.map(a=>{
       const pending=a.status==="draft", text=a.edited_text||a.text;
-      return `<div class="adv" style="border-top:3px solid var(--s-${esc(a.category)})">
-        <div class="advhead"><b>&#9650; ${esc(String(a.category).toUpperCase())}</b> · ${esc(a.site_no)} · ${a.mode==="SIMULATION"?"<b>SIMULATION</b>":esc(a.mode)} · v${esc(a.version)} (${esc(a.source)}) · <b>${esc(String(a.status).toUpperCase())}</b>
-          ${a.confidence==="uncertain"?"· <b>UNCERTAIN</b>":""}${a.reviewer_verdict?" · reviewer: "+esc(a.reviewer_verdict):""}
+      return `<div class="adv glass">
+        <div class="advhead"><b style="color:var(--s-${esc(a.category)})">${esc(a.category)} flood category</b> · ${esc(a.site_no)} · ${a.mode==="SIMULATION"?"<b>SIMULATION</b>":esc(a.mode)} · v${esc(a.version)} (${esc(a.source)}) · <b>${esc(a.status)}</b>
+          ${a.confidence==="uncertain"?"· <b>uncertain</b>":""}${a.reviewer_verdict?" · reviewer: "+esc(a.reviewer_verdict):""}
           ${a.delivered_at?" · delivered "+fmtDT(a.delivered_at):""}</div>
         ${pending?`<textarea id="ta-${esc(a.advisory_id)}" rows="7" onfocus="advEditing=true">${esc(text)}</textarea>
           <button class="go" id="ap-${esc(a.advisory_id)}" onclick="advAct('${esc(a.advisory_id)}','approve')">Approve</button>
@@ -284,7 +327,6 @@ async function loadAdvisories(){
   }catch(e){ box.innerHTML=`<div class="note">cannot reach the console server</div>`; }
 }
 setInterval(()=>{ if(!document.getElementById("tab-data").hidden) loadAdvisories(); },5000);
-{ const h=(location.hash||"").slice(1); if(TABS.includes(h)&&h!=="flow") showTab(h); }
 </script>
 <script>
 (function(){
@@ -309,7 +351,8 @@ setInterval(()=>{ if(!document.getElementById("tab-data").hidden) loadAdvisories
       const pend=d.advisories.filter(a=>a.status==="draft");
       if(!pend.length){ bar.hidden=true; document.title=base; return; }
       const top=pend[0], sim=pend.every(a=>a.mode==="SIMULATION");
-      txt.textContent=` ${pend.length} ADVISORY${pend.length>1?" ARE":" IS"} AWAITING APPROVAL · ${String(top.category).toUpperCase()} FLOOD CATEGORY FORECAST · ${top.site_no}`+(sim?" · SIMULATION":"");
+      txt.textContent=`${pend.length} ${pend.length>1?"advisories":"advisory"} awaiting approval · ${top.category} flood category forecast · ${top.site_no}`+(sim?" · SIMULATION":"");
+      document.getElementById("alert-dot").style.background=`var(--s-${top.category})`;
       bar.hidden=false; document.title="("+pend.length+") "+base;
     }catch(e){}
   }
@@ -318,5 +361,7 @@ setInterval(()=>{ if(!document.getElementById("tab-data").hidden) loadAdvisories
 </script>
 <script src="/static/globe.js"></script>
 <script src="/static/map3d.js"></script>
+<script src="/static/console_tabs.js"></script>
+<script src="/static/landing.js"></script>
 </body>
 </html>

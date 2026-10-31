@@ -122,3 +122,28 @@ def test_regions_load_and_summarise(tmp_path):
 def test_missing_regions_file_falls_back_to_the_default_network():
     from dashboard import flow_monitor as fm
     assert fm.load_regions("no/such/file.json")[0]["id"] == "default"
+
+
+def test_build_view_carries_throughput_and_lag_for_the_metrics_tab():
+    raw = {"ts": 100.0, "topics": {"gauge.usgs": {"total": 5, "rate": 1.5, "last_ts": 90.0}},
+           "groups": {"postgres-sink": {"members": 1, "state": "Stable", "lag": 7}}}
+    m = fm.build_view(raw)["metrics"]
+    assert m["topics"] == [{"name": "gauge.usgs", "rate": 1.5, "total": 5, "age_s": 10.0}]
+    assert m["groups"] == [{"id": "postgres-sink", "members": 1, "state": "Stable", "lag": 7}]
+
+
+def test_agent_run_view_sums_time_tools_tokens_and_keeps_the_last_verdict():
+    ev = [{"agent": "writer", "kind": "start", "detail": {}}, {"agent": "writer", "kind": "end", "detail": {"ms": 100, "tokens": 50}},
+          {"agent": "reviewer", "kind": "verdict", "detail": {"verdict": "fail"}}, {"agent": "writer", "kind": "start", "detail": None},
+          {"agent": "writer", "kind": "end", "detail": {"ms": 200, "tokens": 25}}, {"agent": "writer", "kind": "revision", "detail": {}},
+          {"agent": "reviewer", "kind": "verdict", "detail": {"verdict": "pass"}}, {"agent": "context", "kind": "tool_call", "detail": {}}]
+    v = fm.agent_run_view(ev)
+    a = {x["agent"]: x for x in v["agents"]}
+    assert a["writer"]["starts"] == 2 and a["writer"]["ms"] == 300 and a["writer"]["tokens"] == 75
+    assert a["reviewer"]["verdict"] == "pass" and a["context"]["tool_calls"] == 1 and v["revisions"] == 1 and v["disagreements"] == 0
+
+
+def test_planned_region_has_no_gauges_and_is_marked(tmp_path):
+    regs = [{"id": "x", "name": "X", "lat": 1, "lon": 2, "gauges_csv": str(tmp_path / "missing.csv"), "planned": True}]
+    out = fm.regions_summary(regs, {}, True, 0.0)
+    assert out[0]["planned"] is True and out[0]["n_gauges"] == 0 and out[0]["worst"] == "nodata"

@@ -17,8 +17,9 @@ received a message recently (the live USGS producer sends a heartbeat on every p
 Nodes whose consumer group does not exist yet (forecaster, agent, notifier) show as "not running";
 that is the build progress, not an error.
 
-Tabs: Pipeline flow (above) | Map (every gauge's newest stage against its official flood levels,
-live or replay) | Readings and alerts (latest windows and alerts from PostgreSQL, filled once the sink exists).
+Opens on a landing page that moves into the globe. Tabs: Pipeline flow (above) | Map (globe and flat world map: every
+gauge's newest stage against its official flood levels, live or replay) | Readings and alerts (latest windows and alerts
+from PostgreSQL) | Metrics (throughput, lag, latency waterfall) | Agents (graph and the last run from agent_events).
 The map needs config/gauge_locations.csv:  python -m tools.gauge_locations
 
 Read-only for Kafka monitoring (throwaway consumers and the admin API, no offsets committed). The one write path is
@@ -202,7 +203,11 @@ def build_view(raw: dict, live_stale_s: float = 900.0, lag_warn: int = 500) -> d
         "dlq": dlq_tot,
         "pg": None if raw.get("pg") is None else bool(raw["pg"].get("ok")),
     }
-    return {"ts": now, "nodes": nodes, "edges": edges, "cluster": cluster}
+    metrics = {"topics": [{"name": t, "rate": round(v.get("rate", 0.0), 3), "total": v.get("total", 0),
+                           "age_s": (now - v["last_ts"]) if v.get("last_ts") else None} for t, v in sorted(topics.items())],
+               "groups": [{"id": g, "members": v.get("members", 0), "state": v.get("state", ""), "lag": v.get("lag", 0)}
+                          for g, v in sorted(groups.items())]}
+    return {"ts": now, "nodes": nodes, "edges": edges, "cluster": cluster, "metrics": metrics}
 
 
 class EventLog:
@@ -343,7 +348,8 @@ REGIONS_JSON = os.path.join(os.path.dirname(HERE), "config", "regions.json")
 
 def load_regions(path: str = REGIONS_JSON) -> list[dict]:
     """Monitored areas shown on the globe. Add an entry (and its gauge CSV, same columns as gauge_locations.csv) to monitor
-    another area; fields: id, name, provider, lat, lon, gauges_csv (relative to the repo root), enabled."""
+    another area; fields: id, name, provider, lat, lon, gauges_csv (relative to the repo root), enabled, planned (shown
+    as a hollow marker: nothing is monitored there yet)."""
     try:
         with open(path, encoding="utf-8") as f:
             regs = json.load(f)
@@ -367,7 +373,8 @@ def regions_summary(regions: list[dict], latest: dict, live: bool, now: float, s
         worst = max((g["status"] for g in gs), key=lambda k: sev.get(k, 0), default="nodata")
         out.append({"id": r["id"], "name": r["name"], "provider": r.get("provider", ""), "lat": r["lat"], "lon": r["lon"],
                     "n_gauges": len(gs), "n_reporting": sum(1 for g in gs if g["stage"] is not None),
-                    "n_flooding": sum(1 for g in gs if sev.get(g["status"], 0) >= 3), "worst": worst})
+                    "n_flooding": sum(1 for g in gs if sev.get(g["status"], 0) >= 3), "worst": worst,
+                    "planned": bool(r.get("planned"))})
     return out
 
 
@@ -521,6 +528,84 @@ def advisories_api() -> dict:
         return {"ok": False, "error": (str(e).strip().splitlines() or ["error"])[0][:120]}
 
 
+WATERFALL_STAGES = [("feed_delay_s", "Feed delay"), ("ingest_s", "Ingest"), ("windowing_s", "Windowing"),
+                    ("forecast_s", "Forecast"), ("alert_s", "Alert"), ("human_s", "Human approval"), ("delivery_s", "Delivery"),
+                    ("net_total_s", "Total, net of feed delay"), ("gross_total_s", "Total, gross")]
+
+
+def metrics_api() -> dict:
+    """Latency per pipeline stage from the latency_waterfall view, live and replay kept apart: median, p95 and how many
+    traces have that stage measured (a stage nobody measured stays n = 0, never 0 seconds)."""
+    if CTX["demo"]:
+        return {"ok": True, "waterfall": []}
+    try:
+        conn = pg_conn()
+        try:
+            out = []
+            with conn.cursor() as cur:
+                cur.execute("SELECT mode, count(*) FROM latency_waterfall GROUP BY mode ORDER BY mode")
+                for mode, traces in cur.fetchall():
+                    stages = []
+                    for col, label in WATERFALL_STAGES:      # column names come from the constant above, never from a request
+                        cur.execute(f"SELECT count({col}), percentile_cont(0.5) WITHIN GROUP (ORDER BY {col}), "
+                                    f"percentile_cont(0.95) WITHIN GROUP (ORDER BY {col}) FROM latency_waterfall WHERE mode = %s", (mode,))
+                        n, med, p95 = cur.fetchone()
+                        stages.append({"id": col, "label": label, "n": n, "median_s": med, "p95_s": p95})
+                    out.append({"mode": mode, "traces": traces, "stages": stages})
+            return {"ok": True, "waterfall": out}
+        finally:
+            conn.close()
+    except Exception as e:
+        return {"ok": False, "error": (str(e).strip().splitlines() or ["error"])[0][:120]}
+
+
+def agent_run_view(events: list[dict]) -> dict:
+    """Events of one run -> per agent: visited, time taken (from `end` events), tool calls, tokens, last verdict and attempts."""
+    agents: dict[str, dict] = {}
+    for e in events:
+        a = agents.setdefault(e["agent"], {"agent": e["agent"], "starts": 0, "ms": 0, "tool_calls": 0, "tokens": 0, "verdict": None})
+        d = e.get("detail") or {}
+        if e["kind"] == "start":
+            a["starts"] += 1
+        elif e["kind"] == "end":
+            a["ms"] += d.get("ms") or 0
+            a["tokens"] += d.get("tokens") or 0
+        elif e["kind"] == "tool_call":
+            a["tool_calls"] += 1
+        elif e["kind"] == "verdict":
+            a["verdict"] = d.get("verdict")
+    return {"agents": list(agents.values()), "disagreements": sum(1 for e in events if e["kind"] == "disagreement"),
+            "revisions": sum(1 for e in events if e["kind"] == "revision")}
+
+
+def agents_api() -> dict:
+    """The newest run in agent_events, without the writer's token stream (read-only)."""
+    if CTX["demo"]:
+        return {"ok": True, "run": None}
+    try:
+        conn = pg_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT run_id, alert_id, started_at, ended_at, duration_s, events, tool_calls, review_rounds, last_verdict "
+                            "FROM agent_run_summary ORDER BY ended_at DESC LIMIT 1")
+                row = cur.fetchone()
+                if not row:
+                    return {"ok": True, "run": None}
+                cols = [d[0] for d in cur.description]
+                run = {k: (v.isoformat() if hasattr(v, "isoformat") else (float(v) if k == "duration_s" and v is not None else v)) for k, v in zip(cols, row)}
+                cur.execute("SELECT mode FROM alerts WHERE alert_id = %s", (run["alert_id"],))
+                m = cur.fetchone()
+                run["mode"] = m[0] if m else None
+                cur.execute("SELECT agent, kind, detail, ts FROM agent_events WHERE run_id = %s ORDER BY event_id", (run["run_id"],))
+                events = [{"agent": a, "kind": k, "detail": d, "ts": t.isoformat()} for a, k, d, t in cur.fetchall()]
+            return {"ok": True, "run": run, **agent_run_view(events),
+                    "events": [e for e in events if e["kind"] != "token_chunk"][-80:]}
+        finally:
+            conn.close()
+    except Exception as e:
+        return {"ok": False, "error": (str(e).strip().splitlines() or ["error"])[0][:120]}
+
+
 def demo_gauges(t: float):
     """Fake gauges around the Texas Hill Country for --demo when config/gauge_locations.csv is missing."""
     locs, latest = [], {}
@@ -647,6 +732,10 @@ def make_handler():
                 latest = {} if CTX["demo"] or not CTX["latest"] else (CTX["latest"].live if live else CTX["latest"].replay)
                 self._send(200, "application/json", json.dumps({"mode": "live" if live else "replay",
                            "regions": regions_summary(load_regions(), latest, live, time.time(), CTX["stale_s"])}).encode())
+            elif self.path == "/api/metrics":
+                self._send(200, "application/json", json.dumps(metrics_api()).encode())
+            elif self.path == "/api/agents":
+                self._send(200, "application/json", json.dumps(agents_api(), default=str).encode())
             elif self.path == "/api/advisories":
                 self._send(200, "application/json", json.dumps(advisories_api()).encode())
             elif self.path == "/api/db":
