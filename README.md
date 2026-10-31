@@ -97,7 +97,7 @@ Only measured results are listed. Source: commit messages and `docs/breadcrumbs/
 | MRMS rain producer, rain in windows | not built (S2) | MRMS decode checked on real files (10 km circle = 294 cells) |
 | India data study | loader, audit and Table 1 code done | no real-data numbers yet |
 | Power BI | not built yet | |
-| Tests | `pytest -q` | 184 passed, 20 skipped without a test database (Python 3.12, 31 Oct 2026) |
+| Tests | `pytest -q` | 184 passed + 20 skipped without a test database; 204 passed with PostgreSQL 16 (Python 3.12, 31 Oct 2026) |
 
 The bar any model must beat is the rise-rate baseline from the EDA. At 3 h its F1 is 0.65 at DRWT2, 0.26 at LCPT2,
 0.64 at JNCT2 and 0.41 at AHOT2, with under 1 to 2 h of warning (`FAQ.md`). DEWS is not compared with, and makes no
@@ -109,7 +109,7 @@ Windows, PowerShell, from the repo root. Docker Desktop and Python 3.12 are need
 macOS, are in [Setup](docs/guide/02-setup.md).
 
 ```powershell
-python -m venv .venv; .venv\Scripts\Activate.ps1
+py -3.12 -m venv .venv; .venv\Scripts\Activate.ps1
 python -m pip install -U pip setuptools wheel
 pip install -r requirements-dev.txt          # everything: pipeline, ML, agents, tests
 pytest -q                                    # all green; database tests skip without AGENTS_TEST_DSN
