@@ -42,3 +42,37 @@ def test_distinct_storms_clusters_nearby_crossings():
     H = 3600
     assert harness.distinct_storms([0, 5 * H, 100 * H, 110 * H, 300 * H]) == 3
     assert harness.distinct_storms([]) == 0
+
+
+def test_equal_action_and_minor_is_not_skipped():
+    eq = {**CATS, "action": CATS["minor"]}            # like DRWT2: action 5.5 = minor 5.5
+    r = harness.evaluate_model({"E": SLOW}, {"E": eq}, "rise_rate", baselines.rise_rate, 3.0, "t")
+    assert r[0]["site_no"] == "E" and "crossings=4" in r[0]["notes"] and r[0]["recall"] > 0
+
+
+def test_numpy_path_matches_generic_and_backtest():
+    from ml import backtest
+    prep = harness.prepare(SLOW, CATS)
+    fast = harness.collect(prep, baselines.rise_rate, 3.0)
+    slow = harness.collect(prep, lambda a, h: baselines.rise_rate(a, h), 3.0)       # generic python path
+    assert fast["alerts"] == slow["alerts"] and (fast["f"] == slow["f"]).all()
+    bt = backtest.run(SLOW, CATS, "minor", 3.0, "rise_rate")
+    assert len(fast["alerts"]) == bt["alerts"]
+
+
+def test_reference_table_and_gauge_filter(tmp_path):
+    rows = [{"site_no": "08158700", "model": "rise_rate", "horizon_h": 3.0, "f1": 0.60},
+            {"site_no": "08158700", "model": "persistence", "horizon_h": 3.0, "f1": 0.0}]
+    t = harness.reference_table(rows, {"08158700": "DRWT2"})
+    assert len(t) == 1 and t[0][0] == "DRWT2" and abs(t[0][3] - (-0.05)) < 1e-9
+    from ml import gauges
+
+    def loader(s, a, b):
+        if s != "1":
+            raise SystemExit("no cache")
+        return SLOW
+    g = tmp_path / "g.csv"
+    g.write_text("site_no,lid,action,minor,moderate,major\n1,AAA,6,6,11,14\n2,BBB,6,8,11,14\n3,CCC,,8,11,14\n")
+    got = gauges.load_gauges(str(g), None, "2015-01-01", "2025-12-31", "d", loader)
+    assert [x["lid"] for x in got] == ["AAA"]                       # equal action/minor kept; no-data and missing skipped
+    assert [x["lid"] for x in gauges.load_gauges(str(g), "aaa", "a", "b", "d", loader)] == ["AAA"]

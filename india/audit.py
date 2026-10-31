@@ -47,10 +47,6 @@ def audit_station(readings: list[dict], threshold: float | None) -> dict:
     return out
 
 
-def audit_all(readings_by_site: dict[str, list[dict]], minor_by_site: dict[str, float | None]) -> list[dict]:
-    return [audit_station(rs, minor_by_site.get(site)) for site, rs in readings_by_site.items()]
-
-
 def write_csv(rows: list[dict], path: str) -> None:
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as f:
@@ -60,9 +56,11 @@ def write_csv(rows: list[dict], path: str) -> None:
 
 
 def main(argv=None):
-    from producers.replay_producer import load_readings
+    from ml.gauges import load_gauges
+    from ml.progress import Timer, bar
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--gauges", default="config/gauge_locations.csv")
+    p.add_argument("--gauges-only", help="comma list of NWPS ids or site numbers")
     p.add_argument("--start", default="2015-01-01")
     p.add_argument("--end", default="2025-12-31")
     p.add_argument("--out", default="india/figures/audit_us.csv")
@@ -70,17 +68,20 @@ def main(argv=None):
     a = p.parse_args(argv)
     if a.data_dir:
         config.DATA_DIR = a.data_dir
-    rbs, minor = {}, {}
-    with open(a.gauges, encoding="utf-8") as f:
-        for g in csv.DictReader(f):
-            try:
-                rbs[g["site_no"]] = load_readings(g["site_no"], a.start, a.end)
-                minor[g["site_no"]] = float(g["minor"]) if g["minor"] else None
-            except (SystemExit, ValueError):
-                print(f"skip {g['site_no']}: no cached data")
-    rows = audit_all(rbs, minor)
+    timer = Timer()
+    print(f"india.audit: auditing cached USGS series {a.start}..{a.end} from {config.DATA_DIR}/raw/usgs -> {a.out}")
+    gauges = load_gauges(a.gauges, a.gauges_only, a.start, a.end, config.DATA_DIR)
+    if not gauges:
+        raise SystemExit(f"ERROR: 0 gauges audited, nothing written. Reasons are listed above (skip lines); "
+                         f"data dir = {config.DATA_DIR}/raw/usgs, gauge list = {a.gauges}")
+    rows = []
+    for g in bar(gauges, "stations"):
+        r = audit_station(g["readings"], g["cats"]["minor"])
+        rows.append(r)
+        print(f"  {r['site_no']} {g['lid']}: interval {r['interval_min']} min, {r['archive_days']:.0f} days, "
+              f"missing {r['missing_pct']:.1f}%, longest gap {r['longest_gap_h']} h, events {r['events']}")
     write_csv(rows, a.out)
-    print(f"{len(rows)} stations -> {a.out}")
+    print(f"done: {len(rows)} stations -> {a.out} in {timer.elapsed()}")
 
 
 if __name__ == "__main__":

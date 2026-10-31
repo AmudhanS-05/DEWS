@@ -20,6 +20,6 @@ presentations/
 # personal working notes: kept locally, commit only when decided
 BREADCRUMBS.md
 PROJECT_LOG.md
-# large ML outputs are regenerated, never committed
+# ML outputs: large, regenerable (small summary CSVs are force-added: ml/figures/baselines.csv)
 ml/figures/*.csv
 ml/figures/*.parquet

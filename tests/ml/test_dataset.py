@@ -50,3 +50,15 @@ def test_event_weights_equalise_gauges():
     w = dataset.event_weights(pooled)
     tot = {s: sum(wi for wi, x in zip(w, pooled) if x["site_no"] == s) for s in ("SYN1", "B")}
     assert abs(tot["SYN1"] - tot["B"]) < 0.5 * max(tot.values()) and all(v > 0 for v in tot.values())
+
+
+def test_cli_writes_parquet(tmp_path, monkeypatch):
+    import pytest
+    pd = pytest.importorskip("pandas")
+    pytest.importorskip("pyarrow")
+    from ml import gauges
+    monkeypatch.setattr(gauges, "load_gauges", lambda *a, **k: [{"site_no": "SYN1", "lid": "X", "cats": CATS, "readings": RS}])
+    out = tmp_path / "d.parquet"
+    dataset.main(["--out", str(out)])
+    df = pd.read_parquet(out)
+    assert len(df) == len(rows()) and df["t"].is_monotonic_increasing and "y_cross_3" in df

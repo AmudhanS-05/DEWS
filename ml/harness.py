@@ -10,12 +10,18 @@ alerts against observed crossings with ml/evaluate.py. Three views per model and
 Lead time is reported gross and net of the feed delay (`feed_delay_h`, default 1 h) in `notes`; `data_source` is
 "replay" and rows are never merged with live. `notes` also carries the number of crossings and distinct storms
 (crossings of different gauges closer than `storm_gap_h` count as one storm).
+
+Speed: windows (streams/windowing.py, unchanged) and crossings are built ONCE per gauge by `prepare`, then reused for
+every model and horizon; the two built-in baselines are evaluated with numpy.
+
+    python -m ml.harness [--data-dir D] [--gauges-only DRWT2,LCPT2,JNCT2,AHOT2] --horizons 1,2,3,4,5,6
 """
 from __future__ import annotations
 
-import bisect
 import csv
 from statistics import median
+
+import numpy as np
 
 from common import config, hydro
 from ml import baselines, evaluate
@@ -24,28 +30,50 @@ from ml.dataset import primary_series
 
 COLUMNS = ["run_label", "data_source", "site_no", "model", "horizon_h", "precision", "recall", "f1",
            "false_alarms", "median_lead_time_h", "mae_ft", "rmse_ft", "notes"]
+# Rise-rate 3 h F1 per gauge from FAQ.md ("Baselines"); the harness prints measured vs these, it never tunes to them.
+REFERENCE_F1 = {"DRWT2": 0.65, "LCPT2": 0.26, "JNCT2": 0.64, "AHOT2": 0.41}
 
 
-def collect(readings: list[dict], cats: dict, forecast_fn, horizon_h: float, category: str = "minor",
-            w: int = config.WINDOW_SECONDS, cooldown_h: float = 6.0, slow_rise_h: float = 3.0) -> dict:
-    """Raw alerts, crossings (with slow flag) and stage pairs for one gauge."""
+def prepare(readings: list[dict], cats: dict, category: str = "minor", w: int = config.WINDOW_SECONDS,
+            slow_rise_h: float = 3.0) -> dict:
+    """Everything that does not depend on the model or horizon, computed once per gauge."""
     rs = primary_series(readings)
     series = sorted((r["reading_ts"], r["value"]) for r in rs)
-    times = [t for t, _ in series]
-    thr = cats[category]
-    alerts, pairs, last = [], [], -1e18
-    for agg in windows_from_readings(rs, w):
-        t, cur = agg["window_start_ts"] + w, agg["stage_last"]
-        f = forecast_fn(agg, horizon_h)
-        j = bisect.bisect_left(times, t + horizon_h * 3600)
-        if f is not None and j < len(series):
-            pairs.append((f, series[j][1]))
-        if f is not None and cur is not None and f >= thr > cur and t - last >= cooldown_h * 3600:
-            alerts.append((t, category))
-            last = t
-    crossings = [(series[i][0], category, hydro.rise_time_h(series, i) >= slow_rise_h)
-                 for i in hydro.find_crossings(series, thr)]
-    return {"alerts": alerts, "crossings": crossings, "pairs": pairs, "site": str(rs[0]["site_no"]) if rs else ""}
+    aggs = windows_from_readings(rs, w)
+    nan = np.nan
+    return {
+        "site": str(rs[0]["site_no"]) if rs else "", "thr": cats[category], "category": category, "aggs": aggs,
+        "times": np.array([t for t, _ in series], dtype=float), "vals": np.array([v for _, v in series], dtype=float),
+        "t": np.array([a["window_start_ts"] + w for a in aggs], dtype=float),
+        "cur": np.array([nan if a["stage_last"] is None else a["stage_last"] for a in aggs], dtype=float),
+        "rr": np.array([nan if a["rise_rate_ft_per_h"] is None else a["rise_rate_ft_per_h"] for a in aggs], dtype=float),
+        "crossings": [(series[i][0], category, hydro.rise_time_h(series, i) >= slow_rise_h)
+                      for i in hydro.find_crossings(series, cats[category])],
+    }
+
+
+def _forecasts(prep: dict, fn, h: float) -> np.ndarray:
+    cur, rr = prep["cur"], prep["rr"]
+    if fn is baselines.persistence:
+        return cur
+    if fn is baselines.rise_rate:                      # numpy twin of baselines.rise_rate (damping 1.0)
+        return np.where(np.isnan(cur), np.nan, np.where(np.isnan(rr) | (rr <= 0), cur, cur + rr * h))
+    return np.array([np.nan if (f := fn(a, h)) is None else f for a in prep["aggs"]], dtype=float)
+
+
+def collect(prep: dict, forecast_fn, horizon_h: float, cooldown_h: float = 6.0) -> dict:
+    """Alerts and (forecast, observed) stage pairs for one prepared gauge."""
+    t, cur, thr = prep["t"], prep["cur"], prep["thr"]
+    f = _forecasts(prep, forecast_fn, horizon_h)
+    j = np.searchsorted(prep["times"], t + horizon_h * 3600, side="left")
+    ok = ~np.isnan(f) & (j < len(prep["vals"]))
+    obs = prep["vals"][np.minimum(j, len(prep["vals"]) - 1)] if len(prep["vals"]) else f
+    alerts, last = [], -1e18
+    for i in np.nonzero(~np.isnan(f) & ~np.isnan(cur) & (f >= thr) & (thr > cur))[0]:   # cooldown over candidates only
+        if t[i] - last >= cooldown_h * 3600:
+            alerts.append((float(t[i]), prep["category"]))
+            last = t[i]
+    return {"alerts": alerts, "crossings": prep["crossings"], "f": f[ok], "obs": obs[ok]}
 
 
 def _slow_only(alerts, crossings, horizon_h):
@@ -60,65 +88,86 @@ def distinct_storms(crossing_ts: list[float], storm_gap_h: float = 24.0) -> int:
     return sum(1 for i, t in enumerate(ts) if i == 0 or t - ts[i - 1] > storm_gap_h * 3600)
 
 
-def _row(label, site, model, h, alerts, crossings, pairs, feed_delay_h, extra=""):
-    res = evaluate.score_alerts(alerts, [(t, c) for t, c, _ in crossings], h)
-    err = evaluate.stage_errors(pairs)
-    lead = evaluate.report_lead_times(res["lead_times_h"], [feed_delay_h] * len(res["lead_times_h"]))
-    fmt = lambda x: "NA" if x is None else f"{x:.2f}"
-    notes = (f"crossings={res['crossings']} detected={res['detected']} alerts={res['alerts']} "
-             f"storms={distinct_storms([t for t, _, _ in crossings])} lead_gross_h={fmt(lead['gross_median_h'])} "
-             f"lead_net_h={fmt(lead['net_median_h'])} (feed delay {feed_delay_h:g} h){extra}")
+def _errors(f: np.ndarray, o: np.ndarray) -> dict:
+    if not len(f):
+        return {"mae": None, "rmse": None}
+    e = f - o
+    return {"mae": float(np.abs(e).mean()), "rmse": float(np.sqrt((e * e).mean()))}
+
+
+def _fmt(x):
+    return "NA" if x is None else f"{x:.2f}"
+
+
+def _f1(p, r):
+    if p is None or r is None:
+        return None
+    return 2 * p * r / (p + r) if p + r > 0 else 0.0
+
+
+def _scored_row(label, site, model, h, parts, feed_delay_h):
+    """parts: list of (alerts, crossings, f, obs), one per gauge; counts are summed (alerts never match across gauges)."""
+    tp = fa = det = n_cross = n_alert = 0
+    leads, cross_ts = [], []
+    for alerts, cross, _, _ in parts:
+        r = evaluate.score_alerts(alerts, [(t, c) for t, c, _ in cross], h)
+        tp += r["true_positive_alerts"]; fa += r["false_alarms"]; det += r["detected"]
+        n_cross += r["crossings"]; n_alert += r["alerts"]; leads += r["lead_times_h"]
+        cross_ts += [t for t, _, _ in cross]
+    prec = tp / n_alert if n_alert else None
+    rec = det / n_cross if n_cross else None
+    err = _errors(np.concatenate([p[2] for p in parts]), np.concatenate([p[3] for p in parts])) if parts else _errors(np.array([]), np.array([]))
+    gross = median(leads) if leads else None
+    net = median([l - feed_delay_h for l in leads]) if leads else None
+    notes = (f"crossings={n_cross} detected={det} alerts={n_alert} storms={distinct_storms(cross_ts)} "
+             f"lead_gross_h={_fmt(gross)} lead_net_h={_fmt(net)} (feed delay {feed_delay_h:g} h)")
     return {"run_label": label, "data_source": "replay", "site_no": site, "model": model, "horizon_h": h,
-            "precision": res["precision"], "recall": res["recall"], "f1": res["f1"],
-            "false_alarms": res["false_alarms"], "median_lead_time_h": res["median_lead_time_h"],
-            "mae_ft": err["mae"], "rmse_ft": err["rmse"], "notes": notes}
+            "precision": prec, "recall": rec, "f1": _f1(prec, rec), "false_alarms": fa,
+            "median_lead_time_h": gross, "mae_ft": err["mae"], "rmse_ft": err["rmse"], "notes": notes}
+
+
+def evaluate_prepared(preps: dict[str, dict], model: str, forecast_fn, horizon_h: float, label: str,
+                      feed_delay_h: float = 1.0) -> list[dict]:
+    collected = {s: collect(p, forecast_fn, horizon_h) for s, p in preps.items()}
+    parts = {s: (c["alerts"], c["crossings"], c["f"], c["obs"]) for s, c in collected.items()}
+    rows = [_scored_row(label, s, model, horizon_h, [pt], feed_delay_h) for s, pt in parts.items()]
+    rows.append(_scored_row(label, "POOLED", model, horizon_h, list(parts.values()), feed_delay_h))
+    slow = []
+    for a, cr, f, o in parts.values():
+        sa, sc = _slow_only(a, cr, horizon_h)
+        slow.append((sa, sc, f, o))
+    rows.append(_scored_row(label, "POOLED-SLOW", model, horizon_h, slow, feed_delay_h))
+    return rows
 
 
 def evaluate_model(readings_by_site: dict[str, list[dict]], cats_by_site: dict[str, dict], model: str,
                    forecast_fn, horizon_h: float, label: str, category: str = "minor",
                    feed_delay_h: float = 1.0, slow_rise_h: float = 3.0) -> list[dict]:
+    preps = {s: prepare(rs, cats_by_site[s], category, slow_rise_h=slow_rise_h) for s, rs in readings_by_site.items()}
+    return evaluate_prepared(preps, model, forecast_fn, horizon_h, label, feed_delay_h)
+
+
+def run_baselines(readings_by_site, cats_by_site, horizons=(3.0,), label="baseline", progress=None, **kw) -> list[dict]:
+    prog = progress or (lambda it, desc, total=None: it)
+    preps = {s: prepare(rs, cats_by_site[s], **{k: v for k, v in kw.items() if k in ("category", "slow_rise_h")})
+             for s, rs in prog(readings_by_site.items(), "windows per gauge", len(readings_by_site))}
+    delay = kw.get("feed_delay_h", 1.0)
     rows = []
-    for site, rs in readings_by_site.items():
-        c = collect(rs, cats_by_site[site], forecast_fn, horizon_h, category, slow_rise_h=slow_rise_h)
-        rows.append(_row(label, site, model, horizon_h, c["alerts"], c["crossings"], c["pairs"], feed_delay_h))
-    rows.append(_pooled(label, "POOLED", model, horizon_h, readings_by_site, cats_by_site, forecast_fn,
-                        category, feed_delay_h, slow_rise_h, slow=False))
-    rows.append(_pooled(label, "POOLED-SLOW", model, horizon_h, readings_by_site, cats_by_site, forecast_fn,
-                        category, feed_delay_h, slow_rise_h, slow=True))
+    combos = [(n, fn, h) for n, fn in baselines.BASELINES.items() for h in horizons]
+    for name, fn, h in prog(combos, "model x horizon", len(combos)):
+        rows += evaluate_prepared(preps, name, fn, h, label, delay)
     return rows
 
 
-def _pooled(label, site_name, model, h, rbs, cbs, fn, category, delay, slow_rise_h, slow):
-    """Micro-average: score each gauge separately, then add the counts (alerts never match across gauges)."""
-    tp = fa = det = n_cross = n_alert = 0
-    leads, pairs, cross_ts = [], [], []
-    for site, rs in rbs.items():
-        c = collect(rs, cbs[site], fn, h, category, slow_rise_h=slow_rise_h)
-        a, cr = (_slow_only(c["alerts"], c["crossings"], h) if slow else (c["alerts"], c["crossings"]))
-        r = evaluate.score_alerts(a, [(t, k) for t, k, _ in cr], h)
-        tp += r["true_positive_alerts"]; fa += r["false_alarms"]; det += r["detected"]
-        n_cross += r["crossings"]; n_alert += r["alerts"]; leads += r["lead_times_h"]; pairs += c["pairs"]
-        cross_ts += [t for t, _, _ in cr]
-    prec = tp / n_alert if n_alert else None
-    rec = det / n_cross if n_cross else None
-    f1 = 2 * prec * rec / (prec + rec) if prec and rec else (0.0 if prec is not None and rec is not None else None)
-    err = evaluate.stage_errors(pairs)
-    gross = median(leads) if leads else None
-    net = median([l - delay for l in leads]) if leads else None
-    fmt = lambda x: "NA" if x is None else f"{x:.2f}"
-    notes = (f"crossings={n_cross} detected={det} alerts={n_alert} storms={distinct_storms(cross_ts)} "
-             f"lead_gross_h={fmt(gross)} lead_net_h={fmt(net)} (feed delay {delay:g} h)")
-    return {"run_label": label, "data_source": "replay", "site_no": site_name, "model": model, "horizon_h": h,
-            "precision": prec, "recall": rec, "f1": f1, "false_alarms": fa, "median_lead_time_h": gross,
-            "mae_ft": err["mae"], "rmse_ft": err["rmse"], "notes": notes}
-
-
-def run_baselines(readings_by_site, cats_by_site, horizons=(3.0,), label="baseline", **kw) -> list[dict]:
-    rows = []
-    for name, fn in baselines.BASELINES.items():
-        for h in horizons:
-            rows += evaluate_model(readings_by_site, cats_by_site, name, fn, h, label, **kw)
-    return rows
+def reference_table(rows: list[dict], lid_by_site: dict[str, str]) -> list[tuple]:
+    """(lid, reference F1, measured F1, diff) for rise_rate at 3 h on the reference gauges."""
+    out = []
+    for r in rows:
+        lid = lid_by_site.get(r["site_no"])
+        if r["model"] == "rise_rate" and r["horizon_h"] == 3.0 and lid in REFERENCE_F1:
+            m = r["f1"]
+            out.append((lid, REFERENCE_F1[lid], m, None if m is None else m - REFERENCE_F1[lid]))
+    return out
 
 
 def write_csv(rows: list[dict], path: str) -> None:
@@ -139,37 +188,46 @@ def insert_rows(rows: list[dict], dsn: str = config.PG_DSN) -> None:
 
 def main(argv=None):
     import argparse
-    import csv as _csv
-    from producers.replay_producer import load_readings
-    p = argparse.ArgumentParser(description="M1.4: baseline numbers for all gauges from the cached history.")
+    import os
+    from ml.gauges import load_gauges
+    from ml.progress import Timer, bar
+    p = argparse.ArgumentParser(description="M1.4: baseline numbers from the cached history.")
     p.add_argument("--start", default="2015-01-01")
     p.add_argument("--end", default="2025-12-31")
     p.add_argument("--horizons", default="3")
     p.add_argument("--label", default="m1.4-baselines")
     p.add_argument("--gauges", default="config/gauge_locations.csv")
-    p.add_argument("--out", default="ml/figures/baselines.csv")
+    p.add_argument("--gauges-only", help="comma list of NWPS ids or site numbers, e.g. DRWT2,LCPT2,JNCT2,AHOT2")
     p.add_argument("--data-dir", help="folder holding raw/usgs/ (default: DATA_DIR env or ./data)")
+    p.add_argument("--out", default="ml/figures/baselines.csv")
     p.add_argument("--insert", action="store_true", help="also INSERT into evaluation_runs (needs the DB up)")
     a = p.parse_args(argv)
     if a.data_dir:
         config.DATA_DIR = a.data_dir
-    rbs, cbs = {}, {}
-    with open(a.gauges, encoding="utf-8") as f:
-        for g in _csv.DictReader(f):
-            try:
-                rbs[g["site_no"]] = load_readings(g["site_no"], a.start, a.end)
-                cbs[g["site_no"]] = {k: float(g[k]) for k in ("action", "minor", "moderate", "major")}
-            except (SystemExit, ValueError):
-                print(f"skip {g['site_no']}: no cached data or missing categories")
-    rows = run_baselines(rbs, cbs, [float(x) for x in a.horizons.split(",")], a.label)
-    import os
-    os.makedirs(os.path.dirname(a.out), exist_ok=True)
+    timer = Timer()
+    horizons = [float(x) for x in a.horizons.split(",")]
+    print(f"ml.harness: baselines (persistence, rise_rate) at h={horizons} on cached USGS history "
+          f"{a.start}..{a.end}; reading from {config.DATA_DIR}/raw/usgs")
+    gauges = load_gauges(a.gauges, a.gauges_only, a.start, a.end, config.DATA_DIR)
+    if not gauges:
+        raise SystemExit("ERROR: no gauge could be evaluated; check --data-dir and --gauges-only")
+    rbs = {g["site_no"]: g["readings"] for g in gauges}
+    cbs = {g["site_no"]: g["cats"] for g in gauges}
+    rows = run_baselines(rbs, cbs, horizons, a.label, progress=bar)
+    os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
     write_csv(rows, a.out)
     if a.insert:
         insert_rows(rows)
     for r in rows:
-        if r["site_no"].startswith("POOLED"):
-            print(r["model"], r["site_no"], r["precision"], r["recall"], r["f1"], r["notes"])
+        if r["site_no"].startswith("POOLED") and r["horizon_h"] == horizons[0]:
+            print(f"{r['model']:12s} {r['site_no']:12s} P={_fmt(r['precision'])} R={_fmt(r['recall'])} "
+                  f"F1={_fmt(r['f1'])} FA={r['false_alarms']}  {r['notes']}")
+    table = reference_table(rows, {g["site_no"]: g["lid"] for g in gauges})
+    if table:
+        print("\nrise-rate 3 h F1 vs FAQ reference (no tuning):\n  gauge   ref    measured  diff")
+        for lid, ref, m, d in table:
+            print(f"  {lid:6s} {ref:5.2f}  {_fmt(m):>8s}  {'NA' if d is None else f'{d:+.2f}'}")
+    print(f"\ndone: {len(gauges)} gauges, {len(rows)} rows -> {a.out} in {timer.elapsed()}")
 
 
 if __name__ == "__main__":
