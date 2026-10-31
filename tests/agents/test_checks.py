@@ -43,3 +43,44 @@ def test_too_long():
 
 def test_uncertain_needs_both_signals():
     assert any("UNCERTAIN" in x for x in checks.review(GOOD, ALERT, FACTS, "uncertain"))
+
+
+# Regression: a Groq (gpt-oss-120b) draft on the user's laptop was rejected on every attempt (outcome v1_kept).
+# It wrote the probability as a decimal ("~0.79 probability") and used typographic Unicode.
+LIVE_LIKE = ("SIMULATION – replayed historical data. Onion Creek at Driftwood: gauge now 2.6 ft, rising "
+             "0.7 ft/h. Forecast 6.8 ft within 6.0 h; ~0.79 probability of reaching the MINOR flood "
+             "stage (5.5 ft). Lead‑time ≈ 4.1 h. Data are provisional.")
+
+
+def test_decimal_probability_and_unicode_draft_passes():
+    assert checks.review(LIVE_LIKE, ALERT, FACTS) == []
+
+
+def test_percentage_with_narrow_nbsp_passes():
+    d = LIVE_LIKE.replace("~0.79 probability", "79 % probability")
+    assert checks.review(d, ALERT, FACTS) == []
+
+
+def test_normalize_maps_typographic_characters_to_ascii():
+    s = "a–b‑c—d−e f g h​i­j “q” ’ ７９％"
+    assert checks.normalize(s) == "a-b-c-d-e f g hij \"q\" ' 79%"
+    assert checks.normalize(s).isascii()
+
+
+def test_wrong_number_still_caught_through_unicode():
+    d = LIVE_LIKE.replace("6.8 ft", "9.3 ft")
+    assert any("9.3" in r for r in checks.review(d, ALERT, FACTS))
+
+
+def test_wrong_decimal_probability_is_not_accepted():
+    d = LIVE_LIKE.replace("~0.79 probability", "~0.97 probability")
+    assert any(r.startswith("probability not stated") for r in checks.review(d, ALERT, FACTS))
+
+
+def test_utc_time_digits_from_raised_at_are_allowed():
+    assert checks.check_numbers("as of 2019‑05‑04 04:00 UTC", FACTS) == []
+
+
+def test_lowercase_simulation_is_still_rejected_with_actionable_reason():
+    r = checks.review(LIVE_LIKE.replace("SIMULATION", "Simulation"), ALERT, FACTS)
+    assert r == ["SIMULATION label missing for replayed data (write the word SIMULATION in capitals)"]

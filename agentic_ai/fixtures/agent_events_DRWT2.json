@@ -3,25 +3,25 @@
  "scenarios": {
   "normal": {
    "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
-   "run_id": "3d4df95d5c98",
+   "run_id": "fd7ae2828298",
    "outcome": "saved",
    "confidence": "normal",
    "advisory_text": "SIMULATION: replayed historical data, not a real event.\nOnion Creek near Driftwood: forecast to reach MINOR flood stage (5.5 ft) within 6 h.\nGauge now: 2.6 ft, changing +0.7 ft/h (as of 2019-05-04T04:00:00Z).\nForecast: 6.8 ft in 6 h; probability of reaching MINOR: 79% (rise_rate model). Official stages: action 5.5, minor 5.5, moderate 7.0, major 13.0 ft.\nEstimated time to MINOR at the current rate: about 4.1 h (an estimate, not a promise).\nRadar rain over the catchment: 27.0 mm in 3 h, 71.0 mm in 6 h.\nImpacts at this level: no NWS impact statement loaded for this gauge.\nConfidence: the gauge evidence and the surrounding context agree.\nData are provisional USGS readings and may be revised.\nDraft for approval by a duty officer; not sent until approved.",
    "events": [
     {
      "event_id": 1,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "coordinator",
      "kind": "start",
      "detail": {
       "alert_id": "08158700|minor|2019-05-04T03:00:00Z"
      },
-     "ts": "2026-10-31T03:39:57.992023Z"
+     "ts": "2026-10-31T07:05:34.016409Z"
     },
     {
      "event_id": 2,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "coordinator",
      "kind": "tool_call",
@@ -33,11 +33,11 @@
       "rows": 16,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:57.992217Z"
+     "ts": "2026-10-31T07:05:34.016727Z"
     },
     {
      "event_id": 3,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "coordinator",
      "kind": "tool_call",
@@ -49,11 +49,11 @@
       "rows": 2,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:57.992240Z"
+     "ts": "2026-10-31T07:05:34.016763Z"
     },
     {
      "event_id": 4,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "coordinator",
      "kind": "tool_call",
@@ -65,11 +65,11 @@
       "rows": 2,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:57.992258Z"
+     "ts": "2026-10-31T07:05:34.016786Z"
     },
     {
      "event_id": 5,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "coordinator",
      "kind": "end",
@@ -82,24 +82,25 @@
       ],
       "urgent": false,
       "update_n": 1,
-      "mode": "SIMULATION"
+      "mode": "SIMULATION",
+      "ms": 0
      },
-     "ts": "2026-10-31T03:39:57.992265Z"
+     "ts": "2026-10-31T07:05:34.016796Z"
     },
     {
      "event_id": 6,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "context",
      "kind": "start",
      "detail": {
       "site": "08158700"
      },
-     "ts": "2026-10-31T03:39:57.994190Z"
+     "ts": "2026-10-31T07:05:34.018510Z"
     },
     {
      "event_id": 7,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "context",
      "kind": "tool_call",
@@ -114,11 +115,11 @@
       "rows": 6,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:57.994412Z"
+     "ts": "2026-10-31T07:05:34.018720Z"
     },
     {
      "event_id": 8,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "context",
      "kind": "tool_call",
@@ -132,11 +133,11 @@
       "rows": 4,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:57.994880Z"
+     "ts": "2026-10-31T07:05:34.019056Z"
     },
     {
      "event_id": 9,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "context",
      "kind": "tool_call",
@@ -148,11 +149,11 @@
       "rows": 8,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:57.994901Z"
+     "ts": "2026-10-31T07:05:34.019071Z"
     },
     {
      "event_id": 10,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "context",
      "kind": "tool_call",
@@ -165,35 +166,36 @@
       "rows": 0,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:57.994913Z"
+     "ts": "2026-10-31T07:05:34.019083Z"
     },
     {
      "event_id": 11,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "context",
      "kind": "end",
      "detail": {
       "direction": "rising",
       "rain_3h": 27.0,
-      "n_neighbours": 4
+      "n_neighbours": 4,
+      "ms": 1
      },
-     "ts": "2026-10-31T03:39:57.994928Z"
+     "ts": "2026-10-31T07:05:34.019094Z"
     },
     {
      "event_id": 12,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "evidence",
      "kind": "start",
      "detail": {
       "site": "08158700"
      },
-     "ts": "2026-10-31T03:39:57.995571Z"
+     "ts": "2026-10-31T07:05:34.019653Z"
     },
     {
      "event_id": 13,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "evidence",
      "kind": "tool_call",
@@ -208,11 +210,11 @@
       "rows": 12,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:57.995802Z"
+     "ts": "2026-10-31T07:05:34.019852Z"
     },
     {
      "event_id": 14,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "evidence",
      "kind": "tool_call",
@@ -226,11 +228,11 @@
       "rows": 10,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:57.996006Z"
+     "ts": "2026-10-31T07:05:34.020306Z"
     },
     {
      "event_id": 15,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "evidence",
      "kind": "tool_call",
@@ -242,11 +244,11 @@
       "rows": 6,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:57.996033Z"
+     "ts": "2026-10-31T07:05:34.020331Z"
     },
     {
      "event_id": 16,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "evidence",
      "kind": "tool_call",
@@ -258,11 +260,11 @@
       "rows": 3,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:57.996044Z"
+     "ts": "2026-10-31T07:05:34.020341Z"
     },
     {
      "event_id": 17,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "evidence",
      "kind": "end",
@@ -270,24 +272,25 @@
       "direction": "rising",
       "stage_last": 2.6,
       "rise_rate_ft_per_h": 0.7,
-      "forecast_stage": 6.8
+      "forecast_stage": 6.8,
+      "ms": 1
      },
-     "ts": "2026-10-31T03:39:57.996059Z"
+     "ts": "2026-10-31T07:05:34.020365Z"
     },
     {
      "event_id": 18,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "start",
      "detail": {
       "attempt": 1
      },
-     "ts": "2026-10-31T03:39:57.997435Z"
+     "ts": "2026-10-31T07:05:34.021541Z"
     },
     {
      "event_id": 19,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -295,11 +298,11 @@
       "text": "SIMULATION: replayed historical data, not a real event.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:57.997614Z"
+     "ts": "2026-10-31T07:05:34.021794Z"
     },
     {
      "event_id": 20,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -307,11 +310,11 @@
       "text": "Onion Creek near Driftwood: forecast to reach MINOR flood stage (5.5 ft) within 6 h.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:57.997625Z"
+     "ts": "2026-10-31T07:05:34.021809Z"
     },
     {
      "event_id": 21,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -319,11 +322,11 @@
       "text": "Gauge now: 2.6 ft, changing +0.7 ft/h (as of 2019-05-04T04:00:00Z).",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:57.997629Z"
+     "ts": "2026-10-31T07:05:34.021814Z"
     },
     {
      "event_id": 22,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -331,11 +334,11 @@
       "text": "Forecast: 6.8 ft in 6 h; probability of reaching MINOR: 79% (rise_rate model). Official stages: action 5.5, minor 5.5, moderate 7.0, major 13.0 ft.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:57.997632Z"
+     "ts": "2026-10-31T07:05:34.021819Z"
     },
     {
      "event_id": 23,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -343,11 +346,11 @@
       "text": "Estimated time to MINOR at the current rate: about 4.1 h (an estimate, not a promise).",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:57.997636Z"
+     "ts": "2026-10-31T07:05:34.021823Z"
     },
     {
      "event_id": 24,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -355,11 +358,11 @@
       "text": "Radar rain over the catchment: 27.0 mm in 3 h, 71.0 mm in 6 h.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:57.997640Z"
+     "ts": "2026-10-31T07:05:34.021828Z"
     },
     {
      "event_id": 25,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -367,11 +370,11 @@
       "text": "Impacts at this level: no NWS impact statement loaded for this gauge.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:57.997644Z"
+     "ts": "2026-10-31T07:05:34.021832Z"
     },
     {
      "event_id": 26,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -379,11 +382,11 @@
       "text": "Confidence: the gauge evidence and the surrounding context agree.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:57.997698Z"
+     "ts": "2026-10-31T07:05:34.021837Z"
     },
     {
      "event_id": 27,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -391,11 +394,11 @@
       "text": "Data are provisional USGS readings and may be revised.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:57.997703Z"
+     "ts": "2026-10-31T07:05:34.021842Z"
     },
     {
      "event_id": 28,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -403,60 +406,69 @@
       "text": "Draft for approval by a duty officer; not sent until approved.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:57.997708Z"
+     "ts": "2026-10-31T07:05:34.021846Z"
     },
     {
      "event_id": 29,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "end",
      "detail": {
       "attempt": 1,
+      "max_attempts": 3,
       "chars": 760,
       "provider": "none",
-      "tokens": 0
+      "model": null,
+      "llm": false,
+      "tokens": 0,
+      "latency_s": 0.0,
+      "fallback_from": null,
+      "ms": 0
      },
-     "ts": "2026-10-31T03:39:57.997713Z"
+     "ts": "2026-10-31T07:05:34.021853Z"
     },
     {
      "event_id": 30,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "reviewer",
      "kind": "start",
      "detail": {
       "attempt": 1
      },
-     "ts": "2026-10-31T03:39:57.998120Z"
+     "ts": "2026-10-31T07:05:34.022309Z"
     },
     {
      "event_id": 31,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "reviewer",
      "kind": "verdict",
      "detail": {
       "verdict": "pass",
       "reasons": [],
-      "attempt": 1
+      "attempt": 1,
+      "max_attempts": 3,
+      "llm_judgement": null
      },
-     "ts": "2026-10-31T03:39:57.998569Z"
+     "ts": "2026-10-31T07:05:34.022908Z"
     },
     {
      "event_id": 32,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "reviewer",
      "kind": "end",
      "detail": {
-      "attempt": 1
+      "attempt": 1,
+      "ms": 1
      },
-     "ts": "2026-10-31T03:39:57.998579Z"
+     "ts": "2026-10-31T07:05:34.022923Z"
     },
     {
      "event_id": 33,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "coordinator",
      "kind": "tool_call",
@@ -471,43 +483,44 @@
       "rows": 2,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:57.999150Z"
+     "ts": "2026-10-31T07:05:34.023470Z"
     },
     {
      "event_id": 34,
-     "run_id": "3d4df95d5c98",
+     "run_id": "fd7ae2828298",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "coordinator",
      "kind": "end",
      "detail": {
       "saved": "08158700|minor|2019-05-04T03:00:00Z|2",
-      "confidence": "normal"
+      "confidence": "normal",
+      "ms": 7
      },
-     "ts": "2026-10-31T03:39:57.999162Z"
+     "ts": "2026-10-31T07:05:34.023486Z"
     }
    ]
   },
   "update_2": {
    "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
-   "run_id": "84fdf30767f5",
+   "run_id": "f9b05353eaf5",
    "outcome": "saved",
    "confidence": "uncertain",
    "advisory_text": "SIMULATION: replayed historical data, not a real event.\nUpdate 2: Onion Creek near Driftwood: forecast to reach MODERATE flood stage (7.0 ft) within 6 h.\nGauge now: 5.4 ft, changing +1.0 ft/h (as of 2019-05-04T07:00:00Z).\nForecast: 11.4 ft in 6 h; probability of reaching MODERATE: 99% (rise_rate model). Official stages: action 5.5, minor 5.5, moderate 7.0, major 13.0 ft.\nEstimated time to MODERATE at the current rate: about 1.6 h (an estimate, not a promise).\nRadar rain over the catchment: 1.0 mm in 3 h, 28.0 mm in 6 h.\nImpacts at this level: no NWS impact statement loaded for this gauge.\nUNCERTAIN: the signals disagree. Evidence from the gauge: rising (rise 1.0 ft/h, forecast 11.4 ft). Context: not rising (rain 3h 1.0 mm). Re-check at the next window.\nData are provisional USGS readings and may be revised.\nDraft for approval by a duty officer; not sent until approved.",
    "events": [
     {
      "event_id": 1,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "coordinator",
      "kind": "start",
      "detail": {
       "alert_id": "08158700|moderate|2019-05-04T03:00:00Z"
      },
-     "ts": "2026-10-31T03:39:58.009337Z"
+     "ts": "2026-10-31T07:05:34.037029Z"
     },
     {
      "event_id": 2,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "coordinator",
      "kind": "tool_call",
@@ -519,11 +532,11 @@
       "rows": 16,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.009504Z"
+     "ts": "2026-10-31T07:05:34.037269Z"
     },
     {
      "event_id": 3,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "coordinator",
      "kind": "tool_call",
@@ -535,11 +548,11 @@
       "rows": 2,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.009523Z"
+     "ts": "2026-10-31T07:05:34.037293Z"
     },
     {
      "event_id": 4,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "coordinator",
      "kind": "tool_call",
@@ -551,11 +564,11 @@
       "rows": 2,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.009543Z"
+     "ts": "2026-10-31T07:05:34.037325Z"
     },
     {
      "event_id": 5,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "coordinator",
      "kind": "end",
@@ -568,24 +581,25 @@
       ],
       "urgent": false,
       "update_n": 2,
-      "mode": "SIMULATION"
+      "mode": "SIMULATION",
+      "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.009549Z"
+     "ts": "2026-10-31T07:05:34.037335Z"
     },
     {
      "event_id": 6,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "context",
      "kind": "start",
      "detail": {
       "site": "08158700"
      },
-     "ts": "2026-10-31T03:39:58.010550Z"
+     "ts": "2026-10-31T07:05:34.038433Z"
     },
     {
      "event_id": 7,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "context",
      "kind": "tool_call",
@@ -600,11 +614,11 @@
       "rows": 6,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.010686Z"
+     "ts": "2026-10-31T07:05:34.038706Z"
     },
     {
      "event_id": 8,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "context",
      "kind": "tool_call",
@@ -618,11 +632,11 @@
       "rows": 4,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.010957Z"
+     "ts": "2026-10-31T07:05:34.039032Z"
     },
     {
      "event_id": 9,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "context",
      "kind": "tool_call",
@@ -634,11 +648,11 @@
       "rows": 8,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.010969Z"
+     "ts": "2026-10-31T07:05:34.039047Z"
     },
     {
      "event_id": 10,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "context",
      "kind": "tool_call",
@@ -651,35 +665,36 @@
       "rows": 0,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.011020Z"
+     "ts": "2026-10-31T07:05:34.039057Z"
     },
     {
      "event_id": 11,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "context",
      "kind": "end",
      "detail": {
       "direction": "not rising",
       "rain_3h": 1.0,
-      "n_neighbours": 4
+      "n_neighbours": 4,
+      "ms": 1
      },
-     "ts": "2026-10-31T03:39:58.011031Z"
+     "ts": "2026-10-31T07:05:34.039074Z"
     },
     {
      "event_id": 12,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "evidence",
      "kind": "start",
      "detail": {
       "site": "08158700"
      },
-     "ts": "2026-10-31T03:39:58.011438Z"
+     "ts": "2026-10-31T07:05:34.039523Z"
     },
     {
      "event_id": 13,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "evidence",
      "kind": "tool_call",
@@ -694,11 +709,11 @@
       "rows": 12,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.011575Z"
+     "ts": "2026-10-31T07:05:34.039719Z"
     },
     {
      "event_id": 14,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "evidence",
      "kind": "tool_call",
@@ -712,11 +727,11 @@
       "rows": 10,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.011678Z"
+     "ts": "2026-10-31T07:05:34.039863Z"
     },
     {
      "event_id": 15,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "evidence",
      "kind": "tool_call",
@@ -728,11 +743,11 @@
       "rows": 6,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.011690Z"
+     "ts": "2026-10-31T07:05:34.039883Z"
     },
     {
      "event_id": 16,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "evidence",
      "kind": "tool_call",
@@ -744,11 +759,11 @@
       "rows": 3,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.011697Z"
+     "ts": "2026-10-31T07:05:34.039893Z"
     },
     {
      "event_id": 17,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "evidence",
      "kind": "end",
@@ -756,13 +771,14 @@
       "direction": "rising",
       "stage_last": 5.4,
       "rise_rate_ft_per_h": 1.0,
-      "forecast_stage": 11.4
+      "forecast_stage": 11.4,
+      "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.011706Z"
+     "ts": "2026-10-31T07:05:34.039916Z"
     },
     {
      "event_id": 18,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "coordinator",
      "kind": "disagreement",
@@ -770,22 +786,22 @@
       "evidence": "rising (rise 1.0 ft/h, forecast 11.4 ft)",
       "context": "not rising (rain 3h 1.0 mm)"
      },
-     "ts": "2026-10-31T03:39:58.012317Z"
+     "ts": "2026-10-31T07:05:34.040564Z"
     },
     {
      "event_id": 19,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "start",
      "detail": {
       "attempt": 1
      },
-     "ts": "2026-10-31T03:39:58.012650Z"
+     "ts": "2026-10-31T07:05:34.041041Z"
     },
     {
      "event_id": 20,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -793,11 +809,11 @@
       "text": "SIMULATION: replayed historical data, not a real event.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:58.012775Z"
+     "ts": "2026-10-31T07:05:34.041244Z"
     },
     {
      "event_id": 21,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -805,11 +821,11 @@
       "text": "Update 2: Onion Creek near Driftwood: forecast to reach MODERATE flood stage (7.0 ft) within 6 h.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:58.012782Z"
+     "ts": "2026-10-31T07:05:34.041255Z"
     },
     {
      "event_id": 22,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -817,11 +833,11 @@
       "text": "Gauge now: 5.4 ft, changing +1.0 ft/h (as of 2019-05-04T07:00:00Z).",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:58.012786Z"
+     "ts": "2026-10-31T07:05:34.041261Z"
     },
     {
      "event_id": 23,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -829,11 +845,11 @@
       "text": "Forecast: 11.4 ft in 6 h; probability of reaching MODERATE: 99% (rise_rate model). Official stages: action 5.5, minor 5.5, moderate 7.0, major 13.0 ft.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:58.012791Z"
+     "ts": "2026-10-31T07:05:34.041266Z"
     },
     {
      "event_id": 24,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -841,11 +857,11 @@
       "text": "Estimated time to MODERATE at the current rate: about 1.6 h (an estimate, not a promise).",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:58.012794Z"
+     "ts": "2026-10-31T07:05:34.041272Z"
     },
     {
      "event_id": 25,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -853,11 +869,11 @@
       "text": "Radar rain over the catchment: 1.0 mm in 3 h, 28.0 mm in 6 h.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:58.012798Z"
+     "ts": "2026-10-31T07:05:34.041276Z"
     },
     {
      "event_id": 26,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -865,11 +881,11 @@
       "text": "Impacts at this level: no NWS impact statement loaded for this gauge.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:58.012803Z"
+     "ts": "2026-10-31T07:05:34.041281Z"
     },
     {
      "event_id": 27,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -877,11 +893,11 @@
       "text": "UNCERTAIN: the signals disagree. Evidence from the gauge: rising (rise 1.0 ft/h, forecast 11.4 ft). Context: not rising (rain 3h 1.0 mm). Re-check at the next window.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:58.012807Z"
+     "ts": "2026-10-31T07:05:34.041285Z"
     },
     {
      "event_id": 28,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -889,11 +905,11 @@
       "text": "Data are provisional USGS readings and may be revised.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:58.012811Z"
+     "ts": "2026-10-31T07:05:34.041290Z"
     },
     {
      "event_id": 29,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -901,60 +917,69 @@
       "text": "Draft for approval by a duty officer; not sent until approved.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:58.012818Z"
+     "ts": "2026-10-31T07:05:34.041294Z"
     },
     {
      "event_id": 30,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "end",
      "detail": {
       "attempt": 1,
+      "max_attempts": 3,
       "chars": 880,
       "provider": "none",
-      "tokens": 0
+      "model": null,
+      "llm": false,
+      "tokens": 0,
+      "latency_s": 0.0,
+      "fallback_from": null,
+      "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.012823Z"
+     "ts": "2026-10-31T07:05:34.041302Z"
     },
     {
      "event_id": 31,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "reviewer",
      "kind": "start",
      "detail": {
       "attempt": 1
      },
-     "ts": "2026-10-31T03:39:58.013168Z"
+     "ts": "2026-10-31T07:05:34.041741Z"
     },
     {
      "event_id": 32,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "reviewer",
      "kind": "verdict",
      "detail": {
       "verdict": "pass",
       "reasons": [],
-      "attempt": 1
+      "attempt": 1,
+      "max_attempts": 3,
+      "llm_judgement": null
      },
-     "ts": "2026-10-31T03:39:58.013393Z"
+     "ts": "2026-10-31T07:05:34.042197Z"
     },
     {
      "event_id": 33,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "reviewer",
      "kind": "end",
      "detail": {
-      "attempt": 1
+      "attempt": 1,
+      "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.013399Z"
+     "ts": "2026-10-31T07:05:34.042211Z"
     },
     {
      "event_id": 34,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "coordinator",
      "kind": "tool_call",
@@ -969,43 +994,44 @@
       "rows": 2,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.014012Z"
+     "ts": "2026-10-31T07:05:34.042788Z"
     },
     {
      "event_id": 35,
-     "run_id": "84fdf30767f5",
+     "run_id": "f9b05353eaf5",
      "alert_id": "08158700|moderate|2019-05-04T03:00:00Z",
      "agent": "coordinator",
      "kind": "end",
      "detail": {
       "saved": "08158700|moderate|2019-05-04T03:00:00Z|2",
-      "confidence": "uncertain"
+      "confidence": "uncertain",
+      "ms": 6
      },
-     "ts": "2026-10-31T03:39:58.014028Z"
+     "ts": "2026-10-31T07:05:34.042807Z"
     }
    ]
   },
   "disagreement": {
    "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
-   "run_id": "eea88948ead1",
+   "run_id": "5b4b1f1c261f",
    "outcome": "saved",
    "confidence": "uncertain",
    "advisory_text": "SIMULATION: replayed historical data, not a real event.\nOnion Creek near Driftwood: forecast to reach MINOR flood stage (5.5 ft) within 6 h.\nGauge now: 1.3 ft, changing +0.0 ft/h (as of 2019-05-04T04:00:00Z).\nForecast: 1.3 ft in 6 h; probability of reaching MINOR: 79% (rise_rate model). Official stages: action 5.5, minor 5.5, moderate 7.0, major 13.0 ft.\nRadar rain over the catchment: 27.0 mm in 3 h, 71.0 mm in 6 h.\nImpacts at this level: no NWS impact statement loaded for this gauge.\nUNCERTAIN: the signals disagree. Evidence from the gauge: not rising (rise 0.0 ft/h, forecast 1.3 ft). Context: rising (rain 3h 27.0 mm). Re-check at the next window.\nData are provisional USGS readings and may be revised.\nDraft for approval by a duty officer; not sent until approved.",
    "events": [
     {
      "event_id": 1,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "coordinator",
      "kind": "start",
      "detail": {
       "alert_id": "08158700|minor|2019-05-04T03:00:00Z"
      },
-     "ts": "2026-10-31T03:39:58.029148Z"
+     "ts": "2026-10-31T07:05:34.063101Z"
     },
     {
      "event_id": 2,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "coordinator",
      "kind": "tool_call",
@@ -1017,11 +1043,11 @@
       "rows": 16,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.029305Z"
+     "ts": "2026-10-31T07:05:34.063356Z"
     },
     {
      "event_id": 3,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "coordinator",
      "kind": "tool_call",
@@ -1033,11 +1059,11 @@
       "rows": 2,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.029323Z"
+     "ts": "2026-10-31T07:05:34.063381Z"
     },
     {
      "event_id": 4,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "coordinator",
      "kind": "tool_call",
@@ -1049,11 +1075,11 @@
       "rows": 2,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.029340Z"
+     "ts": "2026-10-31T07:05:34.063405Z"
     },
     {
      "event_id": 5,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "coordinator",
      "kind": "end",
@@ -1066,24 +1092,25 @@
       ],
       "urgent": false,
       "update_n": 1,
-      "mode": "SIMULATION"
+      "mode": "SIMULATION",
+      "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.029346Z"
+     "ts": "2026-10-31T07:05:34.063414Z"
     },
     {
      "event_id": 6,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "context",
      "kind": "start",
      "detail": {
       "site": "08158700"
      },
-     "ts": "2026-10-31T03:39:58.030274Z"
+     "ts": "2026-10-31T07:05:34.064565Z"
     },
     {
      "event_id": 7,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "context",
      "kind": "tool_call",
@@ -1098,11 +1125,11 @@
       "rows": 6,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.030461Z"
+     "ts": "2026-10-31T07:05:34.064747Z"
     },
     {
      "event_id": 8,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "context",
      "kind": "tool_call",
@@ -1116,11 +1143,11 @@
       "rows": 4,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.030897Z"
+     "ts": "2026-10-31T07:05:34.065056Z"
     },
     {
      "event_id": 9,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "context",
      "kind": "tool_call",
@@ -1132,11 +1159,11 @@
       "rows": 8,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.030913Z"
+     "ts": "2026-10-31T07:05:34.065070Z"
     },
     {
      "event_id": 10,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "context",
      "kind": "tool_call",
@@ -1149,35 +1176,36 @@
       "rows": 0,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.030923Z"
+     "ts": "2026-10-31T07:05:34.065081Z"
     },
     {
      "event_id": 11,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "context",
      "kind": "end",
      "detail": {
       "direction": "rising",
       "rain_3h": 27.0,
-      "n_neighbours": 4
+      "n_neighbours": 4,
+      "ms": 1
      },
-     "ts": "2026-10-31T03:39:58.030935Z"
+     "ts": "2026-10-31T07:05:34.065091Z"
     },
     {
      "event_id": 12,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "evidence",
      "kind": "start",
      "detail": {
       "site": "08158700"
      },
-     "ts": "2026-10-31T03:39:58.031440Z"
+     "ts": "2026-10-31T07:05:34.065610Z"
     },
     {
      "event_id": 13,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "evidence",
      "kind": "tool_call",
@@ -1192,11 +1220,11 @@
       "rows": 12,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.031671Z"
+     "ts": "2026-10-31T07:05:34.065770Z"
     },
     {
      "event_id": 14,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "evidence",
      "kind": "tool_call",
@@ -1210,11 +1238,11 @@
       "rows": 10,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.031849Z"
+     "ts": "2026-10-31T07:05:34.065887Z"
     },
     {
      "event_id": 15,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "evidence",
      "kind": "tool_call",
@@ -1226,11 +1254,11 @@
       "rows": 6,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.031875Z"
+     "ts": "2026-10-31T07:05:34.065912Z"
     },
     {
      "event_id": 16,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "evidence",
      "kind": "tool_call",
@@ -1242,11 +1270,11 @@
       "rows": 3,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.031885Z"
+     "ts": "2026-10-31T07:05:34.065922Z"
     },
     {
      "event_id": 17,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "evidence",
      "kind": "end",
@@ -1254,13 +1282,14 @@
       "direction": "not rising",
       "stage_last": 1.3,
       "rise_rate_ft_per_h": 0.0,
-      "forecast_stage": 1.3
+      "forecast_stage": 1.3,
+      "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.031897Z"
+     "ts": "2026-10-31T07:05:34.065933Z"
     },
     {
      "event_id": 18,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "coordinator",
      "kind": "disagreement",
@@ -1268,22 +1297,22 @@
       "evidence": "not rising (rise 0.0 ft/h, forecast 1.3 ft)",
       "context": "rising (rain 3h 27.0 mm)"
      },
-     "ts": "2026-10-31T03:39:58.032590Z"
+     "ts": "2026-10-31T07:05:34.066743Z"
     },
     {
      "event_id": 19,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "start",
      "detail": {
       "attempt": 1
      },
-     "ts": "2026-10-31T03:39:58.032934Z"
+     "ts": "2026-10-31T07:05:34.067170Z"
     },
     {
      "event_id": 20,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -1291,11 +1320,11 @@
       "text": "SIMULATION: replayed historical data, not a real event.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:58.033076Z"
+     "ts": "2026-10-31T07:05:34.067348Z"
     },
     {
      "event_id": 21,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -1303,11 +1332,11 @@
       "text": "Onion Creek near Driftwood: forecast to reach MINOR flood stage (5.5 ft) within 6 h.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:58.033088Z"
+     "ts": "2026-10-31T07:05:34.067358Z"
     },
     {
      "event_id": 22,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -1315,11 +1344,11 @@
       "text": "Gauge now: 1.3 ft, changing +0.0 ft/h (as of 2019-05-04T04:00:00Z).",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:58.033094Z"
+     "ts": "2026-10-31T07:05:34.067364Z"
     },
     {
      "event_id": 23,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -1327,11 +1356,11 @@
       "text": "Forecast: 1.3 ft in 6 h; probability of reaching MINOR: 79% (rise_rate model). Official stages: action 5.5, minor 5.5, moderate 7.0, major 13.0 ft.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:58.033099Z"
+     "ts": "2026-10-31T07:05:34.067369Z"
     },
     {
      "event_id": 24,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -1339,11 +1368,11 @@
       "text": "Radar rain over the catchment: 27.0 mm in 3 h, 71.0 mm in 6 h.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:58.033105Z"
+     "ts": "2026-10-31T07:05:34.067373Z"
     },
     {
      "event_id": 25,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -1351,11 +1380,11 @@
       "text": "Impacts at this level: no NWS impact statement loaded for this gauge.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:58.033110Z"
+     "ts": "2026-10-31T07:05:34.067378Z"
     },
     {
      "event_id": 26,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -1363,11 +1392,11 @@
       "text": "UNCERTAIN: the signals disagree. Evidence from the gauge: not rising (rise 0.0 ft/h, forecast 1.3 ft). Context: rising (rain 3h 27.0 mm). Re-check at the next window.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:58.033119Z"
+     "ts": "2026-10-31T07:05:34.067384Z"
     },
     {
      "event_id": 27,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -1375,11 +1404,11 @@
       "text": "Data are provisional USGS readings and may be revised.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:58.033125Z"
+     "ts": "2026-10-31T07:05:34.067389Z"
     },
     {
      "event_id": 28,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "token_chunk",
@@ -1387,60 +1416,69 @@
       "text": "Draft for approval by a duty officer; not sent until approved.",
       "llm": false
      },
-     "ts": "2026-10-31T03:39:58.033131Z"
+     "ts": "2026-10-31T07:05:34.067395Z"
     },
     {
      "event_id": 29,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "writer",
      "kind": "end",
      "detail": {
       "attempt": 1,
+      "max_attempts": 3,
       "chars": 774,
       "provider": "none",
-      "tokens": 0
+      "model": null,
+      "llm": false,
+      "tokens": 0,
+      "latency_s": 0.0,
+      "fallback_from": null,
+      "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.033137Z"
+     "ts": "2026-10-31T07:05:34.067402Z"
     },
     {
      "event_id": 30,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "reviewer",
      "kind": "start",
      "detail": {
       "attempt": 1
      },
-     "ts": "2026-10-31T03:39:58.033549Z"
+     "ts": "2026-10-31T07:05:34.067832Z"
     },
     {
      "event_id": 31,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "reviewer",
      "kind": "verdict",
      "detail": {
       "verdict": "pass",
       "reasons": [],
-      "attempt": 1
+      "attempt": 1,
+      "max_attempts": 3,
+      "llm_judgement": null
      },
-     "ts": "2026-10-31T03:39:58.033825Z"
+     "ts": "2026-10-31T07:05:34.068221Z"
     },
     {
      "event_id": 32,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "reviewer",
      "kind": "end",
      "detail": {
-      "attempt": 1
+      "attempt": 1,
+      "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.033834Z"
+     "ts": "2026-10-31T07:05:34.068232Z"
     },
     {
      "event_id": 33,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "coordinator",
      "kind": "tool_call",
@@ -1455,19 +1493,20 @@
       "rows": 2,
       "ms": 0
      },
-     "ts": "2026-10-31T03:39:58.034294Z"
+     "ts": "2026-10-31T07:05:34.068803Z"
     },
     {
      "event_id": 34,
-     "run_id": "eea88948ead1",
+     "run_id": "5b4b1f1c261f",
      "alert_id": "08158700|minor|2019-05-04T03:00:00Z",
      "agent": "coordinator",
      "kind": "end",
      "detail": {
       "saved": "08158700|minor|2019-05-04T03:00:00Z|2",
-      "confidence": "uncertain"
+      "confidence": "uncertain",
+      "ms": 6
      },
-     "ts": "2026-10-31T03:39:58.034305Z"
+     "ts": "2026-10-31T07:05:34.068821Z"
     }
    ]
   }

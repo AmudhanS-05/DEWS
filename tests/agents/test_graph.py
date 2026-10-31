@@ -110,3 +110,17 @@ def test_tool_crash_leaves_v1(monkeypatch):
     monkeypatch.setattr(t, "get_rain", lambda *a, **k: 1 / 0)
     res = graph.run_alert(t, ALERT)
     assert res["outcome"] == "v1_kept" and "division" in res["error"] and t.advisories == []
+
+
+def test_unicode_decimal_probability_draft_is_saved_on_first_attempt_as_ascii(monkeypatch):
+    """Regression for the live v1_kept run: a correct draft with U+2013/U+2011/U+202F and '0.79 probability'."""
+    a = FakeTools().get_alert(ALERT)
+    draft = (f"SIMULATION – replayed historical data. Gauge now {a['current_stage']} ft. Forecast "
+             f"{a['forecast_stage']} ft within {a['horizon_h']:g} h; ~{a['probability']} probability of "
+             f"reaching MINOR flood stage ({a['official_levels']['minor']} ft). Lead‑time is an estimate. "
+             "Data are provisional.")
+    _scripted(monkeypatch, [draft, "PASS"])
+    t = FakeTools()
+    res = graph.run_alert(t, ALERT)
+    assert res["outcome"] == "saved" and res["attempts"] == 1, res["reasons"]
+    assert t.advisories[-1]["text"].isascii() and " " not in res["draft"]

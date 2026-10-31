@@ -57,8 +57,11 @@ raise (return the baseline with `model = "rise_rate"` on any error).
 
 ## Agent tools (MCP server, S4; plain Python functions in S1)
 
-Environment: `LLM_PROVIDER` = `groq` | `ollama` | `none`; `GROQ_API_KEY`; `OLLAMA_MODEL` (default `qwen2.5:7b`);
-`LANGSMITH_TRACING`, `LANGSMITH_API_KEY` (optional). All in `.env`.
+Environment: `LLM_PROVIDER` = `groq` | `gemini` | `ollama` | `none`; `GROQ_API_KEY`; `GROQ_MODEL` (default
+`openai/gpt-oss-120b`); `LLM_FALLBACK` = `gemini` | `groq` | `none` (a failed or rate-limited call is retried once on
+it, then template v1 stays); `GEMINI_API_KEY`; `GEMINI_MODEL` (default `gemini-2.5-flash`); `OLLAMA_MODEL` (default
+`qwen2.5:7b`, optional local provider); `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT` (optional,
+default `dews-agents`). All in `.env`.
 
 Read-only: `get_alert(alert_id)`, `get_recent_windows(site, hours)`, `get_forecast(site)`, `get_official_levels(site)`,
 `get_past_floods(site)`, `get_rain(site, hours)`, `get_neighbours(site)`, `get_gauge_info(site)`,

@@ -16,7 +16,8 @@ A2 = "08158700|moderate|2019-05-04T03:00:00Z"
 
 
 def rows(res):
-    return [{"event_id": i + 1, "run_id": res["run_id"], "alert_id": res["alert_id"], **e} for i, e in enumerate(res["events"])]
+    return [{"event_id": i + 1, "run_id": res["run_id"], "alert_id": res["alert_id"],
+             **{k: v for k, v in e.items() if k != "t_s"}} for i, e in enumerate(res["events"])]
 
 
 def main():

@@ -3,14 +3,17 @@ headline, gauge and current stage, forecast and probability, lead time, official
 provisional-data note, SIMULATION label. Wording: "forecast of crossing an official category", never "will flood"."""
 from __future__ import annotations
 
+import json
+
+from agentic_ai import rules
+
 SYSTEM_PROMPT = (
     "You write flood advisories for a duty officer to approve. Use ONLY the facts given; copy numbers exactly; "
-    "never add a number that is not in the facts. State that this is a forecast of reaching an official NWS "
-    "category, with its probability and horizon. Never say 'will flood' or any certainty language. Name the "
-    "official category in CAPITAL letters and state its stage. If mode is SIMULATION, say it is replayed data. If "
-    "data is provisional, say so. Under 800 characters, plain language, fixed order: headline, gauge and stage, "
-    "forecast and probability, lead time, impacts, uncertainty, data note. If revision feedback is given, fix "
-    "exactly those problems.")
+    "never add, compute or convert a number that is not in the facts. It is a forecast of crossing an official NWS "
+    "category, never a statement that a flood will happen. Plain language and plain ASCII characters (normal "
+    "hyphens and spaces, no markdown). Fixed order: headline, gauge and stage, forecast and probability, lead time, "
+    "impacts, uncertainty, data note. An automatic reviewer checks every numbered REQUIREMENT in the user message; "
+    "meet all of them in the first draft. If revision feedback is given, fix exactly those problems and keep the rest.")
 
 
 def lead_time_h(evidence: dict, alert: dict) -> float | None:
@@ -66,14 +69,45 @@ def template_text(alert: dict, evidence: dict, context: dict, confidence: str, u
     return "\n".join(lines)
 
 
+def requirements(facts: dict, confidence: str) -> list[tuple[str, str]]:
+    """Writer instructions, one per deterministic reviewer check (ids as in checks.CHECKS) that applies here."""
+    a = facts["alert"]
+    cat = a["category"]
+    level = (a.get("official_levels") or {}).get(cat)
+    req = [("numbers", "Copy every number exactly as it appears in FACTS (stages in ft, times in UTC as given); do not "
+                       "round differently, convert units or compute new numbers. For the lead time use lead_time_h."),
+           ("category", f"Name the official category in capital letters: {cat.upper()}.")]
+    if level is not None:
+        req.append(("official_stage", f"State the official {cat.upper()} flood stage: {level:g} ft."))
+    req.append(("certainty", "No certainty language (never: " + ", ".join(f"'{p}'" for p in rules.FORBIDDEN_PHRASES)
+                + "); say 'forecast to reach' and give the probability."))
+    if a.get("probability") is not None:
+        req.append(("probability", f"State the probability as a percentage with the % sign: {round(a['probability'] * 100)}%."))
+    if a.get("horizon_h") is not None:
+        req.append(("horizon", f"State the forecast horizon in hours: within {a['horizon_h']:g} h."))
+    if a.get("mode") == "SIMULATION":
+        req.append(("simulation", "Start with the word SIMULATION in capital letters and say it is replayed historical "
+                                  "data, not a real event."))
+    else:
+        req.append(("live_label", "Live data: do not use the word SIMULATION."))
+    if a.get("provisional_data"):
+        req.append(("provisional", "Say the data are provisional (use the word 'provisional')."))
+    if confidence == "uncertain":
+        req.append(("uncertain", "Write UNCERTAIN, then state the gauge evidence signal and the context signal using the "
+                                 "words 'evidence' and 'context', and ask for a re-check at the next window."))
+    req.append(("length", f"At most {rules.MAX_ADVISORY_CHARS - 100} characters in total."))
+    return req
+
+
 def llm_user_prompt(facts: dict, confidence: str, disagreement: dict | None, feedback: list[str]) -> str:
-    import json
     parts = [f"FACTS (JSON):\n{json.dumps(facts, default=str)}", f"Confidence: {confidence}."]
     if disagreement:
-        parts.append(f"The signals disagree. Evidence: {disagreement['evidence']}. Context: {disagreement['context']}. "
-                     "Write UNCERTAIN, state both signals and ask for a re-check at the next window.")
+        parts.append(f"The signals disagree. Evidence: {disagreement['evidence']}. Context: {disagreement['context']}.")
     if facts["update_n"] > 1:
-        parts.append(f"This is update {facts['update_n']} of the same episode: start with 'Update {facts['update_n']}:'.")
+        parts.append(f"This is update {facts['update_n']} of the same episode: start with 'Update {facts['update_n']}:' "
+                     "(after the SIMULATION label if there is one).")
+    parts.append("REQUIREMENTS (each one is checked):\n" +
+                 "\n".join(f"{i}. {text}" for i, (_, text) in enumerate(requirements(facts, confidence), 1)))
     if feedback:
-        parts.append("REVISION FEEDBACK (fix these): " + " | ".join(feedback))
+        parts.append("REVISION FEEDBACK (the reviewer rejected the last draft; fix these): " + " | ".join(feedback))
     return "\n\n".join(parts)
