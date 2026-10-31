@@ -156,7 +156,7 @@ def test_reviewer_llm_sees_the_replay_statement(monkeypatch):
     prompts = []
     t = FakeTools()   # scripted: the writer call fails (template text is used), the judge says PASS
 
-    def fake(system, user, timeout_s=20):
+    def fake(system, user, timeout_s=20, **k):
         prompts.append((system, user))
         if system.startswith("You review"):
             return llm.LlmReply(text="PASS", tokens=5, provider="groq")

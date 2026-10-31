@@ -22,7 +22,7 @@ def test_utf8_stdio_survives_a_cp1252_console(monkeypatch):
 def _scripted(monkeypatch, outputs):
     calls = iter(outputs)
     monkeypatch.setattr(llm, "provider", lambda: "groq")
-    monkeypatch.setattr(llm, "complete", lambda s, u, timeout_s=20: llm.LlmReply(
+    monkeypatch.setattr(llm, "complete", lambda s, u, timeout_s=20, **k: llm.LlmReply(
         text=next(calls), tokens=10, provider="groq", model="openai/gpt-oss-120b"))
 
 

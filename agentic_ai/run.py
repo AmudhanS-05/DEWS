@@ -64,11 +64,18 @@ def progress_line(e: dict) -> str | None:
                f"{d['direction']}: {rain}, {d.get('n_neighbours', 0)} neighbour gauge(s){ms}")
     elif a == "writer" and k == "revision" and "llm_fallback" in d:
         msg = f"{d['primary']} failed ({d.get('primary_error')}); retried on {d['llm_fallback']}: {'ok' if d['ok'] else 'failed'}"
+    elif k == "revision" and "rate_limit" in d:
+        msg = (f"{d['rate_limit']} rate limit (429): waiting {d['wait_s']:g} s (hint {d['hint_s']:g} s, cap "
+               f"{d['cap_s']:g} s), then retrying {d['rate_limit']}" if d["wait_s"] else
+               f"{d['rate_limit']} rate limit (429): reset in {d['hint_s']:g} s > {d['cap_s']:g} s cap, not waiting")
     elif a == "writer" and k == "revision" and "llm_failed" in d:
         msg = f"LLM failed ({d['llm_failed']}); using the deterministic template text"
     elif a == "writer" and k == "end":
         src = f"{d['provider']} {d.get('model') or ''}".strip() if d.get("llm") else "template text"
-        msg = (f"attempt {d['attempt']}/{d.get('max_attempts', 3)}: {src}, {d['chars']} chars, {d['tokens']} tokens"
+        split = f" ({d['prompt_tokens']} in + {d['output_tokens']} out)" if d.get("output_tokens") else ""
+        effort = f", reasoning {d['reasoning_effort']}" if d.get("llm") and d.get("reasoning_effort") else ""
+        msg = (f"attempt {d['attempt']}/{d.get('max_attempts', 3)}: {src}{effort}, {d['chars']} chars, "
+               f"{d['tokens']} tokens{split}"
                f"{' (fallback from ' + d['fallback_from'] + ')' if d.get('fallback_from') and d.get('llm') else ''}{ms}")
     elif a == "reviewer" and k == "verdict":
         msg = f"attempt {d['attempt']}/{d.get('max_attempts', 3)}: {d['verdict'].upper()}"
@@ -158,8 +165,9 @@ def main(argv=None) -> int:
     t = tracing.configure()
     prov = llm.provider()
     fb = llm.fallback()
+    eff = llm.reasoning_effort(prov)
     print(f"LLM_PROVIDER={prov}{' (' + llm.model_name(prov) + ')' if llm.model_name(prov) else ''}"
-          f"{'  LLM_FALLBACK=' + fb if fb != 'none' else ''}  LangSmith tracing: {t['reason']}", flush=True)
+          f"{'  GROQ_REASONING_EFFORT=' + eff if eff else ''}{'  LLM_FALLBACK=' + fb if fb != 'none' else ''}  LangSmith tracing: {t['reason']}", flush=True)
     conn = connect(args.dsn)
     ensure_schema(conn)
     tools = Tools(conn)
