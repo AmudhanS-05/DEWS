@@ -73,7 +73,7 @@ publish to Kafka and never send anything. Only the notifier sends, and it reads 
 | Live gauge readings, 38 Texas Hill Country gauges | USGS Instantaneous Values, polled every 5 min | `mode = LIVE` |
 | Official flood categories per gauge | NOAA NWPS (`config/gauge_locations.csv`) | real |
 | Past floods replayed for the demo and evaluation (e.g. Onion Creek, May 2019) | cached USGS history | `mode = SIMULATION`, own topics |
-| Seeded agent test alert (`python -m agentic_ai.seed`) | hand-made shape around the 2019 flood; official levels real, stage values illustrative | `mode = SIMULATION` |
+| Seeded agent test alert (`python -m agentic_ai.seed`) | the measured May 2019 USGS record, run through the pipeline's own window and forecast code | `mode = SIMULATION` |
 | India study inputs (India-WRIS exports, synthetic "ideal India") | manual downloads / generator | `mode = SIMULATION` |
 
 Replayed and synthetic data are labelled SIMULATION all the way through: in topics, tables, alerts and the advisory
@@ -85,23 +85,29 @@ Only measured results are listed. Source: commit messages and `docs/breadcrumbs/
 
 | Part | State | Measured |
 |---|---|---|
-| Kafka stack | done | 3 brokers (KRaft), 9 topics, RF 3, min ISR 2; one broker stopped, topics stayed available |
+| Kafka stack | done | 3 brokers (KRaft), 9 topics, RF 3, min ISR 2 |
 | USGS live producer | done | dedupe by sensor series, heartbeats, backfill after a 34 h outage |
-| Faust windows (3 workers) | done | May 2019 replay: 119 hourly windows, no window emitted twice; one worker killed mid-replay, recovered in 35.6 s |
+| Faust windows (3 workers) | done | May 2019 replay: 119 hourly windows, no window emitted twice |
 | PostgreSQL sink | done | killed mid-replay and restarted: 4233/4233 readings, 0 gaps, 0 duplicates |
+| Fault drills (`tools.fault_drill`) | done, 6 scenarios | recovery after restart: Faust worker 18.1 s, broker 21.1 s, sink 5.4 s, PostgreSQL 3.9 s, notifier 1.1 s, live producer 4.2 s; all checks PASS (one run each, replay) |
 | Forecaster (rise-rate baseline) | done | 3903 windows → 3903 forecasts. On the 2019 DRWT2 replay the baseline alerted **only after** the minor crossing, so it gave no lead time there |
-| Template advisory, console approval, notifier | code done | tested against PostgreSQL; **no email sent yet** |
-| Console | done (Orbit, Pipeline flow, Flat map, Readings & alerts) | Metrics and Agents tabs not built yet |
-| Agents (LangGraph) | S1 + S2 code done | 74 agent tests with PostgreSQL, `LLM_PROVIDER=none`; live Groq run not yet re-measured after the reviewer fix |
-| ML model (gradient boosting, stage + rain) | code done, synthetic tests only | **no real-data results yet** |
-| MRMS rain producer, rain in windows | not built (S2) | MRMS decode checked on real files (10 km circle = 294 cells) |
-| India data study | loader, audit and Table 1 code done | no real-data numbers yet |
-| Power BI | not built yet | |
-| Tests | `pytest -q` | 184 passed + 20 skipped without a test database; 204 passed with PostgreSQL 16 (Python 3.12, 31 Oct 2026) |
+| Template advisory, console approval, notifier | done | an approved replayed advisory was emailed and its delivery time recorded (runbook step 11) |
+| Console | done: landing page, Pipeline flow, Map (globe and flat), Readings & alerts, Metrics, Agents | |
+| Agents (LangGraph) | S1 + S2 code done | agent tests pass with PostgreSQL and `LLM_PROVIDER=none`; repeated live Groq runs not measured yet |
+| ML model (gradient boosting, stage + rain) | trained once on replayed real data (2020 to 2026) | **neither version beats the rise-rate baseline consistently; no skill is claimed** (`ml/MODEL_CARD.md`) |
+| MRMS rain | history decoded for 102 floods + 102 dry windows (offline); live producer and rain in windows not built (S2) | |
+| India data study | US side of the audit (Table 1) run on real data; India-WRIS loader and API client written | no Indian data processed yet |
+| Power BI | page 1 guide written (`dashboard/powerbi/README.md`); report not built yet | |
+| Slice check | `python -m tools.verify_slice S1` | first real run: 16 of 19 checks passed; one FAIL is the late baseline alert above |
+| Tests | `pytest -q` | 243 passed + 23 skipped without a test database (Python 3.12, 31 Oct 2026, after merging ml-india 17cbf4e) |
 
-The bar any model must beat is the rise-rate baseline from the EDA. At 3 h its F1 is 0.65 at DRWT2, 0.26 at LCPT2,
-0.64 at JNCT2 and 0.41 at AHOT2, with under 1 to 2 h of warning (`FAQ.md`). DEWS is not compared with, and makes no
-claim against, NWS, NSSL FLASH or GloFAS forecasts.
+**The bar any model must beat** is rise-rate extrapolation at 3 h, scored by `ml/harness.py` on stream windows
+(38 gauges, 2015 to 2025, replay): pooled F1 0.28 (precision 0.18, recall 0.61, 310 minor crossings), slow floods only
+0.21; per gauge DRWT2 0.25, LCPT2 0.42, JNCT2 0.76, AHOT2 0.25; median warning 0.8 h gross, −0.2 h net of the 1 h feed
+delay. *Corrected 31 Oct 2026: earlier figures (0.65 / 0.26 / 0.64 / 0.41) included a 1 h look-ahead; evidence in `ml/REFERENCE_BASELINES.md`.*
+
+DEWS is not compared with, and makes no claim against, NWS, NSSL FLASH
+or GloFAS forecasts.
 
 ## Quick start
 
@@ -114,12 +120,13 @@ python -m pip install -U pip setuptools wheel
 pip install -r requirements-dev.txt          # everything: pipeline, ML, agents, tests
 pytest -q                                    # all green; database tests skip without AGENTS_TEST_DSN
 copy .env.example .env                       # then fill in; never commit .env
-cd docker; docker compose up -d; cd ..       # 3 Kafka brokers + PostgreSQL
-Get-Content storage\views.sql | docker exec -i flood-postgres psql -U spa_user -d disaster_warning
+cd docker; docker compose up -d; cd ..       # 3 Kafka brokers + PostgreSQL (tables and views load on first start)
 python -m dashboard.flow_monitor             # console at http://127.0.0.1:8765
 ```
 
-No Docker yet? `python -m dashboard.flow_monitor --demo` shows the console on scripted data. Next, replay the 2019
+No Docker yet? `python -m dashboard.flow_monitor --demo` shows the console on scripted data. The database user and
+password in `docker/docker-compose.yml` (`spa_user` / `spa_pass`) are local demo defaults: change them before exposing
+anything ([Setup](docs/guide/02-setup.md#2-start-kafka-and-postgresql)). Next, replay the 2019
 flood end to end: [Run a demo](docs/guide/03-run-a-demo.md).
 
 ## Guide
@@ -143,9 +150,15 @@ are the way they are). How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Data sources and credit
 
-USGS Water Services (Instantaneous Values), NOAA National Water Prediction Service (flood categories), NOAA MRMS on
-the AWS Open Data registry (`noaa-mrms-pds`), India-WRIS / CWC for the India study. DEWS is not affiliated with or
-endorsed by any of them. USGS provisional data may be revised.
+The data are not part of this repository's code and come under their providers' own terms:
 
-Licence: the team has not chosen one yet. Until a `LICENSE` file is added, the default applies (all rights reserved
-by the authors); please ask before reusing the code.
+- **USGS Water Services** (Instantaneous Values): U.S. public-domain data. Provisional values may be revised.
+- **NOAA** National Water Prediction Service (official flood categories) and **MRMS** radar rainfall on the AWS Open
+  Data registry (`noaa-mrms-pds`).
+- **India-WRIS / CWC**, used only in the India study, under India-WRIS's terms of use.
+
+DEWS is not affiliated with or endorsed by any of these agencies, and it is not an official warning service.
+
+Licence: the code is released under the [MIT License](LICENSE), copyright 2026 Aaditey Chalva, Amudhan S, Dhaksha
+Muthukumaran. The licence covers this repository's code and documentation only. The data sources listed above keep
+their own terms.

@@ -871,6 +871,8 @@ site_no
 
 **What it says:** Baselines scored as warnings at 1, 2, 3 and 6 h horizons. Persistence predicts no change, so it never warns before a crossing (recall 0). Rise-rate extrapolation (current stage + recent rise × horizon) is the simplest model that can warn. At 3 h it reaches F1 0.65 at DRWT2, 0.26 at LCPT2, 0.64 at JNCT2 and 0.41 at AHOT2, but the median warning is under 1 h at three gauges and 2 h at LCPT2. Longer horizons catch more floods at the cost of many more false alarms (AHOT2 at 6 h: 165 false alarms for 35 detections). This is the bar the supervised forecaster must beat: more lead time with fewer false alarms.
 
+> *Corrected 31 Oct 2026: earlier figures (0.65 / 0.26 / 0.64 / 0.41) included a 1 h look-ahead; evidence in `ml/REFERENCE_BASELINES.md`.* Scored on the pipeline's own windows (`ml/harness.py`, 38 gauges, 2015 to 2025): F1 0.25 at DRWT2, 0.42 at LCPT2, 0.76 at JNCT2, 0.25 at AHOT2; pooled 0.28.
+
 
 ### 11. Gate summary for each gauge
 
@@ -1092,4 +1094,4 @@ dtype: float64
 | Big rises are real floods, not errors | 01 · cell 37 | Isolation Forest uses sensor-behaviour features only |
 | Neither showcase gauge flooded in the last 2 years | 01 · cells 20, 40 | live demos replay past floods, stamped SIMULATION |
 | Only 2 gauges have ≥ 10 slow floods | 02 · cell 30, gate check | pool events across the 38 gauges |
-| Rise-rate baseline: F1 up to 0.65, warning < 1–2 h | 02 · cell 27 | the bar the supervised forecaster must beat |
+| Rise-rate baseline: F1 up to 0.65, warning < 1–2 h (corrected 31 Oct 2026: 1 h look-ahead; pooled F1 0.28 on stream windows, see `ml/REFERENCE_BASELINES.md`) | 02 · cell 27 | the bar the supervised forecaster must beat |

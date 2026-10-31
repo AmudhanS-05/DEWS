@@ -58,7 +58,12 @@ uses 5432. Stop the other stack or the local service.
 the console's terminal too.
 
 **Readings & alerts is empty, or says `relation "alert_overview" does not exist`.** Either the sink is not running
-(`python -m storage.sink`) or the views were never applied (see [02 Setup](02-setup.md#2-start-kafka-and-postgresql)).
+(`python -m storage.sink`), or the database volume predates the views and they were never applied (see
+[02 Setup](02-setup.md#2-start-kafka-and-postgresql)).
+
+**`scripts\start_demo.ps1` cannot find Python or Faust.** The script looks for the team's venv at `..\spaenv` next to
+the repo folder. Create the venv there, or start the components by hand ([03](03-run-a-demo.md#1-start-the-pipeline)).
+Its logs are in `gate_output\<name>.log` and `.err`.
 
 **Nodes show "not running".** Expected for components you have not started or that are not built yet (MRMS producer,
 agents, notifier).
@@ -77,8 +82,9 @@ about 120 days through a 301 redirect from `waterservices.usgs.gov` to **`nwis.w
 must be reachable. Corporate, campus or cloud-sandbox proxies sometimes allow only the first. `ml.fetch_history` checks
 this first and stops with a clear message instead of retrying forever. Run it from a network that allows both hosts.
 
-**USGS or NOAA unreachable on demo day.** Use replay from the cached history; it is marked SIMULATION. The map has an
-offline view.
+**USGS or NOAA unreachable on demo day.** Use replay from the cached history; it is marked SIMULATION. Without
+internet the Map tab cannot load its basemap, imagery or elevation tiles. It says so and draws plain ground, and the
+gauges still show.
 
 ## Agents and LLMs
 
@@ -107,6 +113,6 @@ switched off silently.
 **Gmail `535 Username and Password not accepted`.** Use an app password (2-Step Verification on), not the account
 password.
 
-**The approved email never arrived.** Check the *dead letters* chip. After 3 failed attempts the record goes to
+**The approved email never arrived.** Check the *DLQ* chip. After 3 failed attempts the record goes to
 `deadletter.flood`, and the advisory stays approved with an empty *Delivered* time. Fix SMTP, then restart the
 notifier.
