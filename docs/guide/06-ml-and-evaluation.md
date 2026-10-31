@@ -1,9 +1,9 @@
 # 06 ML and evaluation
 
 > **Status (31 Oct 2026):** the forecaster in the pipeline is the **rise-rate baseline**. The gradient-boosting models
-> (stage only, and stage + radar rain) are written and tested on **synthetic data only**. **No trained model and no
-> real-data skill are claimed yet.** Results go into `ml/MODEL_CARD.md` only after a real run, together with the command
-> that produced them.
+> (stage only, and stage + radar rain) have been trained **once** on replayed real data (38 gauges, Oct 2020 to
+> Oct 2026). **Neither beats the rise-rate baseline consistently on events, so no skill is claimed.** Every result,
+> with the command that produced it, is in [`ml/MODEL_CARD.md`](../../ml/MODEL_CARD.md).
 
 ## What is predicted
 
@@ -24,8 +24,8 @@ What this cannot tell you: flooded area, damage, anything at ungauged creeks, or
 |---|---|---|
 | persistence | stage now = stage later | baseline; never warns (recall 0 in the EDA) |
 | `rise_rate` | extrapolate the last 3 h rise | baseline; **live in the pipeline** via `ml/predict.py` |
-| `gbm_v0_stage` | stage relative to minor/action, fraction to minor, rise rate, range, 1/3/6 h changes | code done (`ml/rain_model.py`), not trained on real data |
-| `gbm_v1_stage_rain` | v0 + MRMS radar rain over a 10 km circle (1, 3, 6, 24 h) | code done, not trained on real data |
+| `gbm_v0_stage` | stage relative to minor/action, fraction to minor, rise rate, range, 1/3/6 h changes | trained once (`ml/rain_model.py`); not better than rise-rate |
+| `gbm_v1_stage_rain` | v0 + MRMS radar rain over a 10 km circle (1, 3, 6, 24 h) | trained once; better row-level ranking than v0 at most horizons, no consistent event-level gain |
 
 Both GBMs use scikit-learn `HistGradientBoostingClassifier` for the probability and `HistGradientBoostingRegressor` for
 the stage. **One pooled model** covers all gauges. Stage is expressed relative to each gauge's own minor stage so that
@@ -60,10 +60,11 @@ a model sees the same features in replay, evaluation and live.
 | What | Value | Source |
 |---|---|---|
 | Gauges / history | 38 gauges, 10 years, about 26 million stage readings, 213 minor crossings, 123 slow | gate check, 3 Oct 2026 (`FAQ.md`) |
-| Rise-rate baseline, 3 h, F1 | DRWT2 0.65, LCPT2 0.26, JNCT2 0.64, AHOT2 0.41, with under 1 to 2 h of warning | EDA notebook 02, real data, 3 Oct 2026 |
+| Rise-rate baseline, 3 h, F1 per gauge | **under correction**: the EDA values in `FAQ.md` contain a one-hour look-ahead | `ml/MODEL_CARD.md`, open issues; corrected numbers to follow from the ML workstream |
 | Baseline in the pipeline, May 2019 DRWT2 replay | alert only **after** the minor crossing (no lead time) | core run, 31 Oct 2026 |
+| v0 / v1 vs rise-rate, POOLED, h = 1 to 6 | no consistent event-level gain; median net lead time around zero | `ml/MODEL_CARD.md`, "Measured results" |
 
-The baseline numbers are the bar to beat. DEWS makes no comparison with NWS, NSSL FLASH or GloFAS forecasts, and claims
+The rise-rate baseline, scored on the same rows, is the bar to beat. DEWS makes no comparison with NWS, NSSL FLASH or GloFAS forecasts, and claims
 nothing against them.
 
 ## Reproduce
@@ -71,7 +72,7 @@ nothing against them.
 Run from the repo root with `pip install -r requirements-dev.txt` done. Data goes to `data/` (git-ignored).
 
 ```powershell
-python -m ml.fetch_history --start-year 2015                                 # USGS history, about 1 GB
+python -m ml.fetch_history --start-year 2015                                 # USGS history (38 gauges, ~31 M readings)
 python -m ml.harness --gauges-only DRWT2,LCPT2,JNCT2,AHOT2 --horizons 3 --out ml/figures/baselines_ref.csv
 python -m ml.harness --horizons 1,2,3,4,5,6 --label m1.4-baselines --out ml/figures/baselines.csv
 python -m ml.dataset --end 2026-10-31 --out ml/figures/pooled_dataset.parquet

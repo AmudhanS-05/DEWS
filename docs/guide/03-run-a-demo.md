@@ -1,17 +1,17 @@
 # 03 Run a demo: the May 2019 Onion Creek flood, end to end
 
-On 4 May 2019 Onion Creek near Driftwood, Texas (NWS id **DRWT2**, USGS site **08158700**) rose above its minor flood
-stage of 5.5 ft. This walkthrough replays the cached readings of 2 to 6 May 2019 through the whole pipeline. Every
-record is marked **SIMULATION**. You watch windows, forecasts and an alert appear, approve the advisory, and
-optionally send it by email.
+On 4 May 2019 Onion Creek near Driftwood, Texas (NWS id **DRWT2**, USGS site **08158700**) rose from under 2 ft to a
+peak of about 26 ft within a few hours. Its official major flood stage is 13.0 ft. This walkthrough replays the cached
+readings of 2 to 6 May 2019 through the whole pipeline. Every record is marked **SIMULATION**. You watch windows,
+forecasts and an alert appear, approve the advisory, and optionally send it by email.
 
-Before you start: [02 Setup](02-setup.md) is done, the Docker stack is healthy, the views are applied, and the venv is
-active in **every** terminal (`.venv\Scripts\Activate.ps1`, repo root).
+Before you start: [02 Setup](02-setup.md) is done, the Docker stack is healthy, and the venv is active in **every**
+terminal (`.venv\Scripts\Activate.ps1`, repo root).
 
-**What to expect from the forecaster.** It is still the rise-rate baseline. On the team's measured run of this replay,
-it raised its alert **only after** the stage had crossed minor, so it gave no lead time on this flood. The demo shows
-the pipeline working, not forecast skill. The trained model is meant to change this, and it will be shown only once it
-is measured ([06](06-ml-and-evaluation.md)).
+**What to expect from the forecaster.** It is still the rise-rate baseline. On this replay its first alert for DRWT2
+(`08158700|major|2019-05-04T01:00:00Z`) came in the window where the gauge was already at 8.2 ft, above moderate. So it
+gave **no lead time on the minor crossing**. The demo shows the pipeline working, not forecast skill
+([06](06-ml-and-evaluation.md)).
 
 ## 0. Get the history (once)
 
@@ -19,46 +19,41 @@ is measured ([06](06-ml-and-evaluation.md)).
 python -m ml.fetch_history --gauges-only DRWT2 --start-year 2019 --end-year 2019
 ```
 
-This writes `data/raw/usgs/08158700_00065_2019.json`. Skip it if `tools.gate_check` already filled the cache.
+This writes `data/raw/usgs/08158700_00065_2019.json`. Skip it if the cache already holds that year.
 
-## 1. Console
+## 1. Start the pipeline
 
-Terminal 1:
+**One command (Windows):** `powershell -ExecutionPolicy Bypass -File scripts\start_demo.ps1 -NoLiveProducer` starts
+everything in steps 1 to 3 in the background (it expects the venv at `..\spaenv`, see [02](02-setup.md)). Then go to
+step 4.
+
+**By hand**, one terminal each:
+
 ```powershell
-python -m dashboard.flow_monitor
+python -m dashboard.flow_monitor                                  # console, http://127.0.0.1:8765
+faust -A streams.faust_app worker -l info --web-port 6066         # Faust worker 1
+faust -A streams.faust_app worker -l info --web-port 6067         # Faust worker 2
+faust -A streams.faust_app worker -l info --web-port 6068         # Faust worker 3
+python -m storage.sink                                            # Kafka -> PostgreSQL, writes advisory v1
+python -m streams.forecaster                                      # windows -> forecasts and alerts
 ```
-Open <http://127.0.0.1:8765> and select **Pipeline flow**. All nodes are grey ("not running") or waiting.
 
-## 2. Faust: three windowing workers
+Open the console and choose **Pipeline flow** on the landing page. Wait for `Worker: Ready` in each Faust terminal.
+*Faust windowing* then shows **3/3 instances**, and *Postgres sink* and *Forecaster* show 1/1. On the single-broker
+stack, set `$env:KAFKA_BOOTSTRAP` and `$env:TOPIC_REPLICATION_FACTOR` in every terminal first.
 
-Terminals 2, 3 and 4, one command each:
-```powershell
-faust -A streams.faust_app worker -l info --web-port 6066
-faust -A streams.faust_app worker -l info --web-port 6067
-faust -A streams.faust_app worker -l info --web-port 6068
-```
-Wait for `Worker: Ready` in each. **Console:** *Faust windowing* turns green with **3/3 instances**. Single-broker
-stack: set `$env:KAFKA_BOOTSTRAP` and `$env:TOPIC_REPLICATION_FACTOR` in these terminals first.
+Optional, the agents: `python -m agentic_ai.run` (consumer group `agent` on `alerts.flood`). With `LLM_PROVIDER=none`
+it writes a deterministic v2 without any LLM. See [07 Agents](07-agents.md).
 
-## 3. Sink and forecaster
+## 2. Replay the flood
 
-Terminal 5: `python -m storage.sink`
-Terminal 6: `python -m streams.forecaster`
-
-**Console:** *Postgres sink* and *Forecaster* show 1/1 instance. The sink commits Kafka offsets only after PostgreSQL
-has the rows.
-
-Optional, terminal 7, the agents: `python -m agentic_ai.run` (consumer group `agent` on `alerts.flood`). It needs
-`LLM_PROVIDER` in `.env`. With `none` it writes a deterministic v2 without any LLM. See [07 Agents](07-agents.md).
-
-## 4. Replay the flood
-
-Terminal 8:
 ```powershell
 python -m producers.replay_producer --site 08158700 --start 2019-05-02 --end 2019-05-06 --speed 3600
 ```
-`--speed 3600` replays one hour of history per second, so the 5 days take about 2 minutes. Use `--speed 36000` for a
-12 s run, or `--no-sleep` for a throughput test.
+
+`--speed 3600` replays one hour of history per second, so the 5 days take about 2 minutes. `--speed 36000` takes about
+12 s; `--no-sleep` is the throughput test. To show the neighbouring gauges as well, run the same command with
+`--site 08158840` and `--site 08159000`.
 
 What you should see, in order:
 
@@ -66,20 +61,25 @@ What you should see, in order:
 |---|---|
 | Replay terminal | `replaying N readings for 08158700 (2019-05-02..2019-05-06) -> replay.gauge`; at the end `done: sent=... in ...s = ... msg/s` |
 | Pipeline flow | *Replay* and `replay.*` green with msg/s; dashed green lines move into Faust, then `aggregates.window`, Forecaster and the sink |
-| Orbit / Flat map → **Replay (SIMULATION)** | the DRWT2 pillar or dot changes colour as the stage passes action/minor (orange) and moderate (red) |
+| Map → **Replay (SIMULATION)** | the DRWT2 pillar rises and changes colour: yellow/orange at action and minor (both 5.5 ft), red at moderate (7.0 ft), purple at major (13.0 ft). A dashed red beam marks the open alert, and an alert line appears under the header |
 | Readings & alerts → *Latest windows* | one row per hour for 08158700, mode SIMULATION, stage and rise rate |
-| `alerts.flood` node, then *Alerts* table | the alert(s) of this episode, status **draft** |
+| Readings & alerts → *Alerts* | the alert, status **draft** |
 | Readings & alerts → *Advisories for approval* | a **v1 (template)** draft within seconds of the alert. With the agents running, a **v2 (agents)** draft with the reviewer verdict replaces it |
+| Metrics | throughput per topic, consumer lag rising then draining, the latency waterfall for replay |
+| Agents (if they ran) | the agent graph and the last run, step by step |
 
-## 5. Check the run
+## 3. Check the run
 
 ```powershell
 python -m tools.check_windows --mode SIMULATION --site 08158700   # PASS = no window emitted twice
 python -m tools.check_sink --mode SIMULATION                      # exit 0 = no gaps, no duplicates
+python -m tools.verify_slice S1 --part core                       # the slice's acceptance checks against the running stack
 ```
-The team's measured run gave 119 hourly windows and a PASS from both checks.
 
-## 6. Approve the advisory
+`verify_slice` prints PASS or FAIL per check with what it measured, and lists the steps only a person can confirm as
+MANUAL. Expect a FAIL on "alert before the minor crossing" while the baseline is in use: that check is the honest one.
+
+## 4. Approve the advisory
 
 In **Readings & alerts → Advisories for approval**:
 
@@ -89,29 +89,37 @@ In **Readings & alerts → Advisories for approval**:
 3. Click **Approve**, then confirm the second, in-page click. Only now is one record published to `alerts.approved`.
    **Reject** sends nothing.
 
-The status changes to **approved** and the `alerts.approved` node shows one message.
+## 5. Send it (optional)
 
-## 7. Send it (optional)
-
-Terminal 9, with the email settings in `.env`:
+With the email settings in `.env` ([02](02-setup.md#email-notifier)):
 ```powershell
-python -m alerting.notifier --dry-run        # logs what would be sent; sends nothing, commits nothing
-python -m alerting.notifier                  # sends, then writes delivered_at
+python -m alerting.notifier --dry-run        # builds the email and logs it; sends nothing, commits nothing
+python -m alerting.notifier                  # sends, then writes delivered_at (start_demo.ps1 already runs it)
 ```
-The email holds exactly the approved text. **Readings & alerts → Alerts → Delivered** fills in, and `alert_overview`
-(and Power BI) show `raise_to_approval_s` and `approval_to_delivery_s`. If SMTP fails, the notifier retries 3 times,
-then writes the record to `deadletter.flood` (the *dead letters* chip turns amber) and leaves the advisory approved but
-undelivered.
 
-## 8. Break something (optional)
+The email is a flood-forecast bulletin: a headline sentence, a small table of facts from the alert, the approved
+advisory text and the approver. **Alerts → Delivered** fills in, and `alert_overview` (and Power BI) show
+`raise_to_approval_s` and `approval_to_delivery_s`. If SMTP fails, the notifier retries 3 times, then writes the
+record to `deadletter.flood` (the *DLQ* chip turns amber) and leaves the advisory approved but undelivered.
 
-- **Kill a Faust worker** mid-replay: stop the terminal with Ctrl+C or let the drill do it.
-  `python -m tools.fault_drill --scenario faust` replays 1 to 5 June 2019, kills the worker on port 6068, restarts it,
-  measures the recovery and runs `check_windows`. The team measured a 35.6 s recovery with a PASS. The console's
-  *Status changes* log shows *Faust windowing* go to 2/3 and back.
-- **Stop a broker:** `docker stop flood-kafka-2`. The *brokers* chip shows 2/3 and the topics stay available.
-  `docker start flood-kafka-2` brings it back.
-- **Kill the sink** mid-replay and start it again, then run `check_sink`.
+## 6. Break something (optional)
+
+`tools.fault_drill` breaks one part during a replay, restarts it and measures recovery. Each replay drill replays a date
+range **after the newest one already replayed** for the gauge, so every window is new output (`--start`/`--end`
+override this). The drill writes a `fault_drill:<scenario>` row to `evaluation_runs` (skip it with `--no-db`):
+
+```powershell
+python -m tools.fault_drill --scenario faust      # kill Faust worker 6068 mid-replay -> check_windows must PASS
+python -m tools.fault_drill --scenario broker     # stop flood-kafka-2 -> windows keep flowing
+python -m tools.fault_drill --scenario sink       # kill the sink -> check_sink must PASS
+python -m tools.fault_drill --scenario postgres   # stop PostgreSQL -> messages wait on Kafka, check_sink must PASS
+python -m tools.fault_drill --scenario notifier   # notifier down; its position must not move; sends nothing
+python -m tools.fault_drill --scenario producer   # kill the live USGS producer -> nothing published twice
+```
+
+Team measurement (one run each, 31 Oct 2026): recovery 18.1 s (Faust), 21.1 s (broker), 5.4 s (sink), 3.9 s
+(PostgreSQL), 1.1 s (notifier), 4.2 s (producer), all checks PASS. The console's *Status changes* log on Pipeline flow
+shows each failure and recovery with timestamps.
 
 ## Running it again
 
@@ -120,13 +128,13 @@ replay another flood (pick dates from `gate_output/gate_events.csv` after a gate
 wipes Kafka and PostgreSQL:
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File scripts\stop_demo.ps1        # or stop each terminal with Ctrl+C
 cd docker; docker compose down -v; docker compose up -d; cd ..
-Get-Content storage\views.sql | docker exec -i flood-postgres psql -U spa_user -d disaster_warning
 Remove-Item -Recurse -Force *-data, state -ErrorAction SilentlyContinue      # Faust local stores, forecaster state
 ```
 
 ## Agents without the pipeline
 
-To try only the agent layer: `python -m agentic_ai.seed` inserts a hand-made DRWT2 2019 alert. Its official levels
-are real, but the stage, rain and forecast values are illustrative. Then run
-`python -m agentic_ai.run --alert-id "08158700|minor|2019-05-04T03:00:00Z"`. Details are in [07 Agents](07-agents.md).
+`python -m agentic_ai.seed` writes the same measured May 2019 record (DRWT2 and two neighbours, run through the
+pipeline's own window and forecast code) straight into PostgreSQL, with no Kafka needed. Then run
+`python -m agentic_ai.run --alert-id "08158700|major|2019-05-04T01:00:00Z"`. Details are in [07 Agents](07-agents.md).

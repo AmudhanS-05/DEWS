@@ -50,9 +50,10 @@ docker compose logs topic-init            # 9 topics, PartitionCount 3, Replicat
 cd ..
 ```
 
-Brokers can take 1 to 2 minutes to become healthy on Windows. The compose file creates 9 topics and loads
-`storage/schema.sql` into a **new, empty** database volume. Apply the views once by hand (the console's approval panel
-and Power BI need them). The command is idempotent:
+Brokers can take 1 to 2 minutes to become healthy on Windows. The compose file creates 9 topics. On a **new, empty**
+database volume it also loads `storage/schema.sql` (tables) and `storage/views.sql` (the views that the console's
+approval panel and Power BI need). If your volume was created before the views were added to the compose file, apply
+them once by hand. The command is idempotent:
 
 ```powershell
 Get-Content storage\views.sql | docker exec -i flood-postgres psql -U spa_user -d disaster_warning
@@ -63,7 +64,22 @@ Get-Content storage\views.sql | docker exec -i flood-postgres psql -U spa_user -
 | Service | Address | Credentials |
 |---|---|---|
 | Kafka brokers | `127.0.0.1:9092`, `:9093`, `:9094` | none |
-| PostgreSQL 16 | `127.0.0.1:5432`, database `disaster_warning` | `spa_user` / `spa_pass`. Class-demo values, so change them before exposing anything |
+| PostgreSQL 16 | `127.0.0.1:5432`, database `disaster_warning` | `spa_user` / `spa_pass` |
+
+**The database credentials are local demo defaults, for local use only.** They are public in this repository, and the
+ports are published on your machine. Before you expose the database or run DEWS anywhere shared, change them in three
+places:
+
+1. `POSTGRES_USER` and `POSTGRES_PASSWORD` under the `postgres` service in `docker/docker-compose.yml` (and
+   `docker-compose.single.yml`). These apply only when the volume is created, so either recreate it
+   (`docker compose down -v`, which wipes data) or change the password inside the running database:
+   `docker exec -it flood-postgres psql -U spa_user -d disaster_warning -c "ALTER USER spa_user PASSWORD 'new-password'"`.
+2. `PG_DSN` in every terminal that runs DEWS:
+   `$env:PG_DSN = "postgresql://spa_user:new-password@127.0.0.1:5432/disaster_warning"`.
+3. The Power BI connection credentials.
+
+Also bind the ports to `127.0.0.1` in the compose file (for example `"127.0.0.1:5432:5432"`) if other machines on
+your network should not reach them. Kafka here has no authentication at all.
 
 **Laptop too small for 3 brokers?** Use the single-broker file. You lose the broker fault-tolerance demo, and you must
 not claim it:
@@ -74,8 +90,8 @@ $env:KAFKA_BOOTSTRAP = "127.0.0.1:9092"; $env:TOPIC_REPLICATION_FACTOR = "1"   #
 # the PostgreSQL container is then called flood-postgres-single
 ```
 
-**Schema changes** only load into an empty volume. `docker compose down -v` wipes all data. Later additions were applied
-with `psql`, like the views above.
+**Schema changes** only load into an empty volume. `docker compose down -v` wipes all data. On an existing volume,
+apply additions with `psql`, as with the views above.
 
 ## 3. Create `.env`
 
@@ -148,11 +164,18 @@ The core settings in `common/config.py` come from the shell environment only. Se
 python -m dashboard.flow_monitor            # open http://127.0.0.1:8765
 ```
 
-The header chips should say *Kafka reachable*, *brokers 3/3* and *PostgreSQL up*. Every pipeline node shows "not
-running" or "waiting" until you start something, and that is expected. Then follow
+The page opens on a landing screen. Click **Enter the globe**, or **Pipeline flow**. The header chips should show green
+dots for *Kafka*, *brokers 3/3* and *PG*. Every pipeline node shows "not running" or "waiting" until you start
+something, and that is expected. Then follow
 [03 Run a demo](03-run-a-demo.md).
 
 To see the console without Docker: `python -m dashboard.flow_monitor --demo` (scripted data, marked DEMO DATA).
+
+**One-command start (Windows):** `powershell -ExecutionPolicy Bypass -File scripts\start_demo.ps1` starts the Docker
+stack, three Faust workers, the sink, forecaster, notifier, live producer and console in the background, with logs in
+`gate_output\`. `scripts\stop_demo.ps1` stops them (`-KeepDocker`, `-KeepConsole`). **Note:** the scripts currently
+look for the team's venv at `..\spaenv` (next to the repo folder), not `.venv`. Until that is configurable, create the
+venv there or start the parts by hand as in [03](03-run-a-demo.md).
 
 ## Linux and macOS
 
