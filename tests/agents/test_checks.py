@@ -47,7 +47,7 @@ def test_uncertain_needs_both_signals():
 
 # Regression: a Groq (gpt-oss-120b) draft on the user's laptop was rejected on every attempt (outcome v1_kept).
 # It used typographic Unicode and wrote the probability as a decimal ("~0.79 probability"). Since round 3 the
-# advisory format is a whole percentage, so a decimal is rejected with a reason that says what to write.
+# writer is told to write "79%", and the reviewer still accepts the decimal 0.79 (value checked).
 LIVE_LIKE = ("SIMULATION – replayed historical data. Onion Creek at Driftwood: gauge now 2.6 ft, rising "
              "0.7 ft/h. Forecast 6.8 ft within 6.0 h; 79 % probability of reaching the MINOR flood "
              "stage (5.5 ft). Lead‑time ≈ 4.1 h. Data are provisional.")
@@ -57,9 +57,15 @@ def test_unicode_draft_with_narrow_nbsp_percentage_passes():
     assert checks.review(LIVE_LIKE, ALERT, FACTS) == []
 
 
-def test_decimal_probability_is_rejected_with_actionable_reason():
-    r = checks.review(LIVE_LIKE.replace("79\u202f% probability", "~0.79 probability"), ALERT, FACTS)
-    assert r == ["probability not stated as a whole percentage (write 79%, not a decimal such as 0.79)"]
+def test_decimal_probability_is_accepted_with_its_value_checked():
+    d = LIVE_LIKE.replace("79\u202f% probability", "~0.79 probability")
+    assert checks.review(d, ALERT, FACTS) == []
+
+
+def test_percentage_must_match_the_alert_value():
+    for bad in ("81% probability", "79.3% probability", "~0.97 probability"):
+        r = checks.review(LIVE_LIKE.replace("79\u202f% probability", bad), ALERT, FACTS)
+        assert any(x.startswith("probability not stated") for x in r), bad
 
 
 def test_normalize_maps_typographic_characters_to_ascii():

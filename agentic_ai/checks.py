@@ -89,10 +89,15 @@ def check_numbers(draft: str, facts: dict) -> list[str]:
 
 
 def states_probability(draft: str, p: float) -> bool:
-    """The alert probability appears as a whole percentage (79%)."""
-    want = round(p * 100)
-    return any(m.group(2) and "." not in m.group(1) and int(float(m.group(1))) == want
-               for m in _NUM.finditer(normalize(draft)))
+    """The alert probability appears as a whole percentage (79%) or, accepted too, as a decimal (0.79); value checked.
+    The writer is told to use "79%"; a draft that wrote 0.79 is still correct and is saved as written."""
+    d = normalize(draft)
+    want = p * 100
+    for m in _NUM.finditer(d):
+        v = float(m.group(1))
+        if (m.group(2) and "." not in m.group(1) and abs(v - want) <= 0.5) or (not m.group(2) and v < 1 and abs(v - p) <= 0.006):
+            return True
+    return False
 
 
 def _near(draft: str, a: str, b: re.Pattern, span: int = 80) -> bool:
@@ -125,8 +130,7 @@ def review_detailed(draft: str, alert: dict, facts: dict, confidence: str = "nor
             out.append(("certainty", f"certainty language: '{ph}'"))
     p = alert.get("probability")
     if p is not None and not states_probability(draft, p):
-        out.append(("probability", f"probability not stated as a whole percentage (write {round(p * 100)}%, "
-                                   "not a decimal such as 0.79)"))
+        out.append(("probability", f"probability not stated (write it as a percentage: {round(p * 100)}%)"))
     if p is None and not _near(draft, "probability", _NA):
         out.append(("probability", "the model gives no probability: write 'probability: not available'"))
     if alert.get("horizon_h") is not None and not re.search(r"\b\d+(\.\d+)?\s*h\b|hours?", draft):
