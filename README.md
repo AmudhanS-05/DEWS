@@ -159,5 +159,6 @@ The data are not part of this repository's code and come under their providers' 
 
 DEWS is not affiliated with or endorsed by any of these agencies, and it is not an official warning service.
 
-Licence: the team has not chosen one yet. Until a `LICENSE` file is added, the default applies (all rights reserved
-by the authors); please ask before reusing the code.
+Licence: the code is released under the [MIT License](LICENSE), copyright 2026 Aaditey Chalva, Amudhan S, Dhaksha
+Muthukumaran. The licence covers this repository's code and documentation only. The data sources listed above keep
+their own terms.
