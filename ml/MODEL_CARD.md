@@ -1,6 +1,6 @@
 # Model card: workstream `ml` (31 Oct 2026)
 
-Two models: the **flood-crossing forecaster** (S3 v0 stage-only, v1 stage + rain) and the **sensor-fault detector**
+Two models: the **flood-crossing forecaster** (active at 3 h, see "Use in the stream") (S3 v0 stage-only, v1 stage + rain) and the **sensor-fault detector**
 (Isolation Forest + one rule). All numbers are measured on replayed USGS history (`data_source = replay`, mode
 SIMULATION); none is a live result. **Neither forecaster beats the rise-rate rule consistently; no forecast skill is
 claimed.** The bar is defined in `ml/REFERENCE_BASELINES.md`.
@@ -63,10 +63,13 @@ Same v1 design and protocol at 5, 10 and 25 km, identical rows. Row-level AP at 
 at 3 h 0.25 / 0.24 / no alert. No consistent effect of the radius; 10 km stays.
 
 ### Use in the stream
-`ml/predict.py` uses a model only when `ml/models/active.json` exists (`{"name": "s3_v0"}` or `{"name": "s3_v1_r10"}`;
-see `active.json.example`). **Not activated**: the evidence does not show a clear gain over rise-rate (decision for
-the team). Measured in the cloud: 8.4 ms per call (v0), 17 ms (v1), first call ~1.5 s (file load); one OpenMP thread
-per call. Any failure returns the rise-rate record.
+**Active since 31 Oct 2026 (team decision): `s3_v0` at the 3 h horizon only** (`ml/models/active.json`:
+`{"name": "s3_v0", "horizons": [3]}`); every other horizon, and any failure, uses the rise-rate rule. The evidence
+for that choice, in the words to use: **comparable detection with about a third fewer false alarms on the 2024-26
+test period** (29 vs 33 of 63 crossings detected, 150 vs 224 false alarms, no lead-time gain). Not "better
+forecasts". `predict()` returns `model = "s3_v0"`, `p_minor`, `forecast_stage`, `horizon_h = 3`; p_action, p_moderate,
+p_major stay None. Measured in the cloud: 8.4 ms per call, first call ~1.5 s (file load), one OpenMP thread per call.
+To switch back: delete `ml/models/active.json`.
 
 ## 2. Sensor-fault detector (ml/anomaly.py)
 

@@ -80,3 +80,39 @@ def test_committed_models_load_if_present():
     import joblib
     m = joblib.load(path)
     assert m["kind"] == "v0" and m["horizon_h"] == 3 and 0 < m["tau"] < 1
+
+
+def test_horizon_restriction_in_active_json(isolated):
+    from ml.s3_model import V0_LONG
+    for h in (3, 6):
+        _tiny_model(isolated / f"s3_v0_h{h}.joblib", V0_LONG)
+    (isolated / "active.json").write_text(json.dumps({"name": "s3_v0", "horizons": [3]}))
+    rs = synth.hydrograph("S1", days=5, seed=1)
+    w = [a for a in windows_from_readings(rs, 3600) if a["stage_last"] is not None]
+    f = {**w[-1], "history": w[-25:-1], "official_levels": LEVELS}
+    assert P.predict(f)["model"] == "s3_v0" and P.predict(f)["p_minor"] is not None        # default h = 3
+    out6 = P.predict({**f, "horizon_h": 6})
+    assert out6["model"] == "rise_rate" and out6["p_minor"] is None                        # file exists, not allowed
+
+
+def test_repository_activation_is_s3_v0_at_3h_only():
+    """The committed ml/models/active.json (team decision 31 Oct 2026)."""
+    import os
+    cfg = json.load(open(os.path.join(os.path.dirname(P.__file__), "models", "active.json")))
+    assert cfg["name"] == "s3_v0" and cfg["horizons"] == [3]
+
+
+def test_real_model_at_3h_and_fallback_elsewhere(monkeypatch):
+    import os
+    d = os.path.join(os.path.dirname(P.__file__), "models")
+    if not os.path.exists(os.path.join(d, "s3_v0_h3.joblib")):
+        pytest.skip("model files not present")
+    monkeypatch.setattr(P, "MODELS_DIR", d)
+    monkeypatch.setattr(P, "_CACHE", {})
+    rs = synth.hydrograph("S1", days=5, seed=1)
+    w = [a for a in windows_from_readings(rs, 3600) if a["stage_last"] is not None]
+    f = {**w[-1], "history": w[-25:-1], "official_levels": LEVELS}
+    out = P.predict(f)
+    assert out["model"] == "s3_v0" and 0 <= out["p_minor"] <= 1 and out["horizon_h"] == 3.0
+    assert P.predict({**f, "horizon_h": 1})["model"] == "rise_rate"
+    assert P.predict({**f, "stage_last": None})["model"] == "rise_rate"
