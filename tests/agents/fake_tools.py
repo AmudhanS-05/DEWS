@@ -1,9 +1,9 @@
 """In-memory Tools over agentic_ai.seed.build() so graph tests need no PostgreSQL. Same public methods."""
 import copy
-from datetime import datetime
+from datetime import timedelta
 
 from agentic_ai import seed
-from agentic_ai.tools import Tools, _csv_gauge, _iso, _row, _ts
+from agentic_ai.tools import Tools, _csv_gauge, _row, _ts
 
 
 class FakeTools(Tools):
@@ -42,12 +42,25 @@ class FakeTools(Tools):
         rows.sort(key=lambda w: w["window_start"])
         return [_row(r) for r in rows[-int(hours):]]
 
-    def get_forecast(self, site, until=None, mode=None):
+    def get_forecast(self, site, until=None, mode=None, horizon_h=None):
         u = _ts(until)
         rows = [r for r in self.risk if r["site_no"] == site and (u is None or r["window_start"].timestamp() + 3600 <= u.timestamp())
-                and (mode is None or r["mode"] == mode)]
+                and (mode is None or r["mode"] == mode) and (horizon_h is None or r["horizon_h"] == horizon_h)]
         rows.sort(key=lambda r: r["window_start"])
         return _row(rows[-1]) if rows else None
+
+    def _forecast_rows(self, site, mode, start, end, horizon_h):
+        s, e = _ts(start), _ts(end)
+        stage = {(w["site_no"], w["window_start"], w["mode"]): w["stage_last"] for w in self.windows}
+        rows = [dict(r, stage_last=stage.get((r["site_no"], r["window_start"], r["mode"]))) for r in self.risk
+                if r["site_no"] == site and r["mode"] == mode and r["window_start"] >= s
+                and r["window_start"] + timedelta(hours=1) <= e and (horizon_h is None or r["horizon_h"] == horizon_h)]
+        rows.sort(key=lambda r: r["window_start"])
+        return [_row(r) for r in rows]
+
+    def _alert_record(self, alert_id):
+        a = self.alerts.get(alert_id)
+        return _row(dict(a)) if a else None
 
     def get_past_floods(self, site):
         return {"n": 0, "median_rise_h": 10.9, "recent": []}
@@ -61,21 +74,6 @@ class FakeTools(Tools):
                     key=lambda a: a["raised_at"])
         ids = {a["alert_id"] for a in al}
         return {"alerts": [_row(dict(a)) for a in al], "advisories": [dict(a) for a in self.advisories if a["alert_id"] in ids]}
-
-    def get_alert(self, alert_id):
-        a = self.alerts.get(alert_id)
-        if not a:
-            return None
-        site = a["site_no"]
-        w = self.get_recent_windows(site, 1, a["raised_at"], a["mode"])
-        fc = self.get_forecast(site, a["raised_at"], a["mode"])
-        earlier = [h for h in self.get_episode_history(alert_id)["alerts"] if h["raised_at"] < _iso(a["raised_at"])]
-        return {"alert_id": alert_id, "kind": "upgrade" if earlier else "new", "site_no": site,
-                "site_name": self.get_gauge_info(site)["name"], "mode": a["mode"], "category": a["category"],
-                "probability": a["probability"], "horizon_h": a["horizon_h"], "forecast_stage": fc["forecast_stage"],
-                "current_stage": w[-1]["stage_last"], "official_levels": self.get_official_levels(site),
-                "provisional_data": a["provisional_data"], "model": fc["model"], "raised_at": _iso(a["raised_at"]),
-                "episode_start": alert_id.split("|")[-1], "status": a["status"]}
 
     def save_advisory(self, alert_id, text, confidence="normal", reviewer_verdict=None, source="agents", version=None):
         version = version or max([x["version"] for x in self.advisories if x["alert_id"] == alert_id] + [1]) + 1

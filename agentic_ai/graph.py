@@ -128,9 +128,9 @@ def build_graph(tools, run: Run):
     def evidence(s: State) -> dict:
         t0, a = _now(), s["alert"]
         run.event("evidence", "start", {"site": a["site_no"]})
-        site, until, mode = a["site_no"], a["raised_at"], a["mode"]
+        site, until, mode = a["site_no"], a.get("as_of") or a["raised_at"], a["mode"]   # the alert's own window
         w = run.call("evidence", "get_recent_windows", site, 12, until=until, mode=mode)
-        fc = run.call("evidence", "get_forecast", site, until=until, mode=mode)
+        fc = run.call("evidence", "get_forecast", site, until=until, mode=mode, horizon_h=a.get("horizon_h"))
         lv = run.call("evidence", "get_official_levels", site)
         pf = run.call("evidence", "get_past_floods", site)
         stages = [x["stage_last"] for x in w if x.get("stage_last") is not None]
@@ -152,7 +152,7 @@ def build_graph(tools, run: Run):
     def context(s: State) -> dict:
         t0, a = _now(), s["alert"]
         run.event("context", "start", {"site": a["site_no"]})
-        site, until, mode = a["site_no"], a["raised_at"], a["mode"]
+        site, until, mode = a["site_no"], a.get("as_of") or a["raised_at"], a["mode"]
         rain = run.call("context", "get_rain", site, 6, until=until, mode=mode)
         nb = run.call("context", "get_neighbours", site, until=until, mode=mode)
         info = run.call("context", "get_gauge_info", site)

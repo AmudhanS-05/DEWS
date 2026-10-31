@@ -6,7 +6,7 @@ UPGRADE = "08158700|moderate|2019-05-04T03:00:00Z"
 
 
 def test_seed_is_idempotent(pg_conn, seeded):
-    assert seed.load(pg_conn) == ALERT
+    assert seed.load(pg_conn, illustrative=True) == ALERT
     with pg_conn.cursor() as cur:
         cur.execute("SELECT count(*) FROM alerts")
         assert cur.fetchone()[0] == 2
