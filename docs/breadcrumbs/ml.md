@@ -23,6 +23,7 @@
 [ml] I1.1 + I2.1 measured, US side: `python -m india.audit` 38 stations in 4 min 4 s; Table 1 (india/figures/table1_us_vs_india.md): interval median 5 min (5 to 15), archive 11.0 years within the 2015-2025 audit window (9.2 to 11.0), missing median 0.8 % (0 to 36.6), longest gap median 120 h (2 to 3276), 310 minor events, rise resolvable at 38 of 38. India side pending the user's India-WRIS downloads.
 [ml] M2.1 measured: `python -m ml.mrms_history --radii 5,10,25 --workers 4`: 102 minor crossings since 2020-10-14 (50 slow) + 102 matched dry windows = 8,551 hours; 8,535 decoded, 16 missing in the archive, 0 errors; 42 min 21 s; output 1.3 MB (no GRIB2 kept). Rain over the 61 h window, own gauge, 10 km: median 100.9 mm before slow floods, 57.3 mm before fast ones (none < 1 mm), 0.07 mm in dry windows (65 % < 1 mm). ml/figures/mrms_event_vs_dry.csv.
 [ml] M2.2 measured (replay, case-control rows: event + dry hours, 2020-10 to 2026-10; split chosen before any result: 2024-01-01 primary, 2025-01-01 as a check). Split 2024 (train 2021-23, 39 crossings; test 2024-26, 63 crossings, 23 storms): 3 h POOLED F1 v0 0.25, v1 0.22, rise-rate on the same rows 0.27; v1 FA 72 vs v0 166 vs rise-rate 152 at lower recall (0.27 vs 0.52). Row-level average precision v1 > v0 at 5 of 6 horizons (3 h 0.076 vs 0.067; 6 h 0.102 vs 0.076; base rate 0.2 % at 3 h). Split 2025 (train 55 crossings, test 47): 3 h F1 v0 NA (no alert), v1 0.27, rise-rate 0.26; AP v1 > v0 at 4 of 6. Median lead stays about 0.4 to 1.2 h gross (net about -0.6 to +0.2 h). Finding: no consistent event-level gain from rain or from the GBM over rise-rate yet; the tau rule (chosen on the last 25 % of train, which holds only a few crossings) gives zero alerts at some horizons (2024 split: v0 h4, v1 h2 and h5). Not inserted into evaluation_runs (no DB here); rows in ml/figures/model_v1_vs_v0*.csv.
+[ml] I2.2 API client: `india/indiawris_api.py` from the OpenAPI spec (docs/indiawris_api.json on claude/core): POST with query parameters, basin scope `/Dataset/Basin/River WaterLevel` (basinName, tributaryName, agencyName, startdate, enddate, page, size <= 1000, download) and state scope `/Dataset/River Water Level`; date chunks, paging until a short page, exponential backoff, raw bodies saved under data/raw/indiawris/api/, records converted to per-station CSVs in data/raw/indiawris/api_csv/ that india/indiawris_loader reads (SIMULATION, INDIA-WRIS). `--probe` prints HTTP status, headers and the first 60 body lines. 8 tests with a mocked HTTP layer (pytest tests/india: 20 passed). UNVERIFIED: the real response layout (spec says only StatusHandler {statusCode, message, data}); from the cloud the probe fails with "connection reset by peer". Needs one --probe run from the laptop in India.
 
 
 ## Run locally (or in a cloud session that allows nwis.waterservices.usgs.gov and noaa-mrms-pds.s3.amazonaws.com)
@@ -47,7 +48,13 @@ gauge, a progress bar and a final `done ... in N min` line.
 7. M2.1: `python -m ml.mrms_history --radii 5,10,25 --workers 4` (try `--max-hours 20` first; resumable)
 8. M2.2: `python -m ml.rain_model --split 2024-01-01 --horizons 1,2,3,4,5,6 --label m2.2-rain-v1 --out ml/figures/model_v1_vs_v0.csv`
    (pick --split so both sides hold floods; the command prints the flood years per side and refuses an empty side).
-9. India (manual, India-WRIS is browser-only): 3 to 5 free stations with known floods (Godavari, Krishna, Mahanadi or
+9. India-WRIS API (laptop in India; the cloud cannot reach indiawris.gov.in):
+   `python -m india.indiawris_api --probe` (basin Godavari, agency CWC, last 7 days, 10 rows; add
+   `--basin Krishna --tributary Krishna` etc. to try others). Paste the printed status, headers and body back so the
+   parser (F_CODE / F_TIME / F_VALUE in india/indiawris_api.py) can be fixed. Then the full pull, e.g.
+   `python -m india.indiawris_api --basin Godavari --tributary Godavari --agency CWC --start 2015-01-01 --end 2025-12-31`
+   (raw pages in data/raw/indiawris/api/, loader CSVs in data/raw/indiawris/api_csv/), then `python -m india.table1`.
+10. India (manual fallback, India-WRIS web download): 3 to 5 free stations with known floods (Godavari, Krishna, Mahanadi or
    Periyar), 2015-2025, one year per Excel file, into data/raw/indiawris/; warning/danger levels from CWC bulletins
    into india/thresholds.csv. Check the first file with `python -m india.indiawris_loader data/raw/indiawris`, then
    rerun `python -m india.table1`.
