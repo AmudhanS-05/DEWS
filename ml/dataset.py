@@ -7,17 +7,23 @@ Stage features are RELATIVE to the gauge's official minor stage (pooled model, d
 `rel_minor = stage_last - minor`. Labels use official NWPS categories only.
 
 Labels, for each horizon h in `horizons` (window end t):
-  y_stage_h  stage at the first reading at/after t + h (None if the record ends)
+  y_stage_h  stage at the first reading at/after t + h (missing if the record ends)
   y_cross_h  1 if the stage is below the category now and reaches it within (t, t + h], else 0
 `event_id` is "<site>|<crossing_ts>" for rows within `lead_h` hours before an observed crossing, else "".
 `slow` is True when that event's rise time is >= `slow_rise_h` (default 3 h).
 Split by time with `time_split`; never at random.
+
+Computation is vectorised per gauge (`build_site_columns` -> numpy columns); `build_site` returns the same data
+as a list of dicts (missing = None) for small inputs and tests. The CLI writes Parquet.
+
+    python -m ml.dataset [--data-dir D] [--gauges-only DRWT2,LCPT2] --out ml/figures/pooled_dataset.parquet
 """
 from __future__ import annotations
 
-import bisect
 import csv
 from collections import Counter
+
+import numpy as np
 
 from common import config, hydro
 from common.nwps import CATEGORIES
@@ -32,47 +38,94 @@ def primary_series(readings: list[dict]) -> list[dict]:
     return [r for r in readings if r["series"] == primary]
 
 
-def build_site(readings: list[dict], cats: dict, category: str = "minor", horizons=HORIZONS,
-               w: int = config.WINDOW_SECONDS, slow_rise_h: float = 3.0, lead_h: float = 6.0) -> list[dict]:
+def _nan(x):
+    return np.nan if x is None else x
+
+
+def _range_max(vals: np.ndarray, lo: np.ndarray, hi: np.ndarray) -> np.ndarray:
+    """max(vals[lo:hi]) per row, NaN where the range is empty."""
+    ok = hi > lo
+    ext = np.append(vals, -np.inf)                       # sentinel so index len(vals) is valid
+    idx = np.empty(2 * len(lo), dtype=np.int64)
+    idx[0::2] = np.minimum(lo, len(vals))
+    idx[1::2] = np.where(ok, np.minimum(hi, len(vals)), np.minimum(lo, len(vals)) + 1)
+    idx[1::2] = np.minimum(idx[1::2], len(vals))
+    out = np.maximum.reduceat(ext, idx)[0::2]
+    return np.where(ok, out, np.nan)
+
+
+def build_site_columns(readings: list[dict], cats: dict, category: str = "minor", horizons=HORIZONS,
+                       w: int = config.WINDOW_SECONDS, slow_rise_h: float = 3.0, lead_h: float = 6.0,
+                       wins: list[dict] | None = None) -> dict[str, np.ndarray]:
     rs = primary_series(readings)
     if not rs:
-        return []
+        return {}
     site = str(rs[0]["site_no"])
     series = sorted((r["reading_ts"], r["value"]) for r in rs)
-    times = [t for t, _ in series]
+    times = np.array([t for t, _ in series], dtype=float)
+    vals = np.array([v for _, v in series], dtype=float)
     thr, minor = cats[category], cats["minor"]
-    crossings = hydro.find_crossings(series, thr)
-    events = [(series[i][0], f"{site}|{int(series[i][0])}", hydro.rise_time_h(series, i) >= slow_rise_h)
-              for i in crossings]
-    by_t: dict[float, float] = {}                 # window end -> stage_last, for lag features
-    wins = windows_from_readings(rs, w)
-    for a in wins:
-        by_t[a["window_start_ts"] + w] = a["stage_last"]
+    cross_idx = hydro.find_crossings(series, thr)
+    ev_t = np.array([series[i][0] for i in cross_idx], dtype=float)
+    ev_slow = [hydro.rise_time_h(series, i) >= slow_rise_h for i in cross_idx]
 
-    rows = []
-    for a in wins:
-        t, cur = a["window_start_ts"] + w, a["stage_last"]
-        if cur is None:
-            continue
-        row = {"site_no": site, "t": t, "stage": cur, "rel_minor": cur - minor,
-               "rel_action": cur - cats["action"], "frac_to_minor": cur / minor if minor else None,
-               "rise_rate": a["rise_rate_ft_per_h"] or 0.0, "stage_range": (a["stage_max"] or cur) - (a["stage_min"] or cur),
-               "n_readings": a["n_readings"], "carried_forward": int(a["carried_forward"]),
-               "provisional": int(a["provisional"])}
-        for lag in LAGS_H:
-            prev = by_t.get(t - lag * 3600)
-            row[f"d{lag}h"] = cur - prev if prev is not None else None
-        for h in horizons:
-            j = bisect.bisect_left(times, t + h * 3600)
-            row[f"y_stage_{h}"] = series[j][1] if j < len(series) else None
-            hi = bisect.bisect_right(times, t + h * 3600)
-            lo = bisect.bisect_right(times, t)
-            future_max = max((v for _, v in series[lo:hi]), default=None)
-            row[f"y_cross_{h}"] = int(cur < thr and future_max is not None and future_max >= thr)
-        ev = next(((et, eid, slow) for et, eid, slow in events if 0 < et - t <= lead_h * 3600), None)
-        row["event_id"], row["slow"] = (ev[1], ev[2]) if ev else ("", None)
-        rows.append(row)
-    return rows
+    wins = [a for a in (wins if wins is not None else windows_from_readings(rs, w)) if a["stage_last"] is not None]
+    t = np.array([a["window_start_ts"] + w for a in wins], dtype=float)
+    cur = np.array([a["stage_last"] for a in wins], dtype=float)
+    n = len(t)
+    col: dict[str, np.ndarray] = {
+        "site_no": np.full(n, site, dtype=object), "t": t, "stage": cur, "rel_minor": cur - minor,
+        "rel_action": cur - cats["action"], "frac_to_minor": cur / minor if minor else np.full(n, np.nan),
+        "rise_rate": np.array([a["rise_rate_ft_per_h"] or 0.0 for a in wins], dtype=float),
+        "stage_range": np.array([(a["stage_max"] if a["stage_max"] is not None else c)
+                                 - (a["stage_min"] if a["stage_min"] is not None else c)
+                                 for a, c in zip(wins, cur)], dtype=float),
+        "n_readings": np.array([a["n_readings"] for a in wins], dtype=np.int64),
+        "carried_forward": np.array([int(a["carried_forward"]) for a in wins], dtype=np.int64),
+        "provisional": np.array([int(a["provisional"]) for a in wins], dtype=np.int64),
+    }
+    for lag in LAGS_H:                                    # stage `lag` hours ago from the window sequence
+        pos = np.searchsorted(t, t - lag * 3600)
+        pos_c = np.minimum(pos, n - 1)
+        hit = (pos < n) & (t[pos_c] == t - lag * 3600)
+        col[f"d{lag}h"] = np.where(hit, cur - cur[pos_c], np.nan)
+    lo = np.searchsorted(times, t, side="right")
+    for h in horizons:
+        end = t + h * 3600
+        j = np.searchsorted(times, end, side="left")
+        col[f"y_stage_{h}"] = np.where(j < len(vals), vals[np.minimum(j, len(vals) - 1)], np.nan)
+        fmax = _range_max(vals, lo, np.searchsorted(times, end, side="right"))
+        col[f"y_cross_{h}"] = ((cur < thr) & (fmax >= thr)).astype(np.int64)   # NaN >= thr is False
+    ev_id = np.full(n, "", dtype=object)
+    slow = np.full(n, None, dtype=object)
+    if len(ev_t):
+        k = np.searchsorted(ev_t, t, side="right")        # first event strictly after t
+        kc = np.minimum(k, len(ev_t) - 1)
+        hit = (k < len(ev_t)) & (ev_t[kc] - t <= lead_h * 3600)
+        for i in np.nonzero(hit)[0]:
+            ev_id[i] = f"{site}|{int(ev_t[kc[i]])}"
+            slow[i] = ev_slow[kc[i]]
+    col["event_id"], col["slow"] = ev_id, slow
+    return col
+
+
+def build_site(readings: list[dict], cats: dict, **kw) -> list[dict]:
+    col = build_site_columns(readings, cats, **kw)
+    if not col:
+        return []
+    n = len(col["t"])
+    out = []
+    for i in range(n):
+        row = {}
+        for k, v in col.items():
+            x = v[i]
+            if isinstance(x, (float, np.floating)):
+                x = None if np.isnan(x) else float(x)
+            elif isinstance(x, np.integer):
+                x = int(x)
+            row[k] = x
+        out.append(row)
+    return out
 
 
 def build_pooled(readings_by_site: dict[str, list[dict]], cats_by_site: dict[str, dict], **kw) -> list[dict]:
@@ -117,29 +170,39 @@ def to_csv(rows: list[dict], path: str) -> None:
 def main(argv=None):
     import argparse
     import os
-    from producers.replay_producer import load_readings
+    import pandas as pd
+    from ml.gauges import load_gauges
+    from ml.progress import Timer, bar
     p = argparse.ArgumentParser(description="Build the pooled dataset from cached USGS history.")
     p.add_argument("--gauges", default="config/gauge_locations.csv")
+    p.add_argument("--gauges-only", help="comma list of NWPS ids or site numbers, e.g. DRWT2,LCPT2")
     p.add_argument("--start", default="2015-01-01")
     p.add_argument("--end", default="2025-12-31")
     p.add_argument("--data-dir", help="folder holding raw/usgs/ (default: DATA_DIR env or ./data)")
-    p.add_argument("--out", default="ml/figures/pooled_dataset.csv")
+    p.add_argument("--out", default="ml/figures/pooled_dataset.parquet", help=".parquet (default) or .csv")
     a = p.parse_args(argv)
     if a.data_dir:
         config.DATA_DIR = a.data_dir
-    rbs, cbs = {}, {}
-    with open(a.gauges, encoding="utf-8") as f:
-        for g in csv.DictReader(f):
-            try:
-                cbs[g["site_no"]] = {k: float(g[k]) for k in CATEGORIES}
-                rbs[g["site_no"]] = load_readings(g["site_no"], a.start, a.end)
-            except (SystemExit, ValueError):
-                cbs.pop(g["site_no"], None)
-                print(f"skip {g['site_no']}: no cached data or missing categories")
-    rows = build_pooled(rbs, cbs)
+    timer = Timer()
+    gauges = load_gauges(a.gauges, a.gauges_only, a.start, a.end, config.DATA_DIR)
+    print(f"ml.dataset: building windows + labels for {len(gauges)} gauges ({a.start}..{a.end}) from "
+          f"{config.DATA_DIR}/raw/usgs -> {a.out}")
+    if not gauges:
+        raise SystemExit("ERROR: no gauge had cached data; check --data-dir and --gauges-only")
+    frames = []
+    for g in bar(gauges, "gauges"):
+        col = build_site_columns(g["readings"], g["cats"])
+        if col:
+            frames.append(pd.DataFrame(col))
+    df = pd.concat(frames, ignore_index=True).sort_values("t", kind="stable")
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
-    to_csv(rows, a.out)
-    print(f"{len(rows)} rows, {len(rbs)} gauges -> {a.out}")
+    if a.out.endswith(".csv"):
+        df.to_csv(a.out, index=False)
+    else:
+        df["slow"] = df["slow"].astype("boolean")
+        df.to_parquet(a.out, index=False)
+    print(f"done: {len(df)} rows, {len(frames)} gauges, {int((df['event_id'] != '').sum())} rows in events "
+          f"-> {a.out} in {timer.elapsed()}")
 
 
 if __name__ == "__main__":
