@@ -3,3 +3,7 @@ pyarrow
 pandas
 numpy
 scikit-learn
+openpyxl
+eccodes
+eccodeslib
+requests
