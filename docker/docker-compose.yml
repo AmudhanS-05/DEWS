@@ -95,6 +95,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ../storage/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ../storage/views.sql:/docker-entrypoint-initdb.d/02_views.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U spa_user -d disaster_warning"]
       interval: 10s
