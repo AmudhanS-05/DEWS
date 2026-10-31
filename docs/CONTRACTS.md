@@ -27,8 +27,10 @@ hour), `accum_hours`, `rain_mm` (mean depth over the 10 km circle), `n_cells`, `
 **`alerts.flood`** (S1): only when a forecast crosses an official category within the horizon.
 `alert_id` (`site_no|category|episode_start`), `kind` = `new` | `upgrade` | `retract`, `site_no`, `site_name`, `mode`,
 `category` (`action` | `minor` | `moderate` | `major`), `probability`, `horizon_h`, `forecast_stage`,
-`current_stage`, `official_levels` {action, minor, moderate, major}, `provisional_data`, `model`, `raised_at`,
-`episode_start`, `trace` = forecast trace + `forecast_time`.
+`current_stage`, `official_levels` {action, minor, moderate, major}, `provisional_data`, `model`, `raised_at` (wall
+clock when it was raised), `window_start` / `window_start_ts` (the data time of the window that raised it, added 31
+Oct; for a replay this is the historical time, `raised_at` is not), `episode_start`, `trace` = forecast trace +
+`forecast_time`.
 
 **`alerts.approved`** (S1): written by the console only after a person approves. `alert_id`, `advisory_id`,
 `version`, `text`, `approved_by`, `approved_at`, `mode`. The notifier reads only this topic.

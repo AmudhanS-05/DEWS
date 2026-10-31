@@ -41,6 +41,14 @@ def test_rising_gauge_raises_one_new_alert_before_the_crossing():
     assert a["mode"] == "SIMULATION" and a["official_levels"]["minor"] == 5.5
 
 
+def test_alert_carries_the_window_time_not_only_the_wall_clock():
+    ws = [window(0, 2.6, 0.7), window(1, 3.3, 0.7), window(2, 4.0, 0.7)]
+    _, alerts, _ = run(ws)
+    a = alerts[0]
+    assert a["window_start"] == ws[2]["window_start"] and a["window_start_ts"] == ws[2]["window_start_ts"]
+    assert a["raised_at"] != a["window_start"]      # raised_at stays the wall clock (made_at)
+
+
 def test_stage_already_in_category_does_not_alert_again():
     _, alerts, _ = run([window(0, 6.0, 0.0), window(1, 6.0, 0.0)])
     assert alerts == []

@@ -129,7 +129,8 @@ def _alert(agg, gauge, pred, category, alert_id, kind, episode_start, cur, fc) -
         "mode": agg.get("mode", "LIVE"), "category": category, "probability": pred.get(f"p_{category}"),
         "horizon_h": pred["horizon_h"], "forecast_stage": pred.get("forecast_stage"), "current_stage": cur,
         "official_levels": gauge["levels"], "provisional_data": bool(agg.get("provisional")),
-        "model": pred["model"], "raised_at": fc["made_at"], "episode_start": episode_start, "trace": t,
+        "model": pred["model"], "raised_at": fc["made_at"], "window_start": agg["window_start"],
+        "window_start_ts": agg.get("window_start_ts"), "episode_start": episode_start, "trace": t,
     }
 
 
