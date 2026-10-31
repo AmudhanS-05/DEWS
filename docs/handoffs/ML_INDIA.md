@@ -28,7 +28,10 @@ report the gain from rain as a result.
   (rise ≥ 3 h) and the number of distinct storms; weight events so fast urban creeks (AHOT2: 38 of 213) do not dominate.
 - **Event-based metrics:** precision, recall, F1, false-alarm count, lead time gross and net of the ~1 h feed delay,
   MAE and RMSE of stage; precision-recall curves, never accuracy.
-- **Baselines to beat** (rise-rate, 3 h): DRWT2 F1 0.65, LCPT2 0.26, JNCT2 0.64, AHOT2 0.41.
+- **Baselines to beat** (rise-rate, 3 h, `ml/harness.py`, 38 gauges, 2015-2025): pooled F1 0.28 (slow-only 0.21);
+  DRWT2 0.25, LCPT2 0.42, JNCT2 0.76, AHOT2 0.25 (`ml/figures/baselines.csv`). Rescore the baseline on the same rows
+  when a model uses a different period. Corrected 31 Oct 2026: earlier values included a 1 h look-ahead; see
+  `ml/REFERENCE_BASELINES.md`.
 - **Radius sensitivity** (S3): rerun with rain over 5, 10 and 25 km circles.
 - **India steps:** step C carries the quantitative argument (real data); step D shows feasibility only and says so.
 - Never claim better forecasts than NSSL FLASH, GloFAS or NWS.

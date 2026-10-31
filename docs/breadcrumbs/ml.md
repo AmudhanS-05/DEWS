@@ -24,6 +24,9 @@
 [ml] M2.1 measured: `python -m ml.mrms_history --radii 5,10,25 --workers 4`: 102 minor crossings since 2020-10-14 (50 slow) + 102 matched dry windows = 8,551 hours; 8,535 decoded, 16 missing in the archive, 0 errors; 42 min 21 s; output 1.3 MB (no GRIB2 kept). Rain over the 61 h window, own gauge, 10 km: median 100.9 mm before slow floods, 57.3 mm before fast ones (none < 1 mm), 0.07 mm in dry windows (65 % < 1 mm). ml/figures/mrms_event_vs_dry.csv.
 [ml] M2.2 measured (replay, case-control rows: event + dry hours, 2020-10 to 2026-10; split chosen before any result: 2024-01-01 primary, 2025-01-01 as a check). Split 2024 (train 2021-23, 39 crossings; test 2024-26, 63 crossings, 23 storms): 3 h POOLED F1 v0 0.25, v1 0.22, rise-rate on the same rows 0.27; v1 FA 72 vs v0 166 vs rise-rate 152 at lower recall (0.27 vs 0.52). Row-level average precision v1 > v0 at 5 of 6 horizons (3 h 0.076 vs 0.067; 6 h 0.102 vs 0.076; base rate 0.2 % at 3 h). Split 2025 (train 55 crossings, test 47): 3 h F1 v0 NA (no alert), v1 0.27, rise-rate 0.26; AP v1 > v0 at 4 of 6. Median lead stays about 0.4 to 1.2 h gross (net about -0.6 to +0.2 h). Finding: no consistent event-level gain from rain or from the GBM over rise-rate yet; the tau rule (chosen on the last 25 % of train, which holds only a few crossings) gives zero alerts at some horizons (2024 split: v0 h4, v1 h2 and h5). Not inserted into evaluation_runs (no DB here); rows in ml/figures/model_v1_vs_v0*.csv.
 [ml] I2.2 API client: `india/indiawris_api.py` from the OpenAPI spec (docs/indiawris_api.json on claude/core): POST with query parameters, basin scope `/Dataset/Basin/River WaterLevel` (basinName, tributaryName, agencyName, startdate, enddate, page, size <= 1000, download) and state scope `/Dataset/River Water Level`; date chunks, paging until a short page, exponential backoff, raw bodies saved under data/raw/indiawris/api/, records converted to per-station CSVs in data/raw/indiawris/api_csv/ that india/indiawris_loader reads (SIMULATION, INDIA-WRIS). `--probe` prints HTTP status, headers and the first 60 body lines. 8 tests with a mocked HTTP layer (pytest tests/india: 20 passed). UNVERIFIED: the real response layout (spec says only StatusHandler {statusCode, message, data}); from the cloud the probe fails with "connection reset by peer". Needs one --probe run from the laptop in India.
+[ml] Baseline correction (user decision, 31 Oct): ml/REFERENCE_BASELINES.md. `python -m ml.reference_check` (1 min 30 s, ml/figures/reference_check.csv) scores 4 variants on identical readings/events/scoring: notebook as run (hourly mean, start label) reproduces 0.65/0.26/0.64/0.41 exactly; end label 0.05/0.34/0.29/0.17 (same alert counts, detections 12->1 at DRWT2); last reading instead of mean 0.18/0.33/0.62/0.25; harness 0.16/0.33/0.64/0.25 (rate definition moves F1 <= 0.03); harness on 2015-2025 0.25/0.42/0.76/0.25. Bar to beat = harness, 38 gauges, 2015-2025, rise-rate 3 h POOLED F1 0.28 (slow-only 0.21). FAQ.md (lines 253, 262) and docs/handoffs/ML_INDIA.md corrected with a note; not edited (listed): docs/EDA_WALKTHROUGH.md lines 872 and 1095, notebook 02 cell 27 outputs and code.
+[ml] `ml/import_runs.py`: idempotent import of evaluation_runs CSVs (identity run_label, data_source, site_no, model, horizon_h; skip or --replace; NA -> NULL). Tested against a throwaway PostgreSQL 16 with storage/schema.sql in the cloud: baselines.csv + model_v1_vs_v0.csv inserted 1,200; rerun skipped 480/480; --replace replaced 480. 4 unit tests (fake cursor).
+[ml] India-WRIS: user's laptop probe returned HTTP 200 with {"statusCode": 500, "message": "No data found for the given criteria.", "data": []} (Godavari/Godavari/CWC, 2026-10-24..30). Added `--discover` (11 small requests, 3 s apart: Godavari with tributary = basin / empty / Pranhita, agency CWC / empty / state agency guesses, flood windows Godavari 2022-07-08..18 and Kerala 2018-08-10..20, a dry week 2023-02-01..07, state endpoint Telangana/Bhadradri Kothagudem and Kerala/Ernakulam); prints counts and the first record of any hit. Fixed: an empty tributary was sent as the basin name. pytest -q tests/india: 22 passed.
 
 
 ## Run locally (or in a cloud session that allows nwis.waterservices.usgs.gov and noaa-mrms-pds.s3.amazonaws.com)
@@ -41,7 +44,8 @@ gauge, a progress bar and a final `done ... in N min` line.
 3. Quick check on the four reference gauges (expect `ok` x4, then ref / measured / diff for the 3 h rise-rate F1):
    `python -m ml.harness --gauges-only DRWT2,LCPT2,JNCT2,AHOT2 --horizons 3 --out ml/figures/baselines_ref.csv`
 4. M1.4 all gauges, h = 1..6: `python -m ml.harness --horizons 1,2,3,4,5,6 --label m1.4-baselines --out ml/figures/baselines.csv`
-   (`--insert` with the Docker DB up writes evaluation_runs). Report differences from the reference F1s, do not tune;
+   (`--insert` with the Docker DB up writes evaluation_runs). The old FAQ values printed next to it had a 1 h
+   look-ahead (ml/REFERENCE_BASELINES.md; recheck with `python -m ml.reference_check`); do not tune;
    commit with `git add -f ml/figures/baselines.csv`.
 5. M1.1: `python -m ml.dataset --end 2026-10-31 --out ml/figures/pooled_dataset.parquet`
 6. I1.1 US: `python -m india.audit --out india/figures/audit_us.csv`, then Table 1: `python -m india.table1`
@@ -49,6 +53,8 @@ gauge, a progress bar and a final `done ... in N min` line.
 8. M2.2: `python -m ml.rain_model --split 2024-01-01 --horizons 1,2,3,4,5,6 --label m2.2-rain-v1 --out ml/figures/model_v1_vs_v0.csv`
    (pick --split so both sides hold floods; the command prints the flood years per side and refuses an empty side).
 9. India-WRIS API (laptop in India; the cloud cannot reach indiawris.gov.in):
+   `python -m india.indiawris_api --discover` (11 small requests, 3 s apart; prints which basin / tributary /
+   agency / state-district / date combinations return records, and the first record). Then
    `python -m india.indiawris_api --probe` (basin Godavari, agency CWC, last 7 days, 10 rows; add
    `--basin Krishna --tributary Krishna` etc. to try others). Paste the printed status, headers and body back so the
    parser (F_CODE / F_TIME / F_VALUE in india/indiawris_api.py) can be fixed. Then the full pull, e.g.
@@ -58,3 +64,7 @@ gauge, a progress bar and a final `done ... in N min` line.
    Periyar), 2015-2025, one year per Excel file, into data/raw/indiawris/; warning/danger levels from CWC bulletins
    into india/thresholds.csv. Check the first file with `python -m india.indiawris_loader data/raw/indiawris`, then
    rerun `python -m india.table1`.
+11. Rows computed elsewhere into the laptop DB (Docker up; PG_DSN from .env or the default in common/config.py;
+    needs psycopg2-binary from requirements.txt): `python -m ml.import_runs ml/figures/baselines.csv
+    ml/figures/model_v1_vs_v0.csv` (prints inserted / skipped per file; rerunning skips; `--replace` overwrites;
+    `--dry-run` parses only). Then core's `python -m tools.verify_slice S1` should see the ML rows.
