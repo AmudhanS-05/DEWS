@@ -1,7 +1,7 @@
 /* Globe: an orthographic sphere drawn by a WebGL2 fragment shader at full screen resolution. Imagery = Esri World Imagery in
    Web Mercator, loaded in steps (zoom 2, 3, 4 = up to 4096 px around the world) plus a sharper patch for the area in view once
    zoomed in. Night side = NASA Black Marble city lights. Day/night terminator is approximate (sub-solar point from the UTC date,
-   no equation of time). Markers: one per monitored region, gauge dots when zoomed in. Add a region in config/regions.json and it
+   no equation of time). Without internet (or with ?offline in the URL) it falls back to the bundled NASA Blue Marble image. Markers: one per monitored region, gauge dots when zoomed in. Add a region in config/regions.json and it
    appears here. Used by map3d.js; no library. */
 (function(){
 "use strict";
@@ -76,14 +76,23 @@ async function mosaic(z,x0,y0,nx,ny,url){
     jobs.push(loadImg(url(z,x,y)).then(im=>{ if(im){ g.drawImage(im,i*256,j*256); ok++; } })); }
   await Promise.all(jobs); return ok?c:null;
 }
+const OFFLINE=/[?&]offline\b/.test(location.search);
+let bundledP=null, usingBundled=false;
+function bundled(){                                            // equirectangular file -> Web Mercator canvas, the layout of a zoom-3 tile mosaic
+  return bundledP||(bundledP=loadImg("/static/world_bluemarble.jpg").then(im=>{ if(!im) return null;
+    const N=2048, S=4, c=document.createElement("canvas"); c.width=c.height=N; const g=c.getContext("2d"), lat=j=>Math.atan(Math.sinh(Math.PI*(1-2*j/N)));
+    for(let j=0;j<N;j+=S){ const la=lat(j), lb=lat(j+S); g.drawImage(im,0,(Math.PI/2-la)/Math.PI*im.height,im.width,(la-lb)/Math.PI*im.height,0,j,N,S+1); }
+    return c; }));
+}
 async function loadBase(){                                     // coarse first so the globe appears at once, then sharper
   if(loadingBase) return; loadingBase=true;
-  for(const z of [2,3,4]){ if((256<<z)>maxTex) break; const n=1<<z, m=await mosaic(z,0,0,n,n,imageryUrl); if(m){ upload(0,m,true); imgZ=z; } }
+  if(!OFFLINE) for(const z of [2,3,4]){ if((256<<z)>maxTex) break; const n=1<<z, m=await mosaic(z,0,0,n,n,imageryUrl); if(m){ upload(0,m,true); imgZ=z; } else break; }
+  if(imgZ<0){ const c=await bundled(); if(c){ upload(0,c,true); imgZ=3; usingBundled=true; } }
   loadingBase=false;
 }
-async function loadLights(){ const m=await mosaic(3,0,0,8,8,lightsUrl); if(m){ upload(1,m,true); lightsOk=true; } }
+async function loadLights(){ if(OFFLINE) return; const m=await mosaic(3,0,0,8,8,lightsUrl); if(m){ upload(1,m,true); lightsOk=true; } }
 function wantPatch(R,dpr,W,H){                                 // sharper tiles for the area in view, once the base texture is too coarse
-  const z=Math.min(14,Math.ceil(Math.log2(TAU*R*dpr/256))); if(imgZ<0||z<=imgZ){ if(patch){ patch=null; patchKey=""; } return; }
+  const z=Math.min(14,Math.ceil(Math.log2(TAU*R*dpr/256))); if(OFFLINE||usingBundled||imgZ<0||z<=imgZ){ if(patch){ patch=null; patchKey=""; } return; }
   const n=1<<z, u=st.lon/TAU+.5, mx=(u-Math.floor(u))*n, my=(.5-Math.log(Math.tan(Math.PI/4+st.lat/2))/TAU)*n;
   const nx=Math.min(10,Math.ceil(W*dpr/256)+2), ny=Math.min(8,Math.ceil(H*dpr/256)+2), x0=Math.floor(mx-nx/2), y0=Math.floor(my-ny/2), key=[z,x0,y0,nx,ny].join();
   if(key===patchKey) return; patchKey=key; const ver=++patchVer;
@@ -170,6 +179,7 @@ window.Globe={
   zoom(dy){ st.zoom=Math.max(.6,Math.min(160,st.zoom*Math.exp(-dy*.0012))); },
   setView(lonDeg,latDeg,zoom){ st.lon=wrap(lonDeg*D2R); st.lat=latDeg*D2R; st.zoom=zoom; st.fly=null; },
   sunDeg(){ const s=subsolar(new Date()); return {lon:s.lon/D2R,lat:s.lat/D2R}; },
-  stats(){ return {imgZ,lightsOk,patch,failed,maxTex}; }
+  bundled, offline:OFFLINE, usingBundled:()=>usingBundled,
+  stats(){ return {imgZ,lightsOk,patch,failed,maxTex,usingBundled}; }
 };
 })();

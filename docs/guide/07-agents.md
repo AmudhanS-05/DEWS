@@ -1,6 +1,6 @@
 # 07 Agents: the multi-agent advisory writer
 
-The agent layer is the Agentic AI (AI373TA) part of the project. It takes a forecaster alert (numbers) and writes a
+The agent layer sits after the forecaster. It takes a forecaster alert (numbers) and writes a
 checked, plain-language advisory (version 2) for a duty officer to approve. **Agents draft and check only.** They never
 publish to Kafka and never send email, and nothing reaches anyone without a person clicking Approve.
 

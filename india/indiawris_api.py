@@ -88,7 +88,7 @@ def post_with_backoff(url: str, params: dict, session=None, tries: int = 6, base
     for k in range(tries):
         try:
             r = s.post(url, params=params, timeout=timeout_s,
-                       headers={"User-Agent": "rvce-flood-warning-student-project", "Accept": "application/json"})
+                       headers={"User-Agent": "dews-flood-early-warning", "Accept": "application/json"})
             if r.status_code == 429 or r.status_code >= 500:
                 raise RuntimeError(f"HTTP {r.status_code}")
             return r

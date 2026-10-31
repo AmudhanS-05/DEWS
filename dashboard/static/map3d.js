@@ -1,7 +1,8 @@
 /* Map view: one full-screen canvas, also the landing page's background. Globe (globe.js) <-> flat world map, both showing every
    monitored area: the flat map zooms out to the whole world and in to a single gauge; region markers above about 1400 km, gauges below.
    Ground  = world texture plus a sharper patch for the area in view, re-tiled when the camera settles (Esri gray canvas or
-             satellite). Terrain adds real elevation (AWS Terrain Tiles, decoded in the browser) to the patch, with hillshade and 100 m contours.
+             satellite; the bundled NASA image when tiles cannot be reached). Terrain adds real elevation (AWS Terrain Tiles, decoded in
+             the browser) to the patch at any zoom, with hillshade and contours; the relief scale follows the area in view.
    Gauges  = pillars: height is the newest stage against THAT gauge's own official NWS major level, with ticks at the official
              action/minor/moderate/major stages. A radar sweep pings gauges, ground rings pulse at minor flood or above,
              a dashed red beam marks an open alert (only alerts of the mode on screen: live or SIMULATION replay).
@@ -13,7 +14,7 @@ const root=$("map3d"), cv=$("m-canvas"), ctx=cv.getContext("2d");
 const scene=document.createElement("canvas"), sctx=scene.getContext("2d");
 const card=$("m-card"), list=$("m-list"), tip=$("m-tip");
 const SEV={major:5,moderate:4,minor:3,action:2,normal:1,stale:0,nodata:0}, CATS=["action","minor","moderate","major"], TAU=Math.PI*2, FLAT=Math.PI/2, TILT=.62, D2R=Math.PI/180;
-const EXAG=18, FAR_KM=1400, DIST_MIN=12, DIST_MAX=36000;
+const FAR_KM=1400, DIST_MIN=12, DIST_MAX=36000;
 let TH=null;
 function readTheme(){
   const cs=getComputedStyle(document.documentElement), v=n=>cs.getPropertyValue(n).trim();
@@ -28,6 +29,7 @@ let W=0,H=0,dpr=1,running=false,raf=0,lastT=performance.now();
 const cam={yaw:0,pitch:FLAT,dist:400,tx:0,tz:0,auto:false};
 let G=[],mode="live",selected=null,hover=null,alerts={},hits=[],geo=null,note="",pollA=0,pollB=0,terrain=false,imagery=false,interacting=false;
 let cacheKey="",texVer=0,camFly=null,lastFar=null;
+let scrub=null, bundledBase=false;
 let view="globe",regions=[],selRegion=null,initGlobe=false,fadeCv=null,fadeA=0,flying=false,lastHud=0,gInfo=null,land=0,landTo=0,landDur=1.9;
 const L={gauges:true,alerts:true,sweep:true,rings:true,grid:true,labels:true,regions:true};   // data layers (panel on the left)
 const F=()=>Math.max(W,H)*.9, isFar=()=>cam.dist>FAR_KM;
@@ -61,45 +63,50 @@ async function mosaic(R,urlOf){
 }
 const baseUrl=()=>imagery?(z,x,y)=>`https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`
   :(z,x,y)=>`https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/${TH.dark?"World_Dark_Gray_Base":"World_Light_Gray_Base"}/MapServer/tile/${z}/${y}/${x}`;
-function warp(m,R,b,tw,th){                                   // mercator tiles -> linear-latitude texture, in thin strips; tinted to the theme
+function warp(m,R,b,tw,th,asPhoto){                                   // mercator tiles -> linear-latitude texture, in thin strips; tinted to the theme
   const t=document.createElement("canvas"); t.width=tw; t.height=th; const g=t.getContext("2d");
   g.fillStyle=TH.dark?"#0a1426":"#cfe8f8"; g.fillRect(0,0,tw,th);
   if(m){ const z=R.z, sx=(lon2x(b.lonMin,z)-R.x0)*256, sw=(lon2x(b.lonMax,z)-lon2x(b.lonMin,z))*256, S=4;
     for(let j=0;j<th;j+=S){ const la=b.latMax-j/th*(b.latMax-b.latMin), lb=b.latMax-(j+S)/th*(b.latMax-b.latMin);
       g.drawImage(m,sx,(lat2y(la,z)-R.y0)*256,sw,(lat2y(lb,z)-lat2y(la,z))*256,0,j,tw,S+1); }
-    if(!imagery){ g.globalCompositeOperation="multiply"; g.fillStyle=TH.dark?"#8fb6f2":"#c4e6fb"; g.fillRect(0,0,tw,th); g.globalCompositeOperation="source-over"; } }
+    if(!imagery&&!asPhoto){ g.globalCompositeOperation="multiply"; g.fillStyle=TH.dark?"#8fb6f2":"#c4e6fb"; g.fillRect(0,0,tw,th); g.globalCompositeOperation="source-over"; } }
   t._b=b; return t;
 }
 let worldTex=null,worldVer=0,baseTex=null,terrTex=null,baseVer=0,demVer=0,dem=null,HG=null,relief=null,patchT=0;
 async function loadWorld(){
-  const ver=++worldVer, w=geo.world, b=bounds(w.minx,w.maxx,w.minz,w.maxz,3), R=tileRange(b,3), m=await mosaic(R,baseUrl());
-  if(ver!==worldVer) return; if(!m) note="basemap tiles unavailable (offline?): showing the plain ground";
-  worldTex=warp(m,R,b,2048,1024); texVer++;
+  const ver=++worldVer, w=geo.world, b=bounds(w.minx,w.maxx,w.minz,w.maxz,3), R=tileRange(b,3); let m=Globe.offline?null:await mosaic(R,baseUrl()), Rm=R;
+  if(!m){ m=await Globe.bundled(); Rm={z:3,x0:0,x1:7,y0:0,y1:7}; bundledBase=!!m; note=m?"no connection to the map tiles: showing the bundled world image":"basemap tiles unavailable: showing the plain ground"; }
+  else bundledBase=false;
+  if(ver!==worldVer) return; $("map-note").textContent=bundledBase||!m?note:"";
+  worldTex=warp(m,Rm,b,2048,1024,bundledBase); texVer++;
 }
 function viewHalf(){ const s=Math.max(.35,Math.sin(cam.pitch)), tilt=1+(1-s)*.8; return [cam.dist*W/F()*.55*tilt,cam.dist*H/F()*.55/s]; }
 function clearPatch(){ baseTex=terrTex=null; dem=null; HG=null; relief=null; demVer++; texVer++; }
 function updatePatch(force){                                  // called when the camera settles: re-tile only if the view left the patch or the zoom changed
   if(!geo||view!=="region"||!W) return;
   const [vw,vd]=viewHalf(), lonSpan=2*vw/geo.k; let z=clamp(Math.round(Math.log2(W/256*360/lonSpan)),2,12);
-  if(z<=3){ ++baseVer; if(baseTex) clearPatch(); noteTerrain(); return; }
+  if(Globe.offline||bundledBase){ noteTerrain(); return; }
+  if(z<=3&&!terrain){ ++baseVer; if(baseTex) clearPatch(); return; }
+  z=Math.max(z,3);
   const c=baseTex&&baseTex._b, inside=c&&cam.tx-vw>=c.minx&&cam.tx+vw<=c.maxx&&cam.tz-vd>=c.minz&&cam.tz+vd<=c.maxz;
   if(!force&&c&&c.z===z&&inside) return;
   const m=1.45, w=geo.world, b=bounds(clamp(cam.tx-vw*m,w.minx,w.maxx),clamp(cam.tx+vw*m,w.minx,w.maxx),clamp(cam.tz-vd*m,w.minz,w.maxz),clamp(cam.tz+vd*m,w.minz,w.maxz),z);
-  let R=tileRange(b,z); while(z>4&&(R.x1-R.x0+1)*(R.y1-R.y0+1)>70){ z--; R=tileRange(b,z); } b.z=z;
+  let R=tileRange(b,z); while(z>3&&(R.x1-R.x0+1)*(R.y1-R.y0+1)>70){ z--; R=tileRange(b,z); } b.z=z;
   const ver=++baseVer;
-  mosaic(R,baseUrl()).then(mo=>{ if(ver!==baseVer) return;
+  mosaic(R,baseUrl()).then(mo=>{ if(ver!==baseVer||!mo) return;
     const tw=Math.min(2048,(R.x1-R.x0+1)*256), th=clamp(Math.round(tw*b.d/b.w),256,2048); baseTex=warp(mo,R,b,tw,th); Object.assign(geo,{minx:b.minx,maxx:b.maxx,minz:b.minz,maxz:b.maxz,w:b.w,d:b.d,lonMin:b.lonMin,lonMax:b.lonMax,latMin:b.latMin,latMax:b.latMax,z:b.z});
     terrTex=null; dem=null; HG=null; relief=null; demVer++; texVer++; if(terrain) loadDem(); });
 }
-function noteTerrain(){ if(terrain&&!baseTex){ note="zoom in to see terrain"; $("map-note").textContent=note; } }
+function noteTerrain(){ if(terrain&&(Globe.offline||bundledBase)){ note="terrain needs the elevation tiles: no connection"; $("map-note").textContent=note; } }
 async function loadDem(){
-  if(!baseTex||dem) return; if(geo.lonMax-geo.lonMin>14){ note="zoom in to see terrain"; $("map-note").textContent=note; return; }
-  const ver=++demVer, b=baseTex._b, z=Math.min(b.z,10), R=tileRange(b,z); note="loading elevation…"; $("map-note").textContent=note;
+  if(!baseTex||dem) return;
+  let z=Math.min(baseTex._b.z,10), R=tileRange(baseTex._b,z); while(z>2&&(R.x1-R.x0+1)*(R.y1-R.y0+1)>48){ z--; R=tileRange(baseTex._b,z); }
+  const ver=++demVer; note="loading elevation…"; $("map-note").textContent=note;
   const m=await mosaic(R,(z,x,y)=>`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`);
   if(ver!==demVer) return;
   if(!m){ note="elevation tiles unavailable (offline?): terrain not shown"; $("map-note").textContent=note; return; }
   const id=m.getContext("2d").getImageData(0,0,m.width,m.height).data, h=new Float32Array(m.width*m.height);
-  for(let i=0;i<h.length;i++) h[i]=id[i*4]*256+id[i*4+1]+id[i*4+2]/256-32768;
+  for(let i=0;i<h.length;i++) h[i]=Math.max(0,id[i*4]*256+id[i*4+1]+id[i*4+2]/256-32768);   // the sea floor stays flat: only land relief counts
   dem={R,w:m.width,h:m.height,data:h}; note=""; $("map-note").textContent="";
   buildRelief(); buildHeightGrid(); composeTerrain(); texVer++;
 }
@@ -109,9 +116,10 @@ function elevAt(lon,lat){
   return (d[yi*w+xi]*(1-fx)+d[yi*w+xi+1]*fx)*(1-fy)+(d[(yi+1)*w+xi]*(1-fx)+d[(yi+1)*w+xi+1]*fx)*fy;
 }
 function buildHeightGrid(){
-  const N=48, g=new Float32Array((N+1)*(N+1)); let e0=1e9;
-  for(let j=0;j<=N;j++) for(let i=0;i<=N;i++){ const e=elevAt(toLon(geo.minx+i/N*geo.w),toLat(geo.minz+j/N*geo.d)); g[j*(N+1)+i]=e; if(e<e0) e0=e; }
-  for(let i=0;i<g.length;i++) g[i]=(g[i]-e0)/1000*EXAG;
+  const N=48, g=new Float32Array((N+1)*(N+1)); let e0=1e9, e1=-1e9;
+  for(let j=0;j<=N;j++) for(let i=0;i<=N;i++){ const e=elevAt(toLon(geo.minx+i/N*geo.w),toLat(geo.minz+j/N*geo.d)); g[j*(N+1)+i]=e; if(e<e0) e0=e; if(e>e1) e1=e; }
+  geo.exag=clamp(geo.w*.06/Math.max(.05,(e1-e0)/1000),3,250);                // the highest relief reads as about 6 % of the area in view, at every zoom
+  for(let i=0;i<g.length;i++) g[i]=(g[i]-e0)/1000*geo.exag;
   HG={N,g};
 }
 function groundY(x,z){
@@ -122,15 +130,16 @@ function groundY(x,z){
 function buildRelief(){                       // hillshade + contours as a transparent overlay, computed once per DEM
   const HW=900,HHt=Math.round(HW*geo.d/geo.w), E=new Float32Array(HW*HHt);
   for(let j=0;j<HHt;j++) for(let i=0;i<HW;i++) E[j*HW+i]=elevAt(geo.lonMin+(i+.5)/HW*(geo.lonMax-geo.lonMin),geo.latMax-(j+.5)/HHt*(geo.latMax-geo.latMin));
-  const cx=geo.w*1000/HW, cy=geo.d*1000/HHt, ex=5, alt=40*D2R, az=315*D2R;
+  const cx=geo.w*1000/HW, cy=geo.d*1000/HHt, ex=clamp(cx/180,4,18), alt=40*D2R, az=315*D2R;
+  const ci=[100,200,500,1000,2000].find(v=>v>=cx*2.2)||2000, cb=ci*5;        // contour spacing follows the scale, so a wide view is not a solid mass of lines
   const Ld=[Math.cos(alt)*Math.sin(az),Math.cos(alt)*Math.cos(az),Math.sin(alt)], flat=Ld[2];
   const c=document.createElement("canvas"); c.width=HW; c.height=HHt; const g=c.getContext("2d"), im=g.createImageData(HW,HHt), o=im.data;
   for(let j=1;j<HHt-1;j++) for(let i=1;i<HW-1;i++){
     const k=j*HW+i, gx=(E[k+1]-E[k-1])/(2*cx)*ex, gn=(E[k-HW]-E[k+HW])/(2*cy)*ex, inv=1/Math.sqrt(gx*gx+gn*gn+1);
     const s=(-gx*Ld[0]-gn*Ld[1]+Ld[2])*inv, d=s-flat, p=k*4;
     if(d<0){ o[p]=o[p+1]=o[p+2]=0; o[p+3]=Math.min(175,-d*560); } else { o[p]=o[p+1]=o[p+2]=255; o[p+3]=Math.min(130,d*420); }
-    const a=Math.floor(E[k]/100), b=Math.floor(E[k+1]/100), c2=Math.floor(E[k+HW]/100);
-    if(a!==b||a!==c2){ const idx=Math.floor(E[k]/500)!==Math.floor(E[k+1]/500)||Math.floor(E[k]/500)!==Math.floor(E[k+HW]/500);
+    const a=Math.floor(E[k]/ci), b=Math.floor(E[k+1]/ci), c2=Math.floor(E[k+HW]/ci);
+    if(a!==b||a!==c2){ const idx=Math.floor(E[k]/cb)!==Math.floor(E[k+1]/cb)||Math.floor(E[k]/cb)!==Math.floor(E[k+HW]/cb);
       o[p]=40;o[p+1]=48;o[p+2]=58;o[p+3]=idx?120:55; }
   }
   g.putImageData(im,0,0); relief=c;
@@ -210,12 +219,12 @@ function drawScene(c,lod){
   if(L.grid){ const [vw,vd]=viewHalf(), step=[.25,.5,1,2,5,10,30].find(d=>d*110>cam.dist*.1)||30, x0=cam.tx-vw*1.3,x1=cam.tx+vw*1.3,z0=cam.tz-vd*1.3,z1=cam.tz+vd*1.3, big=v=>Math.abs(v/(2*step)-Math.round(v/(2*step)))<1e-6;
     const lo0=Math.max(-180,toLon(x0)),lo1=Math.min(180,toLon(x1)),la0=Math.max(-85,toLat(z1)),la1=Math.min(85,toLat(z0));
     for(let lon=Math.ceil(lo0/step)*step;lon<=lo1;lon+=step){ const x=(lon-geo.lon0)*geo.k,b=big(lon); gline(c,[x,z0],[x,z1],gm+(b?.2:.08)+")",b?1:.7);
-      if(b){ const p=P(x,0,cam.tz+vd*.8); if(p){ c.fillStyle=TH.muted; c.fillText(fmtLon(lon),p[0],p[1]); } } }
+      if(b){ const p=P(x,0,cam.tz+vd*.8); if(p) labelAt(c,fmtLon(lon),p[0],p[1]); } }
     for(let lat=Math.ceil(la0/step)*step;lat<=la1;lat+=step){ const z=(geo.lat0-lat)*110.57,b=big(lat); gline(c,[x0,z],[x1,z],gm+(b?.2:.08)+")",b?1:.7);
-      if(b){ const p=P(cam.tx-vw*.45,0,z); if(p){ c.fillStyle=TH.muted; c.fillText(fmtLat(lat),p[0],p[1]-3); } } } }
+      if(b){ const p=P(cam.tx-vw*.45,0,z); if(p) labelAt(c,fmtLat(lat),p[0],p[1]-3); } } }
   const cx=selected?selected.x:cam.tx, cz=selected?selected.z:cam.tz;
   if(L.rings&&!isFar()){ const r0=[5,10,25,50,100,250,500].find(r=>r>=cam.dist*.12)||500; for(const m of [1,2,3,4]){ const r=r0*m; gring(c,cx,cz,r,96,rgba(TH.accent,.4),1);
-    const px=cx+r*.7071,pz=cz+r*.7071,p=P(px,groundY(px,pz),pz); if(p){ c.fillStyle=TH.muted; c.fillText(r+" km",p[0],p[1]-3); } } }
+    const px=cx+r*.7071,pz=cz+r*.7071,p=P(px,groundY(px,pz),pz); if(p) labelAt(c,r+" km",p[0],p[1]-3); } }
 }
 
 /* ---------------------------------------------------------------- dynamic layer */
@@ -261,15 +270,14 @@ function drawRegions(t){
     if(p[0]<-40||p[0]>W+40||p[1]<-40||p[1]>H+40) continue; hits.push(Globe.regionMarker(ctx,p[0],p[1],r,selRegion&&selRegion.id===r.id,t,TH,L)); }
 }
 function drawHud(){
-  if(W>900){ const cx=W-326,cy=118; ctx.save(); ctx.translate(cx,cy); ctx.strokeStyle=TH.muted; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(0,0,22,0,TAU); ctx.stroke();
-    ctx.rotate(cam.yaw); ctx.fillStyle=TH.sc.moderate; ctx.beginPath(); ctx.moveTo(0,-20); ctx.lineTo(4,0); ctx.lineTo(-4,0); ctx.fill(); ctx.fillStyle=TH.muted; ctx.beginPath(); ctx.moveTo(0,20); ctx.lineTo(4,0); ctx.lineTo(-4,0); ctx.fill();
-    ctx.rotate(-cam.yaw); ctx.fillStyle=TH.ink; ctx.font="10px Inter,system-ui,sans-serif"; ctx.textAlign="center"; ctx.fillText("N",Math.sin(cam.yaw)*32,-Math.cos(cam.yaw)*32+3); ctx.restore(); }
   const kmPx=cam.dist/B.F, nice=[1,2,5,10,25,50,100,200,500,1000,2000,5000].find(n=>n/kmPx>70)||5000, len=nice/kmPx, rx=W>900?W-310:W-16, bx=rx-len, by=H-30;
-  ctx.strokeStyle=TH.ink; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(bx,by-5); ctx.lineTo(bx,by); ctx.lineTo(bx+len,by); ctx.lineTo(bx+len,by-5); ctx.stroke();
-  ctx.fillStyle=TH.ink; ctx.font="10px Inter,system-ui,sans-serif"; ctx.textAlign="center"; ctx.fillText(nice+" km",bx+len/2,by-8);
-  attribution((imagery?"Imagery: Esri, Maxar, Earthstar Geographics":"Basemap: Esri, HERE, Garmin, © OpenStreetMap contributors")+(terrain?" · elevation: AWS Terrain Tiles, relief ×"+EXAG:""),rx);
+  const halo=TH.dark?"rgba(4,8,18,.85)":"rgba(255,255,255,.92)"; ctx.strokeStyle=halo; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(bx,by-5); ctx.lineTo(bx,by); ctx.lineTo(bx+len,by); ctx.lineTo(bx+len,by-5); ctx.stroke();
+  ctx.strokeStyle=TH.ink; ctx.lineWidth=1.5; ctx.stroke();
+  labelAt(ctx,nice+" km",bx+len/2,by-8);
+  attribution((bundledBase?"Imagery: NASA Blue Marble (bundled)":imagery?"Imagery: Esri, Maxar, Earthstar Geographics":"Basemap: Esri, HERE, Garmin, © OpenStreetMap contributors")+(terrain&&HG?" · elevation: AWS Terrain Tiles, relief ×"+Math.round(geo.exag):""),rx);
 }
-function attribution(txt,rx){ ctx.font="10px Inter,system-ui,sans-serif"; ctx.textAlign="right"; ctx.lineWidth=3; ctx.strokeStyle=TH.dark?"rgba(4,8,18,.7)":"rgba(255,255,255,.75)"; ctx.strokeText(txt,rx,H-12); ctx.fillStyle=TH.dark?TH.muted:TH.ink; ctx.fillText(txt,rx,H-12); }
+function attribution(txt,rx){ ctx.font="10px Inter,system-ui,sans-serif"; ctx.textAlign="right"; ctx.lineWidth=3; ctx.strokeStyle=TH.dark?"rgba(4,8,18,.7)":"rgba(255,255,255,.92)"; ctx.strokeText(txt,rx,H-12); ctx.fillStyle=TH.dark?TH.muted:TH.ink; ctx.fillText(txt,rx,H-12); }
+function labelAt(c,txt,x,y){ c.font="10px Inter,system-ui,sans-serif"; c.textAlign="center"; c.lineWidth=3; c.strokeStyle=TH.dark?"rgba(4,8,18,.8)":"rgba(255,255,255,.92)"; c.strokeText(txt,x,y); c.fillStyle=TH.dark?TH.muted:TH.ink; c.fillText(txt,x,y); }
 const ease=x=>x*x*(3-2*x);
 function globeFrame(now,dt){
   const t=now/1000; if(land!==landTo){ land=landTo>land?Math.min(landTo,land+dt/landDur):Math.max(landTo,land-dt/landDur); }
@@ -277,7 +285,7 @@ function globeFrame(now,dt){
   const e=ease(land), Rf=Globe.radius(W,H), Rb=Math.max(W,H)*.56, wide=W>1100, narrow=W<800, cxf=wide?(228+(W-294))/2:W/2, cyf=H/2+18, cxb=narrow?W/2:W*.84, cyb=narrow?H+Rb*.42:H*.56+Rb*.62;
   const o={R:Rf+(Rb-Rf)*e,cx:cxf+(cxb-cxf)*e,cy:cyf+(cyb-cyf)*e,markerA:land>0?Math.max(0,1-land*1.6):1};
   gInfo=Globe.draw(ctx,W,H,dpr,t,TH,regions,selRegion,L,o,G);
-  if(land===0){ attribution("Imagery: Esri, Maxar, Earthstar Geographics · Night lights: NASA Black Marble · Terminator approximate",W>900?W-310:W-16); updateHud(now); setViewButtons(); }
+  if(land===0){ attribution((Globe.usingBundled()?"Imagery: NASA Blue Marble (bundled)":"Imagery: Esri, Maxar, Earthstar Geographics · Night lights: NASA Black Marble")+" · Terminator approximate",W>900?W-310:W-16); updateHud(now); setViewButtons(); }
   applyFade(dt);
 }
 function frame(now){
@@ -293,7 +301,7 @@ function frame(now){
   ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(scene,0,0); ctx.setTransform(dpr,0,0,dpr,0,0);
   hits=[]; const t=now/1000, sw=L.sweep&&!far?sweepAndPings(t):{ang:0,cx:0,cz:0,R:0};
   if(L.gauges&&!far) for(const o of G.map(g=>({g,z:(P(g.x,0,g.z)||[0,0,1e9])[2]})).sort((a,b)=>b.z-a.z)) drawGauge(o.g,t,sw);
-  drawRegions(t); drawHud(); updateHud(now); setViewButtons(); applyFade(dt);
+  drawRegions(t); drawHud(); updateHud(now); setViewButtons(); syncNeedle(); applyFade(dt);
 }
 function resize(){ const r=root.getBoundingClientRect(); dpr=Math.min(2,window.devicePixelRatio||1); W=Math.round(r.width); H=Math.round(r.height);
   for(const c of [cv,scene]){ c.width=W*dpr; c.height=H*dpr; } ctx.setTransform(dpr,0,0,dpr,0,0); cacheKey=""; }
@@ -321,10 +329,12 @@ async function pollGauges(){
     const gs=[]; all.forEach((d,i)=>d.gauges.forEach(g=>{ if(g.lat!=null){ g.region_id=live[i].id; gs.push(g); } }));
     if(geo) gs.forEach(place);
     G=gs; if(selected) selected=G.find(g=>g.site_no===selected.site_no)||null;
+    if(scrub) applyScrub();
     if(!showRegionList()){ drawList(); drawCard(); }
   }catch(e){ note="cannot reach the console server"; $("map-note").textContent=note; }
 }
 async function pollAlerts(){
+  if(scrub) return;
   try{ const d=await (await fetch("/api/advisories")).json(); if(!d.ok) return; const a={}, want=mode==="replay"?"SIMULATION":"LIVE";
     for(const x of d.advisories){ if(x.mode===want&&["draft","approved","sent"].includes(x.status)&&x.alert_status!=="retracted"&&x.alert_status!=="rejected") a[x.site_no]=x.category; }
     alerts=a; }catch(e){}
@@ -368,7 +378,8 @@ function drawCard(){
     `<div class="val" style="color:${TH.sc[g.status]}">${g.stage==null?"—":g.stage.toFixed(2)}<small> ft</small></div>`+
     `<div class="sub" style="color:${TH.sc[g.status]}">${g.status.toUpperCase()}${g.provisional?" · provisional":""}${g.age_s!=null?" · "+ageTxt(g.age_s):""}</div>`+
     `<div class="lvl">${g.stage!=null?`<i style="left:calc(${pct(g.stage)}% - 1px)"></i>`:""}${ticks}</div><div style="height:12px"></div>`+
-    (alerts[g.site_no]?`<div class="pill" style="color:${TH.sc.moderate};border-color:${TH.sc.moderate}">open alert: ${alerts[g.site_no]}</div>`:"");
+    (alerts[g.site_no]?`<div class="pill" style="color:${TH.sc.moderate};border-color:${TH.sc.moderate}">open alert: ${alerts[g.site_no]}</div>${scrub?"":'<div style="margin-top:8px"><button class="btn" id="m-review">Review advisory</button></div>'}`:"");
+  const rv=card.querySelector("#m-review"); if(rv) rv.onclick=()=>showTab("data");
 }
 function select(g){ selected=g; cacheKey=""; drawList(); drawCard(); }
 function selectRegion(r){ selRegion=r; $("m-region").value=r.id; if(view==="globe") Globe.fly(r.lon,r.lat*.8,Globe.st.zoom,1000); }
@@ -379,9 +390,10 @@ function fmtLon(v){ return Math.abs(v).toFixed(Math.abs(v)%1?2:0)+"°"+(v>=0?"E"
 const esc=t=>String(t??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
 function updateHud(now){
   if(now-lastHud<400) return; lastHud=now;
-  const iso=new Date().toISOString(); $("m-clock").textContent=iso.slice(0,10)+" "+iso.slice(11,19)+" UTC";
+  const iso=new Date(scrub?scrub.t*1000:Date.now()).toISOString(); $("m-clock").textContent=scrub?"Timeline "+iso.slice(0,10)+" "+iso.slice(11,16)+" UTC":iso.slice(0,10)+" "+iso.slice(11,19)+" UTC";
   let worst="normal", brief=""; const nG=G.length, nAl=Object.keys(alerts).length;
-  for(const r of regions) if(!r.planned&&SEV[r.worst]>SEV[worst]) worst=r.worst;
+  if(scrub){ for(const g of G) if(SEV[g.status]>SEV[worst]) worst=g.status; }
+  else for(const r of regions) if(!r.planned&&SEV[r.worst]>SEV[worst]) worst=r.worst;
   if(view==="region"&&!isFar()){
     const rep=G.filter(g=>g.stage!=null).length, hot=G.filter(g=>(SEV[g.status]||0)>=3).sort((a,b)=>SEV[b.status]-SEV[a.status]);
     brief=`<span class="k">Mode</span>${mode==="replay"?"SIMULATION replay":"live"}`+
@@ -465,21 +477,51 @@ const autoOn=()=>view==="globe"?Globe.st.auto:cam.auto;
 function syncAuto(){ $("m-auto").setAttribute("aria-pressed",autoOn()); }
 let lastBtn="";
 function setViewButtons(){ const flat=cam.pitch>1.45, k=view+flat; if(k===lastBtn) return; lastBtn=k; const g=view==="globe";
-  $("v-globe").setAttribute("aria-pressed",g); $("v-flat").setAttribute("aria-pressed",!g); $("m-terrain").disabled=g; $("m-tilt").disabled=g; $("m-imagery").disabled=g; if(!g) $("m-tilt").checked=!flat; drawCard(); }
+  $("v-globe").setAttribute("aria-pressed",g); $("v-flat").setAttribute("aria-pressed",!g); $("m-terrain").disabled=g; $("m-tilt").disabled=g; $("m-imagery").disabled=g; $("m-tilt").setAttribute("aria-pressed",!g&&!flat); drawCard(); }
+function syncNeedle(){ const y=view==="globe"?0:cam.yaw; if(y!==syncNeedle.y){ syncNeedle.y=y; $("m-needle").style.transform=`rotate(${y}rad)`; } }
 function setSeg(live){ $("m-live").setAttribute("aria-pressed",live); $("m-replay").setAttribute("aria-pressed",!live); }
 $("m-auto").onclick=()=>{ if(view==="globe") Globe.st.auto=!Globe.st.auto; else cam.auto=!cam.auto; syncAuto(); };
 $("v-globe").onclick=toGlobe;
 $("v-flat").onclick=globeToFlat;
-$("m-tilt").onchange=e=>{ cam.pitch=e.target.checked?TILT:FLAT; if(!e.target.checked){ cam.yaw=0; cam.auto=false; syncAuto(); } cacheKey=""; };
-const switchMode=m=>{ mode=m; setSeg(m==="live"); G=[]; alerts={}; selected=null; pollRegions().then(()=>{ pollGauges(); pollAlerts(); }); };
+$("m-tilt").onclick=()=>{ const tilted=cam.pitch<=1.45; cam.pitch=tilted?FLAT:TILT; if(tilted){ cam.yaw=0; cam.auto=false; syncAuto(); } cacheKey=""; };
+const switchMode=m=>{ closeScrub(); mode=m; setSeg(m==="live"); G=[]; alerts={}; selected=null; return pollRegions().then(()=>Promise.all([pollGauges(),pollAlerts()])); };
 $("m-live").onclick=()=>switchMode("live");
 $("m-replay").onclick=()=>switchMode("replay");
-$("m-terrain").onchange=e=>{ terrain=e.target.checked; cacheKey=""; note=""; $("map-note").textContent=""; if(terrain){ if(baseTex) loadDem(); else noteTerrain(); if(cam.pitch>1.45){ cam.pitch=TILT; } } };
-$("m-imagery").onchange=e=>{ imagery=e.target.checked; if(geo){ loadWorld(); updatePatch(true); } };
+$("m-terrain").onclick=()=>{ terrain=!terrain; $("m-terrain").setAttribute("aria-pressed",terrain); cacheKey=""; note=""; $("map-note").textContent=""; if(terrain){ if(baseTex) loadDem(); else updatePatch(true); noteTerrain(); if(cam.pitch>1.45){ cam.pitch=TILT; } } else updatePatch(true); };
+$("m-imagery").onclick=()=>{ imagery=!imagery; $("m-imagery").setAttribute("aria-pressed",imagery); if(geo){ loadWorld(); updatePatch(true); } };
 $("m-region").onchange=e=>{ if(e.target.value==="__all"){ fitAll(); return; } const r=regions.find(x=>x.id===e.target.value); if(!r) return; selRegion=r; if(view==="globe"){ Globe.fly(r.lon,r.lat*.8,Globe.st.zoom,1100); drawList(); drawCard(); } else enterRegion(r); };
 document.querySelectorAll("[data-layer]").forEach(cb=>{ cb.onchange=()=>{ L[cb.dataset.layer]=cb.checked; cacheKey=""; }; });
-$("m-presets").addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return; for(const x of $("m-presets").children) x.setAttribute("aria-pressed",x===b);
-  cv.className=cv.className.replace(/\bvp-\w+/g,"").trim(); if(b.dataset.preset!=="standard") cv.classList.add("vp-"+b.dataset.preset); });
+
+/* ---------------------------------------------------------------- timeline: scrub the windows stored in PostgreSQL across the map */
+const catOf=(s,c)=>{ let o="normal"; for(const k of CATS) if(c&&c[k]!=null&&s>=c[k]) o=k; return o; };
+const utc=t=>new Date(t*1000).toISOString().slice(0,16).replace("T"," ");
+function applyScrub(){
+  const s=scrub; if(!s) return;
+  for(const g of G){ const a=s.series[g.site_no]; let r=null; if(a) for(const x of a){ if(x[0]>s.t) break; r=x; }
+    g.stage=r?r[1]:null; g.status=r?catOf(r[1],g.cats):"nodata"; g.age_s=null; g.provisional=false; }
+  for(const r of regions){ if(r.planned) continue; const gs=G.filter(g=>g.region_id===r.id); r.n_reporting=gs.filter(g=>g.stage!=null).length; r.n_flooding=gs.filter(g=>SEV[g.status]>=3).length;
+    r.worst=gs.reduce((w,g)=>SEV[g.status]>SEV[w]?g.status:w,"normal"); }
+  const on={}; for(const a of s.alerts) if(a.t<=s.t&&a.status!=="retracted") on[a.site_no]=a.category; alerts=on;
+  $("sc-t").textContent=`${utc(s.t)} UTC · ${s.mode==="SIMULATION"?"SIMULATION":"live history"}`+(s.alerts.some(a=>a.t>s.t-3600&&a.t<=s.t)?" · alert raised here":"");
+  $("sc-range").value=s.t; lastHud=0; drawList(); drawCard();
+}
+function stopPlay(){ if(scrub&&scrub.timer){ clearInterval(scrub.timer); scrub.timer=0; } $("sc-play").textContent="▶"; $("sc-play").setAttribute("aria-label","Play"); }
+async function loadScrub(start,end){
+  const q=start!=null?`&start=${start}&end=${end}`:"", d=await (await fetch(`/api/timeline?mode=${mode}${q}`)).json();
+  if(!d.ok||!d.events.length||d.start==null){ $("map-note").textContent=d.ok?"no stored windows to scrub yet for this mode":d.error; closeScrub(); return; }
+  stopPlay(); scrub={...d,t:d.start,timer:0}; const rg=$("sc-range"); rg.min=d.start; rg.max=d.end-3600; rg.step=3600;
+  $("sc-ev").innerHTML=d.events.map(e=>`<option value="${e.start}|${e.end}"${e.start===d.start?" selected":""}>${utc(e.start).slice(0,10)} to ${utc(e.end-3600).slice(0,10)}${e.alerts?` · ${e.alerts} alert${e.alerts>1?"s":""}`:""}</option>`).join("");
+  $("sc-ticks").innerHTML=d.alerts.map(a=>`<i class="${a.status==="retracted"?"off":""}" style="left:${((a.t-d.start)/Math.max(1,d.end-3600-d.start)*100).toFixed(1)}%;background:var(--s-${esc(a.category)})" title="${esc(a.category)} alert, ${utc(a.t)} UTC${a.status==="retracted"?", retracted":""}"></i>`).join("");
+  applyScrub();
+}
+function openScrub(){ $("m-scrub").hidden=false; $("m-time").setAttribute("aria-pressed",true); loadScrub().then(()=>{ if(scrub&&selRegion&&selRegion.n_gauges) enterRegion(selRegion); }); }
+function closeScrub(){ if(!scrub&&$("m-scrub").hidden) return; stopPlay(); scrub=null; $("m-scrub").hidden=true; $("m-time").setAttribute("aria-pressed",false); selected=null; pollGauges(); pollAlerts(); }
+$("m-time").onclick=()=>{ scrub||!$("m-scrub").hidden?closeScrub():openScrub(); };
+$("sc-close").onclick=closeScrub;
+$("sc-range").oninput=e=>{ if(!scrub) return; stopPlay(); scrub.t=+e.target.value; applyScrub(); };
+$("sc-ev").onchange=e=>{ const [a,b]=e.target.value.split("|").map(Number); loadScrub(a,b); };
+$("sc-play").onclick=()=>{ const s=scrub; if(!s) return; if(s.timer){ stopPlay(); return; } if(s.t>=s.end-3600) s.t=s.start; $("sc-play").textContent="❚❚"; $("sc-play").setAttribute("aria-label","Pause");
+  s.timer=setInterval(()=>{ if(s.t>=s.end-3600){ stopPlay(); return; } s.t+=3600; applyScrub(); },220); };
 document.addEventListener("themechange",()=>{ readTheme(); cacheKey=""; if(geo){ if(!imagery){ loadWorld(); updatePatch(true); } if(dem) composeTerrain(); } drawList(); drawCard(); });
 
 window.Map3D={
@@ -487,9 +529,19 @@ window.Map3D={
     pollRegions().then(()=>{ pollGauges(); pollAlerts(); });
     pollA=setInterval(()=>{ pollRegions(); pollGauges(); },4000); pollB=setInterval(pollAlerts,6000); },
   hide(){ running=false; cancelAnimationFrame(raf); clearInterval(pollA); clearInterval(pollB); },
-  toLanding(instant){                                         // same canvas: the Earth grows and sinks behind the landing page
-    if(view!=="globe"){ if(geo) Globe.setView(toLon(cam.tx),clamp(toLat(cam.tz),-60,60),1); view="globe"; }
-    flying=false; const sun=Globe.sunDeg(); Globe.setView(wrapDeg(sun.lon-35),18,1); Globe.st.auto=true; landTo=1; if(instant) land=1; },   // face the terminator, whatever the hour
+  toLanding(instant){                                         // same canvas: the Earth grows and sinks behind the landing page, facing the terminator whatever the hour
+    closeScrub(); selected=null; hover=null; tip.hidden=true; camFly=null; clearTimeout(patchT); flying=false; landTo=1;
+    const target=wrapDeg(Globe.sunDeg().lon-35), fromMap=view!=="globe";
+    if(fromMap&&geo&&!instant){ snapshot(); Globe.setView(toLon(cam.tx),clamp(toLat(cam.tz),-60,60),zoomForDist(cam.dist)); }
+    view="globe";
+    if(instant){ Globe.setView(target,18,1); Globe.st.auto=true; land=1; return; }
+    landDur=1.3; Globe.fly(target,18,1,1300,()=>{ Globe.st.auto=true; }); },
+  focusAlert(site,sim){                                       // alert line -> fly to that gauge and open its card
+    const want=sim?"replay":"live";
+    (mode===want?pollGauges():switchMode(want)).then(()=>{
+      const g=G.find(x=>x.site_no===site); if(!g||!geo) return; const r=regions.find(x=>x.id===g.region_id); if(r){ selRegion=r; $("m-region").value=r.id; }
+      if(view==="globe"){ flying=true; Globe.fly(g.lon,g.lat,zoomForDist(90),1500,()=>{ toFlat(g.lon,g.lat,90); select(g); }); }
+      else { select(g); flyCam(g.x,g.z,90,1100); } }); },
   fromLanding(ms){ landDur=(ms||1900)/1000; landTo=0; if(selRegion){ Globe.fly(selRegion.lon,selRegion.lat*.8,1,ms||1900,()=>{ syncAuto(); }); } drawList(); drawCard(); },
   summary:()=>({regions,alerts})
 };

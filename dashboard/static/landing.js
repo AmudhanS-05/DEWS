@@ -23,9 +23,11 @@ function leave(tab){
   showTab(tab);
 }
 $("l-enter").addEventListener("click",()=>leave("map"));
-$("l-flow").addEventListener("click",()=>leave("flow"));
-$("brand").addEventListener("click",()=>goLanding(false));
+$("brand").addEventListener("click",()=>{ if(!body.classList.contains("landing")) goLanding($("tab-map").hidden); });     // from another tab there is no map on screen to move
 $("landing").addEventListener("wheel",e=>{ if(e.deltaY>10&&body.classList.contains("landing")) leave("map"); },{passive:true});
+let touchY=null;
+$("landing").addEventListener("touchstart",e=>{ touchY=e.touches[0].clientY; },{passive:true});
+$("landing").addEventListener("touchmove",e=>{ if(touchY!=null&&touchY-e.touches[0].clientY>40&&body.classList.contains("landing")){ touchY=null; leave("map"); } },{passive:true});
 addEventListener("keydown",e=>{ if(e.key==="Enter"&&body.classList.contains("landing")&&document.activeElement===body) leave("map"); });
 const h=(location.hash||"").slice(1);
 if(TABS.includes(h)) showTab(h); else goLanding(true);

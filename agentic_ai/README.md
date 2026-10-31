@@ -1,4 +1,4 @@
-# Agentic AI layer: multi-agent flood advisories (workstream `agents`, AI373TA)
+# Agentic AI layer: multi-agent flood advisories (workstream `agents`)
 
 Turns a forecaster alert (`alerts.flood` / the `alerts` table) into a checked, plain-language advisory **draft**
 (version 2+, the template text from the sink is version 1). Agents draft and check only: they never produce to

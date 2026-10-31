@@ -1,6 +1,5 @@
 # DEWS: real-time flood and flash-flood forecasting and alerting on Apache Kafka
 
-A student project (RVCE, 7th semester) for **AI372IA Stream Processing and Analytics** and **AI373TA Agentic AI**.
 Team: Aaditey Chalva, Amudhan S, Dhaksha Muthukumaran. Mentors: Dr. Vijayalakshmi M. N., Dr. Anupama Kumar.
 
 > **Status: work in progress (October 2026).** The streaming pipeline runs end to end on replayed history. The

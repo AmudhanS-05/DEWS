@@ -125,8 +125,15 @@ CREATE TABLE IF NOT EXISTS evaluation_runs (
     throughput_msgs_s   DOUBLE PRECISION,
     recovery_time_s     DOUBLE PRECISION,
     notes               TEXT,
-    created_at          TIMESTAMPTZ DEFAULT now()
+    created_at          TIMESTAMPTZ DEFAULT now(),
+    status              TEXT NOT NULL DEFAULT 'completed',   -- completed (ML runs) | passed | failed (drills); never delete a failed run
+    failure_reason      TEXT
 );
+ALTER TABLE evaluation_runs ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'completed';
+ALTER TABLE evaluation_runs ADD COLUMN IF NOT EXISTS failure_reason TEXT;
+UPDATE evaluation_runs SET status = CASE WHEN notes LIKE '%FAILED:%' THEN 'failed' ELSE 'passed' END,
+       failure_reason = substring(notes FROM 'FAILED: ([^(]*)')
+ WHERE run_label LIKE 'fault_drill:%' AND status = 'completed';
 
 -- Feed staleness per reading, for the dashboard
 CREATE OR REPLACE VIEW feed_staleness AS

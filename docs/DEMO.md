@@ -19,7 +19,7 @@ only then is it emailed, and every step is timed. We can kill any component and 
 The system supports officials; it is not an official warning authority.
 
 ## Starting everything
-Until `scripts/start_demo.ps1` exists (S1, C1.9), in separate windows from the repo root with the venv active:
+`scripts\start_demo.ps1` starts all of this (`scripts\stop_demo.ps1` stops it). By hand, in separate windows from the repo root with the venv active:
 ```powershell
 cd docker; docker compose up -d; cd ..
 python -m dashboard.flow_monitor                     # http://127.0.0.1:8765
@@ -36,8 +36,8 @@ One person narrates, one drives the console and terminals, one handles questions
 **Scene 0 (available now): live pipeline and map.** Console → Pipeline flow: USGS live green, `gauge.usgs`
 receiving. Map → 38 gauges, all below action stage (it is dry). Say: "Every dot is a real gauge in Texas, coloured
 by its official NWS level. Readings arrive every 5 to 15 minutes but the feed sends them about hourly." Stop the live
-producer: after the stale threshold the node turns red and the change is logged. Fallback without internet: Map →
-Offline view.
+producer: after the stale threshold the node turns red and the change is logged. Without internet the map falls back
+to the bundled world image by itself (gauges and alerts keep working; sharper tiles and terrain need the network).
 
 ## Questions to prepare for
 Why US data (only open source with live gauges, official levels and hourly radar, plus archives; India study shows

@@ -2,19 +2,26 @@
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\start_demo.ps1
 #   powershell -ExecutionPolicy Bypass -File scripts\start_demo.ps1 -NoLiveProducer
+#   powershell -ExecutionPolicy Bypass -File scripts\start_demo.ps1 -Venv C:\path\to\venv     (or set DEWS_VENV)
 #
 # Safe to run twice: whatever is already running is left alone. Background processes run hidden, with their output in
 # gate_output\<name>.log and .err. Sends nothing: the notifier only acts on alerts.approved, after a person approves.
 # Stop with scripts\stop_demo.ps1.
 param(
     [switch]$NoLiveProducer,
-    [int]$TimeoutS = 240
+    [int]$TimeoutS = 240,
+    [string]$Venv = $env:DEWS_VENV     # folder of the virtual environment; default .venv in the repo, else ..\spaenv
 )
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$python = Join-Path (Split-Path -Parent $root) 'spaenv\Scripts\python.exe'
-$faust = Join-Path (Split-Path -Parent $root) 'spaenv\Scripts\faust.exe'
+if (-not $Venv) {
+    $Venv = Join-Path $root '.venv'
+    if (-not (Test-Path $Venv)) { $Venv = Join-Path (Split-Path -Parent $root) 'spaenv' }
+}
+$python = Join-Path $Venv 'Scripts\python.exe'
+$faust = Join-Path $Venv 'Scripts\faust.exe'
+if (-not (Test-Path $python)) { throw "no Python in $Venv : pass -Venv <folder> or set DEWS_VENV" }
 $logs = Join-Path $root 'gate_output'
 $t0 = Get-Date
 

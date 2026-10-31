@@ -37,7 +37,7 @@ PG_DSN = os.getenv("PG_DSN", "postgresql://spa_user:spa_pass@127.0.0.1:5432/disa
 USGS_IV_URL = os.getenv("USGS_IV_URL", "https://waterservices.usgs.gov/nwis/iv/")
 NWPS_GAUGE_URL = os.getenv("NWPS_GAUGE_URL", "https://api.water.noaa.gov/nwps/v1/gauges/{lid}")
 HTTP_TIMEOUT_S = float(os.getenv("HTTP_TIMEOUT_S", "30"))
-USER_AGENT = os.getenv("USER_AGENT", "rvce-flood-warning-student-project")
+USER_AGENT = os.getenv("USER_AGENT", "dews-flood-early-warning")
 
 # Gauge parameter codes (USGS): 00065 = gage height (ft), 00060 = discharge (cfs)
 PARAM_STAGE = "00065"

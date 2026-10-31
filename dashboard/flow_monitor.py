@@ -39,6 +39,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from common import config, nwps
+from common.envfile import load_env
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 LOC_CSV = os.path.join(os.path.dirname(HERE), "config", "gauge_locations.csv")
@@ -559,7 +560,8 @@ WATERFALL_STAGES = [("feed_delay_s", "Feed delay"), ("ingest_s", "Ingest"), ("wi
 def metrics_api() -> dict:
     """Latency per pipeline stage from the latency_waterfall view, live and replay kept apart: median, p95 and how many
     traces have that stage measured (a stage nobody measured stays n = 0, never 0 seconds). Only instrumented traces
-    count; how many older ones were left out is reported. Feed delay and gross total do not apply to a replay."""
+    count; how many older ones were left out is reported. Feed delay does not apply to a replay. Also agent metrics and
+    every fault drill, failed ones included."""
     if CTX["demo"]:
         return {"ok": True, "waterfall": []}
     try:
@@ -577,9 +579,109 @@ def metrics_api() -> dict:
                                     "WHERE mode = %s AND instrumented", (mode,))
                         n, med, p95 = cur.fetchone()
                         stages.append({"id": col, "label": label, "n": n, "median_s": med, "p95_s": p95,
-                                       "applies": mode == "LIVE" or col not in ("feed_delay_s", "gross_total_s")})
+                                       "applies": mode == "LIVE" or col != "feed_delay_s"})
                     out.append({"mode": mode, "traces": traces, "older_traces": older, "stages": stages})
-            return {"ok": True, "waterfall": out}
+                return {"ok": True, "waterfall": out, "agents": agent_metrics(cur), "drills": drill_rows(cur), "langsmith": langsmith_status()}
+        finally:
+            conn.close()
+    except Exception as e:
+        return {"ok": False, "error": (str(e).strip().splitlines() or ["error"])[0][:120]}
+
+
+def langsmith_status() -> dict:
+    """Whether agent runs are traced to LangSmith (never the key). Tracing is optional and lives in the agents' own process."""
+    load_env()
+    on = os.getenv("LANGSMITH_TRACING", "").strip().lower() in ("1", "true", "yes", "on") and bool(os.getenv("LANGSMITH_API_KEY"))
+    return {"enabled": on, "project": (os.getenv("LANGSMITH_PROJECT") or "dews-agents") if on else None}
+
+
+def agent_metrics(cur) -> list[dict]:
+    """Per mode: runs, duration, reviewer pass rate, revisions, disagreements, tokens, v1 -> first agent draft, time per agent."""
+    cur.execute("""WITH s AS (SELECT r.*, COALESCE(a.mode, 'no alert row') AS mode FROM agent_run_summary r LEFT JOIN alerts a USING (alert_id))
+                   SELECT mode, count(*), percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_s), percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_s),
+                          count(*) FILTER (WHERE last_verdict = 'pass'), count(*) FILTER (WHERE last_verdict IS NOT NULL), avg(review_rounds)
+                   FROM s GROUP BY mode ORDER BY mode""")
+    out = [{"mode": m, "runs": n, "median_s": _num(med), "p95_s": _num(p95), "passed": ok, "judged": judged, "avg_review_rounds": _num(rounds)}
+           for m, n, med, p95, ok, judged, rounds in cur.fetchall()]
+    for row in out:
+        mode = row["mode"]
+        cur.execute("""SELECT count(*) FILTER (WHERE e.kind = 'revision'), count(*) FILTER (WHERE e.kind = 'disagreement'), count(*) FILTER (WHERE e.kind = 'tool_call'),
+                              COALESCE(sum((e.detail->>'tokens')::numeric) FILTER (WHERE e.kind = 'end'), 0)
+                       FROM agent_events e LEFT JOIN alerts a USING (alert_id) WHERE COALESCE(a.mode, 'no alert row') = %s""", (mode,))
+        row["revisions"], row["disagreements"], row["tool_calls"], tokens = cur.fetchone()
+        row["tokens_per_run"] = round(float(tokens) / row["runs"]) if row["runs"] else None
+        cur.execute("""SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (v2.created_at - v1.created_at))), count(*)
+                       FROM advisories v2 JOIN advisories v1 ON v1.alert_id = v2.alert_id AND v1.version = 1 JOIN alerts a ON a.alert_id = v2.alert_id
+                       WHERE v2.version = 2 AND a.mode = %s""", (mode,))
+        v, n = cur.fetchone()
+        row["v1_to_v2_s"], row["v1_to_v2_n"] = _num(v), n
+        cur.execute("""SELECT agent, percentile_cont(0.5) WITHIN GROUP (ORDER BY ms), percentile_cont(0.5) WITHIN GROUP (ORDER BY tokens), count(*) FROM (
+                         SELECT e.run_id, e.agent, sum(COALESCE((e.detail->>'ms')::numeric, 0)) AS ms, sum(COALESCE((e.detail->>'tokens')::numeric, 0)) AS tokens
+                         FROM agent_events e LEFT JOIN alerts a USING (alert_id) WHERE e.kind = 'end' AND COALESCE(a.mode, 'no alert row') = %s GROUP BY 1, 2) x
+                       GROUP BY agent ORDER BY 2 DESC""", (mode,))
+        row["per_agent"] = [{"agent": a, "median_ms": _num(ms), "median_tokens": _num(t), "runs": c} for a, ms, t, c in cur.fetchall()]
+    return out
+
+
+def drill_rows(cur) -> list[dict]:
+    cur.execute("SELECT run_label, status, recovery_time_s, failure_reason, data_source, created_at FROM evaluation_runs "
+                "WHERE run_label LIKE 'fault_drill:%%' ORDER BY created_at DESC, run_id DESC LIMIT 40")
+    return [{"scenario": lb.split(":", 1)[1], "status": st, "recovery_s": rec, "reason": why, "data_source": src, "at": at.isoformat()}
+            for lb, st, rec, why, src, at in cur.fetchall()]
+
+
+def _num(v):
+    return None if v is None else float(v)
+
+
+def timeline_events(times: list[float], alerts: list[float] = (), gap_h: float = 6.0, keep: int = 20) -> list[dict]:
+    """Ascending window starts that have readings -> contiguous stretches, newest first, with how many alerts each holds."""
+    runs: list[list[float]] = []
+    for t in times:
+        if runs and t - runs[-1][1] <= gap_h * 3600:
+            runs[-1][1] = t
+        else:
+            runs.append([t, t])
+    return [{"start": a, "end": b + 3600, "alerts": sum(1 for x in alerts if a <= x <= b + 3600)} for a, b in reversed(runs)][:keep]
+
+
+def timeline_series(rows: list[tuple]) -> dict:
+    """(site_no, window_start epoch, stage_last, n_readings) ascending -> site_no: [[t, stage, n], ...]; a window with no stage is left out."""
+    out: dict[str, list] = {}
+    for site, t, stage, n in rows:
+        if stage is not None:
+            out.setdefault(site, []).append([t, round(float(stage), 3), n])
+    return out
+
+
+TIMELINE_MAX_S = 21 * 86400
+
+
+def timeline_api(mode: str, start: float | None, end: float | None) -> dict:
+    """Past windows from PostgreSQL for the map's scrubber. Without a range: the stretches of data to choose from, and the newest one."""
+    if CTX["demo"]:
+        return {"ok": True, "events": [], "series": {}, "alerts": []}
+    db_mode = "SIMULATION" if mode == "replay" else "LIVE"
+    try:
+        conn = pg_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""SELECT alert_id, site_no, category, status, EXTRACT(EPOCH FROM COALESCE((details->>'window_start')::timestamptz,
+                               split_part(alert_id, '|', 3)::timestamptz)) FROM alerts WHERE mode = %s ORDER BY 5""", (db_mode,))
+                alerts = [{"alert_id": i, "site_no": s, "category": c, "status": st, "t": float(t)} for i, s, c, st, t in cur.fetchall()]
+                cur.execute("SELECT DISTINCT EXTRACT(EPOCH FROM window_start) FROM windowed_aggregates WHERE mode = %s AND n_readings > 0 ORDER BY 1", (db_mode,))
+                events = timeline_events([float(r[0]) for r in cur.fetchall()], [a["t"] for a in alerts])
+                if start is None or end is None:
+                    if not events:
+                        return {"ok": True, "mode": db_mode, "events": [], "series": {}, "alerts": []}
+                    pick = next((e for e in events if e["alerts"]), events[0])
+                    start, end = pick["start"], pick["end"]
+                start = max(start, end - TIMELINE_MAX_S)
+                cur.execute("""SELECT site_no, EXTRACT(EPOCH FROM window_start), stage_last, n_readings FROM windowed_aggregates
+                               WHERE mode = %s AND window_start >= to_timestamp(%s) AND window_start < to_timestamp(%s) ORDER BY 2""", (db_mode, start, end))
+                rows = [(s, float(t), st, n) for s, t, st, n in cur.fetchall()]
+            return {"ok": True, "mode": db_mode, "start": start, "end": end, "events": events, "series": timeline_series(rows),
+                    "alerts": [a for a in alerts if start <= a["t"] <= end]}
         finally:
             conn.close()
     except Exception as e:
@@ -587,28 +689,35 @@ def metrics_api() -> dict:
 
 
 def agent_run_view(events: list[dict]) -> dict:
-    """Events of one run -> per agent: visited, time taken (from `end` events), tool calls, tokens, last verdict and attempts."""
+    """Events of one run -> per agent: visited, time taken (from `end` events), tool calls, tokens, last verdict and attempts.
+    `open` = started and not ended yet: that agent is running now, if the run is still recent."""
     agents: dict[str, dict] = {}
     for e in events:
-        a = agents.setdefault(e["agent"], {"agent": e["agent"], "starts": 0, "ms": 0, "tool_calls": 0, "tokens": 0, "verdict": None})
+        a = agents.setdefault(e["agent"], {"agent": e["agent"], "starts": 0, "ends": 0, "ms": 0, "tool_calls": 0, "tokens": 0, "verdict": None})
         d = e.get("detail") or {}
         if e["kind"] == "start":
             a["starts"] += 1
         elif e["kind"] == "end":
+            a["ends"] += 1
             a["ms"] += d.get("ms") or 0
             a["tokens"] += d.get("tokens") or 0
         elif e["kind"] == "tool_call":
             a["tool_calls"] += 1
         elif e["kind"] == "verdict":
             a["verdict"] = d.get("verdict")
+    for a in agents.values():
+        a["open"] = a["starts"] > a["ends"]
     return {"agents": list(agents.values()), "disagreements": sum(1 for e in events if e["kind"] == "disagreement"),
             "revisions": sum(1 for e in events if e["kind"] == "revision")}
+
+
+ACTIVE_RUN_S = 120      # a run with an agent still open but silent for longer than this crashed; it is not shown as running
 
 
 def agents_api() -> dict:
     """The newest run in agent_events, without the writer's token stream (read-only)."""
     if CTX["demo"]:
-        return {"ok": True, "run": None}
+        return {"ok": True, "run": None, "langsmith": langsmith_status()}
     try:
         conn = pg_conn()
         try:
@@ -617,7 +726,7 @@ def agents_api() -> dict:
                             "FROM agent_run_summary ORDER BY ended_at DESC LIMIT 1")
                 row = cur.fetchone()
                 if not row:
-                    return {"ok": True, "run": None}
+                    return {"ok": True, "run": None, "langsmith": langsmith_status()}
                 cols = [d[0] for d in cur.description]
                 run = {k: (v.isoformat() if hasattr(v, "isoformat") else (float(v) if k == "duration_s" and v is not None else v)) for k, v in zip(cols, row)}
                 cur.execute("SELECT mode FROM alerts WHERE alert_id = %s", (run["alert_id"],))
@@ -625,7 +734,13 @@ def agents_api() -> dict:
                 run["mode"] = m[0] if m else None
                 cur.execute("SELECT agent, kind, detail, ts FROM agent_events WHERE run_id = %s ORDER BY event_id", (run["run_id"],))
                 events = [{"agent": a, "kind": k, "detail": d, "ts": t.isoformat()} for a, k, d, t in cur.fetchall()]
-            return {"ok": True, "run": run, **agent_run_view(events),
+                cur.execute("SELECT version, source, status FROM advisories WHERE alert_id = %s ORDER BY version DESC LIMIT 1", (run["alert_id"],))
+                adv = cur.fetchone()
+                cur.execute("SELECT EXTRACT(EPOCH FROM (now() - max(ts))) FROM agent_events WHERE run_id = %s", (run["run_id"],))
+                age = float(cur.fetchone()[0] or 0)
+            view = agent_run_view(events)
+            return {"ok": True, "run": run, **view, "active": age < ACTIVE_RUN_S and any(a["open"] for a in view["agents"]), "langsmith": langsmith_status(),
+                    "advisory": {"version": adv[0], "source": adv[1], "status": adv[2]} if adv else None,
                     "events": [e for e in events if e["kind"] != "token_chunk"][-80:]}
         finally:
             conn.close()
@@ -730,11 +845,11 @@ def make_handler():
                 full = os.path.join(HERE, "static", rel)
                 if rel.startswith("..") or not os.path.isfile(full):
                     return self._send(404, "text/plain", b"not found")
-                ctype = {".js": "application/javascript", ".css": "text/css", ".png": "image/png"}.get(
+                ctype = {".js": "application/javascript", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg"}.get(
                     os.path.splitext(full)[1], "application/octet-stream")
                 with open(full, "rb") as f:
                     return self._send(200, ctype, f.read())
-            if self.path in ("/", "/index.html"):
+            if urlparse(self.path).path in ("/", "/index.html"):
                 with open(os.path.join(HERE, "flow.html"), "rb") as f:
                     self._send(200, "text/html; charset=utf-8", f.read())
             elif self.path == "/api/state":
@@ -761,6 +876,10 @@ def make_handler():
                            "regions": regions_summary(load_regions(), latest, live, time.time(), CTX["stale_s"])}).encode())
             elif self.path == "/api/metrics":
                 self._send(200, "application/json", json.dumps(metrics_api()).encode())
+            elif self.path.startswith("/api/timeline"):
+                q = parse_qs(urlparse(self.path).query)
+                num = lambda k: float(q[k][0]) if q.get(k) else None  # noqa: E731
+                self._send(200, "application/json", json.dumps(timeline_api(q.get("mode", ["live"])[0], num("start"), num("end"))).encode())
             elif self.path == "/api/agents":
                 self._send(200, "application/json", json.dumps(agents_api(), default=str).encode())
             elif self.path == "/api/advisories":

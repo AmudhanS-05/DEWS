@@ -24,8 +24,8 @@ approval panel. **Restart it after pulling new code.** Tabs can be opened direct
 ## Landing page
 
 The first screen: what the system is, four live numbers (monitored areas, gauges, gauges reporting live, advisories
-awaiting approval) and two buttons. **Enter the globe** opens the Map; **Pipeline flow** opens the diagram. The logo
-in the header brings you back. The footer reads "Prototype, not an official warning".
+awaiting approval). Scroll down (or press Enter) to move into the globe. The DEWS logo in the header brings you back.
+A small line at the bottom reads "Prototype, not an official warning".
 
 ## Header
 
@@ -55,9 +55,9 @@ A WebGL globe of the monitored areas that flies down to a regional map.
   mark its official stages. **Colour** is the official category it is in now: below action, action, minor, moderate,
   major, or grey for no recent reading (the key is in the left panel). A dashed red beam marks an open alert. Click a
   pillar for its card; the list on the right is sorted by severity.
-- Toggles: **Tilt**, **Terrain** (real elevation), **Satellite** imagery. *Data layers* switch gauges, alerts, the
-  radar sweep, range rings, graticule and labels on or off. *Visual* presets (Standard, Night, Mono, Thermal) and
-  **Auto-rotate** are for presenting.
+- Icons: **compass** (tilt, or back to north up), **terrain** (real elevation at any zoom), **satellite** imagery, **clock** (timeline scrubber). *Data layers* switch gauges, alerts, the
+  radar sweep, range rings, graticule and labels on or off. **Auto-rotate** is for
+  presenting. Clicking the alert line flies to that gauge.
 - The top bar shows the time and an overall **Status** (NORMAL until a gauge reaches a category). *Scene brief*
   summarises what is on screen.
 

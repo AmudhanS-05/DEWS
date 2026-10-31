@@ -54,7 +54,7 @@ recall, F1, false alarms and lead time on held-out years; the reviewer catches a
 
 | Workstream | Tasks | Done when |
 |---|---|---|
-| **Core** | C3.1 forecaster loads the model through `ml/predict.py` (hot-swap, falls back to baseline). C3.2 Metrics tab detection panel; Power BI page 3 guide. | `verify_slice S3` PASS: forecasts carry the model name |
+| **Core** | C3.1 forecaster loads the model through `ml/predict.py` (hot-swap, falls back to baseline). C3.2 Metrics tab detection panel; Power BI page 3 guide. | `verify_slice S3` PASS: forecasts carry the model name; on the May 2019 replay the trained model alerts before the minor crossing (moved here from S1: the rise-rate baseline measurably alerts too late, pooled lead time net of feed delay −0.17 h) |
 | **ML + India** | M3.1 final split and evaluation (per gauge, slow-only, distinct storms, PR curves). M3.2 model v2 + `ml/MODEL_CARD.md`. M3.3 radius sensitivity 5 / 10 / 25 km. I3.1 Indian data through the pipeline (replay via loader) → failure log (Table 2). | results table; Table 2 |
 | **Agents** | A3.1 reviewer: deterministic number/category/wording checks + LLM judgement; corrupted-draft fixtures. A3.2 Ollama fallback path tested (Groq off). A3.3 episodic memory: episode history, "Update n" wording, edits as examples; guard: numbers only from current evidence. | reviewer catches all seeded errors; update wording on a repeat alert |
 | **YOU** | review the results table; ask faculty nothing new unless numbers look odd | |

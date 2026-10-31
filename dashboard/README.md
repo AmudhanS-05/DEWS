@@ -1,5 +1,8 @@
 # Console and dashboards
 
+`static/world_bluemarble.jpg` is NASA's Blue Marble (public domain, NASA Earth Observatory): the map's fallback when the
+imagery tiles cannot be reached. Add `?offline` to the console URL to see it on purpose.
+
 Two front ends read the same pipeline:
 
 | | What it is | Used for |

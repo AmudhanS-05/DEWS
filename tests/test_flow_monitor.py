@@ -149,6 +149,32 @@ def test_planned_region_has_no_gauges_and_is_marked(tmp_path):
     assert out[0]["planned"] is True and out[0]["n_gauges"] == 0 and out[0]["worst"] == "nodata"
 
 
+def test_timeline_events_split_at_gaps_newest_first_and_count_alerts():
+    h = 3600.0
+    ev = fm.timeline_events([0, h, 2 * h, 100 * h, 101 * h], alerts=[h])
+    assert [(e["start"], e["end"], e["alerts"]) for e in ev] == [(100 * h, 102 * h, 0), (0, 3 * h, 1)]
+    assert fm.timeline_events([]) == []
+
+
+def test_timeline_series_leaves_out_windows_without_a_stage():
+    assert fm.timeline_series([("a", 1.0, 2.34567, 3), ("a", 2.0, None, 0), ("b", 1.0, 1, 0)]) == {"a": [[1.0, 2.346, 3]], "b": [[1.0, 1.0, 0]]}
+
+
+def test_agent_run_view_marks_an_agent_still_running():
+    ev = [{"agent": "writer", "kind": "start", "detail": {}}, {"agent": "reviewer", "kind": "start", "detail": {}}, {"agent": "reviewer", "kind": "end", "detail": {"ms": 5}}]
+    a = {x["agent"]: x for x in fm.agent_run_view(ev)["agents"]}
+    assert a["writer"]["open"] and not a["reviewer"]["open"] and a["reviewer"]["ms"] == 5
+
+
+def test_langsmith_status_never_returns_the_key(monkeypatch):
+    monkeypatch.setattr(fm, "load_env", lambda: None)
+    monkeypatch.setenv("LANGSMITH_TRACING", "true"); monkeypatch.setenv("LANGSMITH_API_KEY", "secret")
+    monkeypatch.delenv("LANGSMITH_PROJECT", raising=False)
+    assert fm.langsmith_status() == {"enabled": True, "project": "dews-agents"}
+    monkeypatch.delenv("LANGSMITH_API_KEY")
+    assert fm.langsmith_status()["enabled"] is False
+
+
 class _Fut:
     def __init__(self, value=None, err=None):
         self.value, self.err = value, err

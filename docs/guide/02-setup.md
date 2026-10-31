@@ -164,7 +164,7 @@ The core settings in `common/config.py` come from the shell environment only. Se
 python -m dashboard.flow_monitor            # open http://127.0.0.1:8765
 ```
 
-The page opens on a landing screen. Click **Enter the globe**, or **Pipeline flow**. The header chips should show green
+The page opens on a landing screen. Scroll down to enter the globe. The header chips should show green
 dots for *Kafka*, *brokers 3/3* and *PG*. Every pipeline node shows "not running" or "waiting" until you start
 something, and that is expected. Then follow
 [03 Run a demo](03-run-a-demo.md).
