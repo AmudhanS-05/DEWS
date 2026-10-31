@@ -13,9 +13,6 @@ python -m dashboard.flow_monitor            # http://127.0.0.1:8765; restart it 
 
 | # | Slice | Run | Pass when |
 |---|---|---|---|
-| 1 | S1 | Once: `pip install "aiokafka[lz4]==0.12.0" cramjam`. Then three Faust workers: `faust -A streams.faust_app worker -l info --web-port 6066` (and `6067`, `6068`) | console: Faust windowing `3/3 instances`, no crash |
-| 2 | S1 | `cd docker; docker compose up -d --force-recreate topic-init` | `forecasts.stage` in the topic list (9 topics) |
-| 3 | S1 | Replay: `python -m producers.replay_producer --site 08158700 --start 2019-05-02 --end 2019-05-06 --speed 36000`, then `python -m tools.check_windows --mode SIMULATION --site 08158700` | `aggregates.window` fills; `PASS: no window emitted twice`; zero-filled hours have `n_readings` 0 |
 | 4 | S1 | Kill one Faust worker (Ctrl-C) during a replay; restart it; `tools.check_windows` again | Faust amber `2/3`, then `3/3`; still PASS |
 | 5 | S1 | Stop the live producer with the console started as `python -m dashboard.flow_monitor --live-stale-s 400`; start it again | "USGS live" turns red and back to green; both changes in the status log |
 | 6 | S1 | Throughput: `python -m producers.replay_producer --site 08158700 --start 2017-01-01 --end 2026-09-30 --no-sleep` | note the printed msg/s; Faust lag rises then drains |
