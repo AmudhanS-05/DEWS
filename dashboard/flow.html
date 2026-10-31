@@ -3,87 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Flood Early-Warning Console</title>
-<style>
-  :root{
-    --bg:#f6f7f9; --panel:#fff; --ink:#1f2933; --muted:#6b7785; --line:#d5dae1;
-    --producer:#e3f4ec; --topic:#ebe9fb; --group:#fbe9e0; --store:#f3f4f6; --manual:#fafafa; --info:#f3f4f6;
-    --ok:#1f9d63; --idle:#4a7bd0; --warn:#d98e04; --down:#d63b3b; --absent:#a7afba;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-  header{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;padding:12px 20px;background:var(--panel);border-bottom:1px solid var(--line)}
-  h1{font-size:16px;margin:0 8px 0 0}
-  .chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid var(--line);border-radius:999px;font-size:12px;background:#fff}
-  .dot{width:9px;height:9px;border-radius:50%;background:var(--absent);display:inline-block}
-  .dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.down{background:var(--down)}
-  .demo{background:#fff4d6;border-color:#f0d58a}
-  main{max-width:1180px;margin:0 auto;padding:16px 20px 28px}
-  .canvas{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:6px}
-  .canvas svg{width:100%;height:auto;display:block}
-  .legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--muted);margin:10px 4px 0}
-  .legend span{display:inline-flex;align-items:center;gap:6px}
-  .banner{display:none;margin:0 0 12px;padding:8px 12px;border-radius:8px;background:#fde8e8;color:#8a1f1f;border:1px solid #f3b9b9}
-  h2{font-size:14px;margin:20px 0 8px}
-  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden;font-size:13px}
-  td,th{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left}
-  th{background:#eef0f3;font-weight:600}
-  td.t{color:var(--muted);white-space:nowrap;width:90px}
-  .st{font-weight:600}
-  .st.ok{color:var(--ok)}.st.idle{color:var(--idle)}.st.warn{color:var(--warn)}.st.down{color:var(--down)}.st.absent{color:var(--absent)}
-
-  /* nodes */
-  .node rect{stroke-width:2;transition:stroke .3s, opacity .3s}
-  .node.producer rect{fill:var(--producer)} .node.topic rect{fill:var(--topic)} .node.group rect{fill:var(--group)}
-  .node.store rect,.node.info rect{fill:var(--store)} .node.manual rect{fill:var(--manual)}
-  .node.ok rect{stroke:var(--ok)} .node.idle rect{stroke:var(--idle)} .node.warn rect{stroke:var(--warn)}
-  .node.down rect{stroke:var(--down)} .node.absent rect{stroke:var(--absent);stroke-dasharray:5 4;opacity:.62}
-  .node.manual rect,.node.info rect{stroke:var(--line);stroke-dasharray:4 4}
-  .node.down rect{animation:pulse 1.2s ease-in-out infinite}
-  .node.warn rect{animation:pulse 2s ease-in-out infinite}
-  @keyframes pulse{50%{stroke-width:4}}
-  .node text{font-family:inherit;fill:var(--ink)}
-  .node .ttl{font-size:13px;font-weight:700}
-  .node .ln{font-size:10.5px;fill:var(--muted)}
-  .node.down .ln:first-of-type{fill:var(--down);font-weight:700}
-  .sdot{transition:fill .3s}
-  .sdot.ok{fill:var(--ok)}.sdot.idle{fill:var(--idle)}.sdot.warn{fill:var(--warn)}.sdot.down{fill:var(--down)}.sdot.absent{fill:var(--absent)}.sdot.manual,.sdot.info{fill:var(--line)}
-
-  /* edges */
-  .edge{fill:none;stroke-width:2;transition:stroke .3s}
-  .edge.flow{stroke:var(--ok);stroke-dasharray:7 9;animation:flow var(--dur,1.2s) linear infinite}
-  .edge.idle{stroke:var(--idle);opacity:.5}
-  .edge.inactive{stroke:var(--absent);stroke-dasharray:3 6;opacity:.55}
-  .edge.planned{stroke:var(--absent);stroke-dasharray:2 7;opacity:.5}
-  .edge.blocked{stroke:var(--down);stroke-dasharray:7 9;animation:none}
-  @keyframes flow{to{stroke-dashoffset:-16}}
-  .elabel{font-size:10px;fill:var(--muted)}
-
-  .tabs{display:flex;gap:4px;margin:0 0 12px;border-bottom:1px solid var(--line)}
-  .tab{appearance:none;border:0;background:none;padding:8px 14px;font:inherit;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-1px}
-  .tab[aria-selected=true]{color:var(--ink);border-bottom-color:var(--idle)}
-  .tab:focus-visible{outline:2px solid var(--idle);outline-offset:2px}
-  [hidden]{display:none!important}
-  .mapwrap{display:grid;grid-template-columns:1fr 300px;gap:12px}
-  @media(max-width:860px){.mapwrap{grid-template-columns:1fr}}
-  #map,#scatter{height:520px;border:1px solid var(--line);border-radius:12px;background:#eef1f5;overflow:hidden}
-  #scatter svg{width:100%;height:100%}
-  .glist{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
-  .grow{display:flex;gap:8px;align-items:center;padding:7px 10px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px}
-  .grow:hover{background:#f3f5f8}
-  .grow .sub{color:var(--muted);font-size:11.5px}
-  .gdot{width:11px;height:11px;border-radius:50%;flex:none}
-  .toolbar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:0 0 10px;font-size:13px}
-  .seg button{border:1px solid var(--line);background:#fff;padding:4px 12px;font:inherit;cursor:pointer}
-  .seg button:first-child{border-radius:8px 0 0 8px}.seg button:last-child{border-radius:0 8px 8px 0;border-left:0}
-  .seg button[aria-pressed=true]{background:#e6eefc;border-color:var(--idle);font-weight:600}
-  .note{color:var(--muted);font-size:12.5px}
-</style>
+<title>Orbital Flood Watch</title>
 <link rel="stylesheet" href="/static/leaflet/leaflet.css">
+<link rel="stylesheet" href="/static/theme.css">
 </head>
 <body>
 <header>
-  <h1>Flood early-warning console</h1>
+  <h1>Orbital Flood Watch<small>flood early-warning console</small></h1>
   <span class="chip"><span class="dot" id="d-kafka"></span><span id="c-kafka">Kafka …</span></span>
   <span class="chip"><span class="dot" id="d-brokers"></span><span id="c-brokers">brokers …</span></span>
   <span class="chip"><span class="dot" id="d-urp"></span><span id="c-urp">under-replicated …</span></span>
@@ -94,17 +20,47 @@
 </header>
 <main>
   <div class="tabs" role="tablist">
-    <button class="tab" role="tab" id="tb-flow" aria-selected="true" data-tab="flow">Pipeline flow</button>
-    <button class="tab" role="tab" id="tb-map" aria-selected="false" data-tab="map">Map</button>
+    <button class="tab" role="tab" id="tb-orbit" aria-selected="true" data-tab="orbit">Orbit</button>
+    <button class="tab" role="tab" id="tb-flow" aria-selected="false" data-tab="flow">Pipeline flow</button>
+    <button class="tab" role="tab" id="tb-map" aria-selected="false" data-tab="map">Flat map</button>
     <button class="tab" role="tab" id="tb-data" aria-selected="false" data-tab="data">Readings &amp; alerts</button>
   </div>
   <div class="banner" id="banner"></div>
-  <section id="tab-flow">
+  <section id="tab-orbit">
+    <div class="toolbar">
+      <span class="seg"><button id="o-live" aria-pressed="true">Live</button><button id="o-replay" aria-pressed="false">Replay (SIMULATION)</button></span>
+      <span class="note">Ground is a lat/lon graticule, not terrain. Pillar height = newest stage against that gauge's own official NWS major level.</span>
+    </div>
+    <div class="orbit" id="orbit">
+      <canvas id="o-canvas" aria-label="3D orbital view of every gauge" role="img"></canvas>
+      <div class="hud tl"><div class="big">Orbital flood watch</div><div id="o-mode"></div><div id="o-stat"></div></div>
+      <div class="hud tr"><span id="o-clock"></span><br>USGS gauges · official NWS stages</div>
+      <div class="ctl">
+        <button class="btn" id="o-auto" aria-pressed="true" title="slow automatic orbit">Auto-orbit</button>
+        <button class="btn" id="o-top" title="look straight down">Top-down</button>
+        <button class="btn" id="o-tilt" title="default tilt">Tilt</button>
+        <button class="btn" id="o-low" title="low angle, see the horizon">Horizon</button>
+      </div>
+      <div class="side"><div class="glass card" id="o-card"></div><div class="glass glist" id="o-list"></div></div>
+      <div class="tip" id="o-tip" hidden></div>
+    </div>
+    <div class="legend">
+      <span><span class="gdot" style="display:inline-block;color:#34d6b0;background:#34d6b0"></span>below action stage</span>
+      <span><span class="gdot" style="display:inline-block;color:#e6c04a;background:#e6c04a"></span>action</span>
+      <span><span class="gdot" style="display:inline-block;color:#ff8a3d;background:#ff8a3d"></span>minor flood</span>
+      <span><span class="gdot" style="display:inline-block;color:#ff4d4d;background:#ff4d4d"></span>moderate</span>
+      <span><span class="gdot" style="display:inline-block;color:#c084fc;background:#c084fc"></span>major</span>
+      <span><span class="gdot" style="display:inline-block;color:#46586d;background:#46586d"></span>no recent reading</span>
+      <span>a dashed red beam marks an open alert</span>
+    </div>
+  </section>
+
+  <section id="tab-flow" hidden>
   <div class="canvas">
   <svg viewBox="0 0 1120 600" id="svg" role="img" aria-label="Live pipeline diagram">
     <defs>
       <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-        <path d="M0 0L10 5L0 10z" fill="#9aa3af"/>
+        <path d="M0 0L10 5L0 10z" fill="#52657a"/>
       </marker>
     </defs>
     <g id="edges"></g>
@@ -136,12 +92,12 @@
       <div class="glist" id="glist"></div>
     </div>
     <div class="legend">
-      <span><span class="gdot" style="display:inline-block;background:#1f9d63"></span>below action stage</span>
-      <span><span class="gdot" style="display:inline-block;background:#e0b000"></span>action</span>
-      <span><span class="gdot" style="display:inline-block;background:#e8761a"></span>minor flood</span>
-      <span><span class="gdot" style="display:inline-block;background:#d63b3b"></span>moderate</span>
-      <span><span class="gdot" style="display:inline-block;background:#7b3fbf"></span>major</span>
-      <span><span class="gdot" style="display:inline-block;background:#a7afba"></span>no recent reading</span>
+      <span><span class="gdot" style="display:inline-block;background:#34d6b0"></span>below action stage</span>
+      <span><span class="gdot" style="display:inline-block;background:#e6c04a"></span>action</span>
+      <span><span class="gdot" style="display:inline-block;background:#ff8a3d"></span>minor flood</span>
+      <span><span class="gdot" style="display:inline-block;background:#ff4d4d"></span>moderate</span>
+      <span><span class="gdot" style="display:inline-block;background:#c084fc"></span>major</span>
+      <span><span class="gdot" style="display:inline-block;background:#46586d"></span>no recent reading</span>
       <span>levels are the official NWS (NWPS) stages for each gauge</span>
     </div>
   </section>
@@ -248,20 +204,21 @@ connect();
 setInterval(()=>{ if (lastMsg && Date.now()-lastMsg > 8000) document.getElementById("c-clock").textContent = "no update for " + Math.round((Date.now()-lastMsg)/1000) + " s"; }, 2000);
 
 // ---------------------------------------------------------------- tabs
-const TABS = ["flow","map","data"];
+const TABS = ["orbit","flow","map","data"];
 function showTab(t){
   for (const n of TABS){
     document.getElementById("tab-"+n).hidden = n!==t;
     document.getElementById("tb-"+n).setAttribute("aria-selected", n===t);
   }
   try{ history.replaceState(null,"","#"+t); }catch(e){}
+  if (window.Orbit) { if (t==="orbit") Orbit.show(); else Orbit.hide(); }
   if (t==="map") { loadGauges(); setTimeout(()=>lmap&&lmap.invalidateSize(),50); }
   if (t==="data") { loadDb(); if (typeof loadAdvisories==="function") loadAdvisories(); }
 }
 document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>showTab(b.dataset.tab)));
 
 // ---------------------------------------------------------------- map
-const SC = {normal:"#1f9d63",action:"#e0b000",minor:"#e8761a",moderate:"#d63b3b",major:"#7b3fbf",stale:"#a7afba",nodata:"#a7afba"};
+const SC = {normal:"#34d6b0",action:"#e6c04a",minor:"#ff8a3d",moderate:"#ff4d4d",major:"#c084fc",stale:"#5b6b80",nodata:"#46586d"};
 const SEV = {major:5,moderate:4,minor:3,action:2,normal:1,stale:0,nodata:0};
 let gmode="live", gdata=null, lmap=null, lmarkers={}, useScatter=false, fitted=false;
 const ageTxt = s => s==null?"":(s<90?Math.round(s)+" s ago":(s<5400?Math.round(s/60)+" min ago":(s/3600).toFixed(1)+" h ago"));
@@ -287,7 +244,7 @@ function popup(g){
   const c=g.cats||{};
   return `<b>${g.name}</b><br>${g.lid} · ${g.site_no}<br>`+
     (g.stage==null?"no reading":`stage <b>${g.stage.toFixed(2)} ft</b>${g.provisional?" (provisional)":""}${g.age_s!=null?" · "+ageTxt(g.age_s):""}`)+
-    `<br><span style="color:#6b7785">action ${c.action??"-"} · minor ${c.minor??"-"} · moderate ${c.moderate??"-"} · major ${c.major??"-"} ft</span>`;
+    `<br><span style="color:#7f93a8">action ${c.action??"-"} · minor ${c.minor??"-"} · moderate ${c.moderate??"-"} · major ${c.major??"-"} ft</span>`;
 }
 function drawList(gs){
   const el=document.getElementById("glist"); el.innerHTML="";
@@ -305,12 +262,12 @@ function drawScatter(gs){
   const lons=gs.map(g=>g.lon), lats=gs.map(g=>g.lat);
   const x0=Math.min(...lons),x1=Math.max(...lons),y0=Math.min(...lats),y1=Math.max(...lats);
   const sx=lon=>pad+(lon-x0)/((x1-x0)||1)*(W-2*pad), sy=lat=>H-pad-(lat-y0)/((y1-y0)||1)*(H-2*pad);
-  let h=`<svg viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="#eef1f5"/>`;
-  h+=`<text x="12" y="20" font-size="12" fill="#6b7785">Offline view: gauge positions only (no map tiles). Longitude → right, latitude → up.</text>`;
+  let h=`<svg viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="#0a1522"/>`;
+  h+=`<text x="12" y="20" font-size="12" fill="#7f93a8">Offline view: gauge positions only (no map tiles). Longitude → right, latitude → up.</text>`;
   for (const g of gs){
     const r=g.status==="major"||g.status==="moderate"||g.status==="minor"?9:7;
-    h+=`<g><circle cx="${sx(g.lon)}" cy="${sy(g.lat)}" r="${r}" fill="${SC[g.status]}" stroke="#fff" stroke-width="2"><title>${g.name}: ${g.stage==null?"no reading":g.stage.toFixed(2)+" ft"} (${g.status})</title></circle>`;
-    h+=`<text x="${sx(g.lon)+11}" y="${sy(g.lat)+4}" font-size="10" fill="#1f2933">${g.lid}</text></g>`;
+    h+=`<g><circle cx="${sx(g.lon)}" cy="${sy(g.lat)}" r="${r}" fill="${SC[g.status]}" stroke="#04070d" stroke-width="2"><title>${g.name}: ${g.stage==null?"no reading":g.stage.toFixed(2)+" ft"} (${g.status})</title></circle>`;
+    h+=`<text x="${sx(g.lon)+11}" y="${sy(g.lat)+4}" font-size="10" fill="#dbe7f3">${g.lid}</text></g>`;
   }
   box.innerHTML=h+"</svg>";
 }
@@ -338,7 +295,7 @@ function drawGauges(){
       let tileErr=0; tl.on("tileerror",()=>{ if(++tileErr===4) note.textContent+=" · map tiles not loading (no internet?): gauges still shown"; });
     }
     for(const g of gs){
-      const style={radius:(["minor","moderate","major"].includes(g.status)?11:8),color:"#fff",weight:2,fillColor:SC[g.status],fillOpacity:.95};
+      const style={radius:(["minor","moderate","major"].includes(g.status)?11:8),color:"#04070d",weight:2,fillColor:SC[g.status],fillOpacity:.95};
       if(lmarkers[g.site_no]){ lmarkers[g.site_no].setStyle(style); lmarkers[g.site_no].setPopupContent(popup(g)); }
       else lmarkers[g.site_no]=L.circleMarker([g.lat,g.lon],style).bindPopup(popup(g)).addTo(lmap);
     }
@@ -369,15 +326,27 @@ const byInput=document.getElementById("adv-by");
 try{ byInput.value=localStorage.getItem("approver")||""; }catch(e){}
 byInput.addEventListener("input",()=>{ try{ localStorage.setItem("approver",byInput.value); }catch(e){} });
 let advEditing=false;   // do not redraw while a person is typing in a text box
+const armed={};
+function disarm(btn,id){ armed[id]=false; if(btn){ btn.disabled=false; btn.textContent="Approve"; btn.classList.remove("armed"); } }
 async function advAct(id,action){
-  const ta=document.getElementById("ta-"+id), msg=document.getElementById("msg-"+id);
-  const body={advisory_id:id, by:byInput.value, text:ta?ta.value:undefined};
-  if(action==="approve" && !byInput.value.trim()){ msg.textContent="enter the approver name first"; return; }
-  if(action==="approve" && !confirm("Approve and send this advisory by email?")) return;
-  const r=await fetch("/api/advisory/"+action,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-  const d=await r.json().catch(()=>({error:"bad answer"}));
-  msg.textContent = r.ok ? (action==="edit"?"saved":action+"d") : (d.error||"failed");
-  advEditing=false; if(r.ok && action!=="edit") loadAdvisories();
+  const ta=document.getElementById("ta-"+id), msg=document.getElementById("msg-"+id), btn=document.getElementById("ap-"+id);
+  if(action==="approve"){
+    if(!byInput.value.trim()){ msg.textContent=" enter the approver name first (top of this section)"; byInput.focus(); return; }
+    if(!armed[id]){                                   // first click arms, second click sends
+      armed[id]=true; btn.textContent="Click again to send email"; btn.classList.add("armed"); msg.textContent="";
+      setTimeout(()=>{ if(armed[id]) disarm(btn,id); },6000); return;
+    }
+    armed[id]=false; btn.disabled=true; btn.textContent="Sending…";
+  }
+  msg.textContent=" working…";
+  let r,d;
+  try{
+    r=await fetch("/api/advisory/"+action,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({advisory_id:id,by:byInput.value,text:ta?ta.value:undefined})});
+    d=await r.json().catch(()=>({error:"bad answer from the console server"}));
+  }catch(e){ msg.textContent=" cannot reach the console server"; disarm(btn,id); return; }
+  if(!r.ok){ msg.textContent=" "+(d.error||("failed ("+r.status+")")); disarm(btn,id); return; }
+  msg.textContent = action==="edit" ? " saved" : " "+action+"d";
+  advEditing=false; if(action!=="edit") loadAdvisories();
 }
 async function loadAdvisories(){
   if(advEditing) return;
@@ -387,21 +356,22 @@ async function loadAdvisories(){
     if(!d.ok){ box.innerHTML=`<div class="note">${esc(d.error)}</div>`; return; }
     box.innerHTML = d.advisories.length ? d.advisories.map(a=>{
       const pending=a.status==="draft", text=a.edited_text||a.text;
-      return `<div style="border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px;background:var(--panel)">
+      return `<div class="adv">
         <div><b>${esc(a.site_no)}</b> ${esc(a.category)} · ${esc(a.mode)} · v${esc(a.version)} (${esc(a.source)}) · <b>${esc(a.status)}</b>
           ${a.confidence==="uncertain"?"· <b>UNCERTAIN</b>":""}${a.reviewer_verdict?" · reviewer: "+esc(a.reviewer_verdict):""}
           ${a.delivered_at?" · delivered "+fmtDT(a.delivered_at):""}</div>
-        ${pending?`<textarea id="ta-${esc(a.advisory_id)}" rows="7" style="width:100%;margin:6px 0;font:inherit" onfocus="advEditing=true">${esc(text)}</textarea>
-          <button onclick="advAct('${esc(a.advisory_id)}','approve')">Approve</button>
+        ${pending?`<textarea id="ta-${esc(a.advisory_id)}" rows="7" onfocus="advEditing=true">${esc(text)}</textarea>
+          <button class="go" id="ap-${esc(a.advisory_id)}" onclick="advAct('${esc(a.advisory_id)}','approve')">Approve</button>
           <button onclick="advAct('${esc(a.advisory_id)}','edit')">Save edit</button>
-          <button onclick="advAct('${esc(a.advisory_id)}','reject')">Reject</button>
+          <button class="no" onclick="advAct('${esc(a.advisory_id)}','reject')">Reject</button>
           <span id="msg-${esc(a.advisory_id)}" class="note"></span>`
-        :`<pre style="white-space:pre-wrap;margin:6px 0;font:inherit">${esc(text)}</pre>`}
+        :`<pre>${esc(text)}</pre>`}
       </div>`; }).join("") : `<div class="note">No advisories yet: they appear within seconds of an alert.</div>`;
   }catch(e){ box.innerHTML=`<div class="note">cannot reach the console server</div>`; }
 }
 setInterval(()=>{ if(!document.getElementById("tab-data").hidden) loadAdvisories(); },5000);
-{ const h=(location.hash||"").slice(1); if(TABS.includes(h)&&h!=="flow") showTab(h); }
+{ const h=(location.hash||"").slice(1); showTab(TABS.includes(h)?h:"orbit"); }
 </script>
+<script src="/static/orbit.js"></script>
 </body>
 </html>
