@@ -10,8 +10,6 @@ def load_gauges(path: str, only: str | None, start: str, end: str, data_dir: str
     """[{site_no, lid, cats, readings}]. Prints one line per gauge, including why a gauge was skipped.
     A gauge is skipped only if its categories are missing/non-numeric or it has no cached data; equal
     action and minor stages are valid (labels are 'crosses minor')."""
-    if loader is None:
-        from producers.replay_producer import load_readings as loader
     want = {x.strip().upper() for x in only.split(",")} if only else None
     out = []
     with open(path, encoding="utf-8") as f:
@@ -24,6 +22,8 @@ def load_gauges(path: str, only: str | None, start: str, end: str, data_dir: str
             except (ValueError, TypeError):
                 print(f"  skip {tag}: official categories missing or not numeric")
                 continue
+            if loader is None:
+                from producers.replay_producer import load_readings as loader
             try:
                 rs = loader(g["site_no"], start, end)
             except SystemExit:
