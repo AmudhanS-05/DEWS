@@ -115,3 +115,25 @@ def test_probe_reports_unreachable_host(tmp_path):
     finally:
         mod.post_with_backoff = orig
     assert any("FAILED" in x for x in out)
+
+
+def test_empty_tributary_is_sent_as_empty():
+    assert A.query("basin", "a", "b", 0, 5, "CWC", basin="Godavari", tributary="")["tributaryName"] == ""
+
+
+def test_discover_counts_and_first_record(tmp_path):
+    matrix = [("empty", "basin", {"basin": "Godavari", "tributary": "Godavari"}, "CWC", "dry_week_2023"),
+              ("hit", "state", {"state": "Kerala", "district": "Ernakulam"}, "CWC", "kerala_flood_2018")]
+
+    def fn(url, p):
+        if "stateName" in p:
+            return Resp(200, {"statusCode": 200, "message": "ok", "data": [rec("K1", 15, 9.9)]})
+        return Resp(200, {"statusCode": 500, "message": "No data found for the given criteria.", "data": []})
+    s, waits, out = Sess(fn), [], []
+    rows = A.discover(matrix=matrix, data_dir=str(tmp_path), session=s, sleep_s=3, sleep=waits.append,
+                      printer=out.append)
+    assert [r["records"] for r in rows] == [0, 1] and rows[0]["status_code"] == 500
+    assert waits == [3] and s.calls[1][1]["startdate"] == "2018-08-10"
+    assert "/Dataset/River%20Water%20Level" in s.calls[1][0]
+    text = "\n".join(out)
+    assert "No data found" in text and '"stationCode": "K1"' in text and "1 of 2 combinations" in text

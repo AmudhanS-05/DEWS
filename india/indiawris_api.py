@@ -19,6 +19,7 @@ read into per-station CSV files under data/raw/indiawris/api_csv/ in the layout 
 (mode = SIMULATION, source = INDIA-WRIS, as for the Excel downloads).
 
     python -m india.indiawris_api --probe                                     # one small request, prints raw body
+    python -m india.indiawris_api --discover                                  # ~11 requests: which names return data
     python -m india.indiawris_api --basin Godavari --tributary Godavari --agency CWC \
         --start 2015-01-01 --end 2025-12-31                                   # page through and save
 """
@@ -63,7 +64,7 @@ def query(scope: str, start: str, end: str, page: int, size: int, agency: str, b
     q = {"agencyName": agency, "startdate": start, "enddate": end, "page": page, "size": size,
          "download": str(download).lower()}
     if scope == "basin":
-        q.update(basinName=basin, tributaryName=tributary or basin)
+        q.update(basinName=basin, tributaryName=basin if tributary is None else tributary)
     else:
         q.update(stateName=state, districtName=district)
     return q
@@ -255,11 +256,83 @@ def probe(dataset: str = "water_level", basin: str = "Godavari", tributary: str 
     return 0 if r.status_code < 400 else 1
 
 
+# --discover matrix: (label, scope, where, agency, start, end). Names of tributaries, districts and the state agency are
+# GUESSES at India-WRIS spellings; the point is to find which combination returns records. Edit freely.
+DISCOVER_WINDOWS = {"godavari_flood_2022": ("2022-07-08", "2022-07-18"),   # Godavari flood at Bhadrachalam
+                    "kerala_flood_2018": ("2018-08-10", "2018-08-20"),     # Periyar / Kerala floods
+                    "dry_week_2023": ("2023-02-01", "2023-02-07")}         # non-monsoon week
+DISCOVER = [
+    ("basin Godavari / trib=Godavari / CWC", "basin", {"basin": "Godavari", "tributary": "Godavari"}, "CWC",
+     "godavari_flood_2022"),
+    ("basin Godavari / trib='' / CWC", "basin", {"basin": "Godavari", "tributary": ""}, "CWC", "godavari_flood_2022"),
+    ("basin Godavari / trib=Pranhita / CWC", "basin", {"basin": "Godavari", "tributary": "Pranhita"}, "CWC",
+     "godavari_flood_2022"),
+    ("basin Godavari / trib=Godavari / agency=''", "basin", {"basin": "Godavari", "tributary": "Godavari"}, "",
+     "godavari_flood_2022"),
+    ("basin Godavari / trib=Godavari / CWC / dry", "basin", {"basin": "Godavari", "tributary": "Godavari"}, "CWC",
+     "dry_week_2023"),
+    ("basin Periyar / trib=Periyar / CWC", "basin", {"basin": "Periyar", "tributary": "Periyar"}, "CWC",
+     "kerala_flood_2018"),
+    ("state Telangana / Bhadradri Kothagudem / CWC", "state",
+     {"state": "Telangana", "district": "Bhadradri Kothagudem"}, "CWC", "godavari_flood_2022"),
+    ("state Telangana / Bhadradri Kothagudem / state agency", "state",
+     {"state": "Telangana", "district": "Bhadradri Kothagudem"}, "Telangana Water Resources Department",
+     "godavari_flood_2022"),
+    ("state Kerala / Ernakulam / CWC", "state", {"state": "Kerala", "district": "Ernakulam"}, "CWC",
+     "kerala_flood_2018"),
+    ("state Kerala / Ernakulam / state agency", "state", {"state": "Kerala", "district": "Ernakulam"},
+     "Kerala Water Resources Department", "kerala_flood_2018"),
+    ("state Kerala / Ernakulam / CWC / dry", "state", {"state": "Kerala", "district": "Ernakulam"}, "CWC",
+     "dry_week_2023"),
+]
+
+
+def discover(dataset: str = "water_level", matrix=None, size: int = 5, data_dir: str = "data", session=None,
+             sleep_s: float = 3.0, sleep=time.sleep, printer=print) -> list[dict]:
+    """One small request per combination (polite: `sleep_s` between calls, no retries beyond one); prints one line
+    per combination (HTTP status, body statusCode/message, record count) and the first record of any non-empty
+    response. Raw bodies go to data/raw/indiawris/api/discover/."""
+    matrix = matrix if matrix is not None else DISCOVER
+    raw = os.path.join(data_dir, "raw", "indiawris", "api", "discover")
+    out = []
+    printer(f"india.indiawris_api --discover: {len(matrix)} requests, {sleep_s:g} s apart, size {size}")
+    for k, (label, scope, where, agency, win) in enumerate(matrix):
+        if k:
+            sleep(sleep_s)
+        start, end = DISCOVER_WINDOWS.get(win, (None, None)) if isinstance(win, str) else win
+        q = query(scope, start, end, 0, size, agency, **where)
+        row = {"label": label, "window": f"{start}..{end}", "http": None, "status_code": None, "message": "",
+               "records": 0}
+        try:
+            r = post_with_backoff(endpoint(dataset, scope), q, session=session, tries=2, timeout_s=60, sleep=sleep)
+            row["http"] = r.status_code
+            p, doc = _save_raw(r, os.path.join(raw, f"{k:02d}"), start, end, 0)
+            if isinstance(doc, dict):
+                row["status_code"], row["message"] = doc.get("statusCode"), str(doc.get("message") or "")[:80]
+            recs = extract_records(doc)
+            row["records"] = len(recs)
+            if recs:
+                row["first_record"] = recs[0]
+        except Exception as e:  # noqa: BLE001
+            row["message"] = f"FAILED {type(e).__name__}: {str(e)[:100]}"
+        out.append(row)
+        printer(f"  [{k:02d}] {label:55s} {row['window']}  HTTP {row['http']}  statusCode {row['status_code']}  "
+                f"records {row['records']}  {row['message']}")
+        if row.get("first_record"):
+            printer(f"       first record: {json.dumps(row['first_record'], ensure_ascii=False)[:600]}")
+    hits = [r for r in out if r["records"]]
+    printer(f"discover done: {len(hits)} of {len(out)} combinations returned records"
+            + (": " + "; ".join(r["label"] for r in hits) if hits else ""))
+    return out
+
+
 def main(argv=None):
     import argparse
     from ml.progress import Timer, bar
     p = argparse.ArgumentParser(description="India-WRIS API client (response layout unverified; run --probe first).")
     p.add_argument("--probe", action="store_true", help="one small request; print status, headers, raw body")
+    p.add_argument("--discover", action="store_true", help="small matrix of names/agencies/windows; record counts")
+    p.add_argument("--sleep", type=float, default=3.0, help="seconds between --discover requests")
     p.add_argument("--dataset", default="water_level", choices=sorted(DATASETS))
     p.add_argument("--scope", default="basin", choices=["basin", "state"])
     p.add_argument("--basin", default="Godavari")
@@ -276,6 +349,9 @@ def main(argv=None):
     a = p.parse_args(argv)
     if a.probe:
         raise SystemExit(probe(a.dataset, a.basin, a.tributary, a.agency, a.days, None, 10, a.data_dir))
+    if a.discover:
+        discover(a.dataset, data_dir=a.data_dir, sleep_s=a.sleep)
+        return
     timer = Timer()
     where = ({"basin": a.basin, "tributary": a.tributary or a.basin} if a.scope == "basin"
              else {"state": a.state, "district": a.district})
