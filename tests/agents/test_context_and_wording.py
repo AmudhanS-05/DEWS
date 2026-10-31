@@ -208,3 +208,35 @@ def test_pg_alert_details_window_start_is_used(pg_empty):
     with pg_empty.cursor() as cur:   # an old row without details keeps the first-crossing fallback
         cur.execute("UPDATE alerts SET details = NULL WHERE alert_id = %s", (seed.REPLAY_ALERT,))
     assert Tools(pg_empty).get_alert(seed.REPLAY_ALERT)["as_of"] == "2019-05-04T02:00:00Z"
+
+
+# ------------------------------------------------------------------ unknown abbreviations (live run 3 at low effort)
+
+RUN3 = """SIMULATION - replay of a historical USGS gauge record, not a real-time event
+Onion Creek near Driftwood (site 08158700) current stage 8.2 ft, forecast stage 24.7 ft
+Forecast to reach MAJOR flood stage (13.0 ft) within 3 h; probability: not available
+Lead time to MAJOR: about 0.9 h
+Impacts: no NGS impact statement loaded
+Uncertainty: supporting signal only - downstream Onion Creek at US 183 +6.1 ft in 3 h and nearby Slaughter Creek +7.4 ft in 3 h are rising in the same window; no leading signal; rain data not available (radar rain archive starts Oct 2020; this event is earlier, so there is no radar rain for it)
+Data: approved per USGS; model rise-rate baseline; readings time 2019-05-04T02:00:00Z."""
+
+RUN3_CX = {**NO_RAIN, "kind": "supporting", "direction": "rising",
+           "neighbours": [_nb("downstream", True, 6.1, "Onion Creek at US 183"),
+                          _nb("nearby", True, 7.4, "Slaughter Creek at FM 1826 near Austin")]}
+
+
+def test_run3_unknown_abbreviation_ngs_is_sent_back():
+    found = checks.review_detailed(RUN3, REAL, advisory.build_facts(REAL, REAL_EV, RUN3_CX, 1))
+    assert [i for i, _ in found] == ["abbreviation"]
+    assert "unknown abbreviation NGS" in found[0][1]
+    fixed = RUN3.replace("NGS", "NWS")
+    assert checks.review(fixed, REAL, advisory.build_facts(REAL, REAL_EV, RUN3_CX, 1)) == []
+
+
+def test_abbreviations_from_facts_names_and_lids_are_allowed():
+    facts = advisory.build_facts({**REAL, "site_name": "Onion Ck nr Driftwood DRWT TX"}, REAL_EV, RUN3_CX, 1)
+    allowed = checks.allowed_abbreviations(facts)
+    assert {"NWS", "USGS", "UTC", "US", "FM", "DRWT", "TX"} <= allowed
+    good = advisory.template_text(REAL, REAL_EV, RUN3_CX, "normal", 1, None)
+    assert "abbreviation" not in {i for i, _ in checks.review_detailed(good, REAL, facts)}
+    assert "abbreviation" in {i for i, _ in checks.review_detailed(good + "\nNOT an official forecast.", REAL, facts)}

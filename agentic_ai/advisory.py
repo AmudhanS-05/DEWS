@@ -261,6 +261,9 @@ def requirements(facts: dict, confidence: str) -> list[tuple[str, str]]:
     req.append(("missing_value", "Never write null, None, NaN or '?' for a value: write 'not available'."))
     req.append(("raw_field", "Never write a FACTS field name (words joined with _, e.g. as_of, rise_rate) or the "
                              "words true/false; use plain words (e.g. 'as of', 'data: approved per USGS')."))
+    from agentic_ai.checks import ABBREVIATIONS
+    req.append(("abbreviation", "Capitalised abbreviations only from: " + ", ".join(sorted(ABBREVIATIONS))
+                + " (and gauge names exactly as in FACTS); no other all-caps words."))
     kind = facts["context"].get("signal_kind")
     if kind == "supporting":
         req.append(("context_kind", "Context: say the downstream/nearby gauges are a SUPPORTING signal (also rising in "
