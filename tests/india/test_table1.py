@@ -24,3 +24,12 @@ def test_india_measured_when_audited():
     by = {r["property"]: r for r in t}
     assert by["Reporting interval (median per station)"]["india_measured"].startswith("1440 min")
     assert "1 stations with levels" in by["Official thresholds machine-readable"]["india_measured"]
+
+
+def test_measurement_method_row():
+    ind = [dict(US[0], site_no="X", interval_min=1440.0, method="MANUAL-Water Level by Staff Gauge"),
+           dict(US[0], site_no="Y", interval_min=1440.0, method="")]
+    by = {r["property"]: r for r in T.build_table(US, ind, 38, 0)}
+    assert by["Measurement method"]["india_measured"] == "1 of 2 stations: manual staff-gauge readings"
+    empty = {r["property"]: r for r in T.build_table(US, [], 38)}
+    assert empty["Measurement method"]["india_measured"] == T.PENDING

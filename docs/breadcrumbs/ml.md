@@ -32,6 +32,8 @@
 [ml] predict.py: model used only if ml/models/active.json names it (example file committed); s3_v0 8.4 ms/call, s3_v1_r10 17 ms/call (one OpenMP thread per call; 1.1 s/call without that under CPU load); fallback to rise-rate; 6 contract tests incl. live features == training frame.
 [ml] Anomaly `ml/anomaly.py` (Isolation Forest on 7 fault-shape features + >= 3 h no-readings rule), trained 2015-2023; faults injected into 2024-2026: spike 17.6 %, step 82.4 %, dropout 100 %, drift 1.1 %, stuck 0.3 %; clean 10.4 flag episodes per gauge-year; REAL FLOOD windows 11.2 % flagged (does not yet meet "never flag a flood rise"). First design (raw change size) flagged 30 % of flood windows on test; redesign done on validation years only. Contract proposal added to docs/CONTRACTS.md ("Sensor-fault flag, PROPOSED") [ml][core][agents].
 [ml] Models committed with git add -f: 13 files, 3.5 MB, ml/models/MANIFEST.sha256; scikit-learn pinned 1.9.1. ml/rain_cache/ holds the M2.1 rain (1.3 MB) so the laptop can rebuild without MRMS downloads.
+[ml] Team decision 31 Oct: s3_v0 active at 3 h only (ml/models/active.json, horizons [3]); wording: "comparable detection with about a third fewer false alarms on the 2024-26 test period". Other horizons use rise-rate.
+[ml] India-WRIS from the user's laptop (--discover): Godavari + tributary Pranhita + CWC returns station CW1PRA000084 Aheri (Gudem Bridge), "MANUAL-Water Level by Staff Gauge", dataTime 00:00; Kerala + Ernakulam + CWC returns 012-SWRDKOCHI NEELEESWARAM (Periyar), "MANUAL-WL by Staff Gauge (MSL)", 00:00 and 08:00. Parser now reads these field names first and keeps description/agency/lat/lon; added --list-stations (tributaries of Godavari/Krishna/Mahanadi, districts of Kerala/Telangana/Andhra Pradesh/Odisha, one month, station catalogue CSV) and --fetch <codes> (yearly chunks, resume from saved pages, pauses); Table 1 gains "Measurement method" (manual staff gauge, about daily: observed, to be measured per station). pytest tests/india: 27 passed (mocked HTTP; the cloud cannot reach indiawris.gov.in).
 
 
 ## Run locally (or in a cloud session that allows nwis.waterservices.usgs.gov and noaa-mrms-pds.s3.amazonaws.com)
@@ -57,14 +59,16 @@ gauge, a progress bar and a final `done ... in N min` line.
 7. M2.1: `python -m ml.mrms_history --radii 5,10,25 --workers 4` (try `--max-hours 20` first; resumable)
 8. M2.2: `python -m ml.rain_model --split 2024-01-01 --horizons 1,2,3,4,5,6 --label m2.2-rain-v1 --out ml/figures/model_v1_vs_v0.csv`
    (pick --split so both sides hold floods; the command prints the flood years per side and refuses an empty side).
-9. India-WRIS API (laptop in India; the cloud cannot reach indiawris.gov.in):
-   `python -m india.indiawris_api --discover` (11 small requests, 3 s apart; prints which basin / tributary /
-   agency / state-district / date combinations return records, and the first record). Then
-   `python -m india.indiawris_api --probe` (basin Godavari, agency CWC, last 7 days, 10 rows; add
-   `--basin Krishna --tributary Krishna` etc. to try others). Paste the printed status, headers and body back so the
-   parser (F_CODE / F_TIME / F_VALUE in india/indiawris_api.py) can be fixed. Then the full pull, e.g.
-   `python -m india.indiawris_api --basin Godavari --tributary Godavari --agency CWC --start 2015-01-01 --end 2025-12-31`
-   (raw pages in data/raw/indiawris/api/, loader CSVs in data/raw/indiawris/api_csv/), then `python -m india.table1`.
+9. India-WRIS API (laptop, Indian connection; the cloud cannot reach indiawris.gov.in):
+   a. `python -m india.indiawris_api --list-stations` (about 39 requests, 3 s apart, July 2022; writes
+      data/raw/indiawris/api/stations.csv and prints code, name, record count, typical interval, method).
+      Another month: `--window 2023-07-01:2023-07-31`; a state agency: `--agency "<name>"`.
+   b. Pick 3 to 5 stations with known floods from the catalogue, e.g.
+      `python -m india.indiawris_api --fetch CW1PRA000084,012-SWRDKOCHI --start 2015-01-01 --end 2025-12-31`
+      (codes exactly as in stations.csv; yearly chunks, resumes from saved pages if interrupted, 3 s pauses).
+   c. `python -m india.indiawris_loader data/raw/indiawris` (per station: readings, interval, range), copy the CWC
+      warning/danger levels into india/thresholds.csv, then `python -m india.table1`.
+   (`--discover` and `--probe` remain for checking names.)
 10. India (manual fallback, India-WRIS web download): 3 to 5 free stations with known floods (Godavari, Krishna, Mahanadi or
    Periyar), 2015-2025, one year per Excel file, into data/raw/indiawris/; warning/danger levels from CWC bulletins
    into india/thresholds.csv. Check the first file with `python -m india.indiawris_loader data/raw/indiawris`, then
