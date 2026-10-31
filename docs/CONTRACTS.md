@@ -55,6 +55,17 @@ hour), `accum_hours`, `rain_mm` (mean depth over the 10 km circle), `n_cells`, `
 windows as `history` (oldest first) and `official_levels`. Must run in under 50 ms per call on the laptop and never
 raise (return the baseline with `model = "rise_rate"` on any error).
 
+**Sensor-fault flag (S3, PROPOSED by ml, 31 Oct 2026; core and agents to accept or amend):**
+`ml/anomaly.py`: `score_window(features: dict) -> {anomaly_score, suspect, reason}`, with `features` exactly as
+for `predict()` (latest `aggregates.window` + `history`, oldest first; `site_no` used for the gauge's scale).
+`anomaly_score` float (higher = more unusual; None if the detector is unavailable), `suspect` bool, `reason` one
+of `excursion` (spike), `reversal` (up-then-down), `jump_then_flat` (step), `creep` (slow drift), `flat_h`,
+`n_ratio`, `no_readings` (>= 3 h without readings), `pattern` (unusual combination), `unavailable`, or "" when not
+suspect. Never raises; loads `ml/models/anomaly_if.joblib` once. Proposed use: core adds `suspect` and `reason` to
+the `forecasts.stage` record (or a separate `quality.flags` topic) and the console marks suspect windows; agents may
+say "readings at <gauge> look like a sensor fault (<reason>)". A suspect flag never suppresses or raises a flood
+alert by itself (measured detection and false-flag rates: ml/MODEL_CARD.md).
+
 ## Agent tools (MCP server, S4; plain Python functions in S1)
 
 Environment: `LLM_PROVIDER` = `groq` | `ollama` | `none`; `GROQ_API_KEY`; `OLLAMA_MODEL` (default `qwen2.5:7b`);

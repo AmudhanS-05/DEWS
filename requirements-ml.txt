@@ -2,9 +2,10 @@ tqdm
 pyarrow
 pandas
 numpy
-scikit-learn
+scikit-learn==1.9.1
 openpyxl
 eccodes
 eccodeslib
 requests
 xlrd
+matplotlib
