@@ -72,8 +72,8 @@ alert by itself (measured detection and false-flag rates: ml/MODEL_CARD.md).
 ## Agent tools (MCP server, S4; plain Python functions in S1)
 
 Environment: `LLM_PROVIDER` = `groq` | `gemini` | `ollama` | `none`; `GROQ_API_KEY`; `GROQ_MODEL` (default
-`openai/gpt-oss-120b`); `LLM_FALLBACK` = `gemini` | `groq` | `none` (a failed or rate-limited call is retried once on
-it, then template v1 stays); `GEMINI_API_KEY`; `GEMINI_MODEL` (default `gemini-2.5-flash`); `OLLAMA_MODEL` (default
+`openai/gpt-oss-120b`); `GROQ_REASONING_EFFORT` = `low` (default) | `medium` | `high` (only for `openai/gpt-oss-*`, else not sent); `LLM_FALLBACK` = `gemini` | `groq` | `none` (a Groq 429 first waits once for its reset hint when it is <= 20 s and retries Groq; a
+failed call is then retried once on it, then template v1 stays); `GEMINI_API_KEY`; `GEMINI_MODEL` (default `gemini-3.5-flash-lite`; `gemini-2.5-flash` is closed to new keys); `OLLAMA_MODEL` (default
 `qwen2.5:7b`, optional local provider); `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT` (optional,
 default `dews-agents`). All in `.env`.
 

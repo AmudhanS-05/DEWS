@@ -59,9 +59,9 @@ def test_precision_stages_to_a_tenth():
 
 def test_probability_whole_percent_or_not_available():
     t = advisory.template_text(REAL, REAL_EV, NO_RAIN, "normal", 1, None)
-    assert "probability of reaching MAJOR: not available (rise_rate model gives none)" in t and "%" not in t
+    assert "probability of reaching MAJOR: not available (rise-rate baseline gives none)" in t and "%" not in t
     assert _review(t, REAL, REAL_EV, NO_RAIN) == []
-    assert {"probability", "missing_value"} <= _ids(t.replace("not available (rise_rate model gives none)", "null"),
+    assert {"probability", "missing_value"} <= _ids(t.replace("not available (rise-rate baseline gives none)", "null"),
                                                    REAL, REAL_EV, NO_RAIN)
     good = advisory.template_text({**ALERT, "site_name": "Onion Creek"}, EV, CX, "normal", 1, None)
     assert "probability" in _ids(good.replace("79%", "79.3%"))
@@ -86,7 +86,7 @@ def test_markdown_bold_is_rejected():
 
 def test_missing_rain_says_rain_data_not_available():
     t = advisory.template_text(REAL, REAL_EV, NO_RAIN, "normal", 1, None)
-    assert "Radar rain: rain data not available." in t and "?" not in t
+    assert "Radar rain: rain data not available (radar archive starts Oct 2020)." in t and "?" not in t
     assert {"rain", "missing_value"} <= _ids(t.replace("rain data not available", "?"), REAL, REAL_EV, NO_RAIN)
     facts = advisory.build_facts(REAL, REAL_EV, NO_RAIN, 1)
     assert facts["context"]["rain"] == "rain data not available" and facts["lead_time_h"] == 0.9

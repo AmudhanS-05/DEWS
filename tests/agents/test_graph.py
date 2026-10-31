@@ -74,7 +74,7 @@ def test_upgrade_in_same_episode_is_written_as_update():
 def _scripted(monkeypatch, outputs):
     calls = iter(outputs)
     monkeypatch.setattr(llm, "provider", lambda: "groq")
-    monkeypatch.setattr(llm, "complete", lambda s, u, timeout_s=20: llm.LlmReply(text=next(calls), tokens=10, provider="groq"))
+    monkeypatch.setattr(llm, "complete", lambda s, u, timeout_s=20, **k: llm.LlmReply(text=next(calls), tokens=10, provider="groq"))
 
 
 def test_reviewer_sends_bad_draft_back_then_passes(monkeypatch):
@@ -100,7 +100,7 @@ def test_still_failing_after_two_revisions_keeps_v1(monkeypatch):
 
 def test_llm_failure_falls_back_to_deterministic_text(monkeypatch):
     monkeypatch.setattr(llm, "provider", lambda: "groq")
-    monkeypatch.setattr(llm, "complete", lambda s, u, timeout_s=20: llm.LlmReply(text=None, provider="groq", error="Timeout"))
+    monkeypatch.setattr(llm, "complete", lambda s, u, timeout_s=20, **k: llm.LlmReply(text=None, provider="groq", error="Timeout"))
     res = graph.run_alert(FakeTools(), ALERT)
     assert res["outcome"] == "saved" and res["attempts"] == 1
 
