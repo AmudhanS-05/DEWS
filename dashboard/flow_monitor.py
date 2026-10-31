@@ -558,7 +558,8 @@ WATERFALL_STAGES = [("feed_delay_s", "Feed delay"), ("ingest_s", "Ingest"), ("wi
 
 def metrics_api() -> dict:
     """Latency per pipeline stage from the latency_waterfall view, live and replay kept apart: median, p95 and how many
-    traces have that stage measured (a stage nobody measured stays n = 0, never 0 seconds)."""
+    traces have that stage measured (a stage nobody measured stays n = 0, never 0 seconds). Only instrumented traces
+    count; how many older ones were left out is reported. Feed delay and gross total do not apply to a replay."""
     if CTX["demo"]:
         return {"ok": True, "waterfall": []}
     try:
@@ -566,15 +567,18 @@ def metrics_api() -> dict:
         try:
             out = []
             with conn.cursor() as cur:
-                cur.execute("SELECT mode, count(*) FROM latency_waterfall GROUP BY mode ORDER BY mode")
-                for mode, traces in cur.fetchall():
+                cur.execute("SELECT mode, count(*) FILTER (WHERE instrumented), count(*) FILTER (WHERE NOT instrumented) "
+                            "FROM latency_waterfall GROUP BY mode ORDER BY mode")
+                for mode, traces, older in cur.fetchall():
                     stages = []
                     for col, label in WATERFALL_STAGES:      # column names come from the constant above, never from a request
                         cur.execute(f"SELECT count({col}), percentile_cont(0.5) WITHIN GROUP (ORDER BY {col}), "
-                                    f"percentile_cont(0.95) WITHIN GROUP (ORDER BY {col}) FROM latency_waterfall WHERE mode = %s", (mode,))
+                                    f"percentile_cont(0.95) WITHIN GROUP (ORDER BY {col}) FROM latency_waterfall "
+                                    "WHERE mode = %s AND instrumented", (mode,))
                         n, med, p95 = cur.fetchone()
-                        stages.append({"id": col, "label": label, "n": n, "median_s": med, "p95_s": p95})
-                    out.append({"mode": mode, "traces": traces, "stages": stages})
+                        stages.append({"id": col, "label": label, "n": n, "median_s": med, "p95_s": p95,
+                                       "applies": mode == "LIVE" or col not in ("feed_delay_s", "gross_total_s")})
+                    out.append({"mode": mode, "traces": traces, "older_traces": older, "stages": stages})
             return {"ok": True, "waterfall": out}
         finally:
             conn.close()

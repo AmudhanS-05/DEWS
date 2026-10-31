@@ -12,6 +12,9 @@ from datetime import datetime, timezone
 from common import config
 
 PENDING = ("draft",)
+# latency_trace row of the reading that raised an alert (same id as storage/sink.py trace_row); %s = alert_id
+ALERT_TRACE_ID = ("(SELECT a.site_no || '|' || a.mode || '|' || floor((a.details->'trace'->>'reading_ts')::numeric)::bigint "
+                  "FROM alerts a WHERE a.alert_id = %s)")
 
 
 class ApprovalError(Exception):
@@ -80,10 +83,7 @@ def approve(conn, producer, advisory_id: str, by: str, text: str | None = None) 
         row = cur.fetchone()
         if not row:
             raise ApprovalError(f"no alert row for {a['alert_id']}")
-        cur.execute("UPDATE latency_trace SET approved_time = %s, alert_time = COALESCE(alert_time, %s) "
-                    "WHERE trace_id IN (SELECT t.trace_id FROM latency_trace t WHERE t.site_no = split_part(%s, '|', 1) "
-                    "AND t.mode = %s ORDER BY t.forecast_time DESC NULLS LAST LIMIT 1)",
-                    (now, now, a["alert_id"], row[0]))
+        cur.execute(f"UPDATE latency_trace SET approved_time = %s WHERE trace_id = {ALERT_TRACE_ID}", (now, a["alert_id"]))
         rec = {"alert_id": a["alert_id"], "advisory_id": advisory_id, "version": a["version"], "text": final,
                "approved_by": by, "approved_at": now.isoformat(), "mode": row[0]}
         producer.send(config.TOPIC_APPROVED, a["alert_id"].split("|")[0], rec)

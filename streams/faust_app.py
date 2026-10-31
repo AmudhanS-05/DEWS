@@ -57,8 +57,9 @@ async def _process(stream, table):
                 state, emitted = windowing.on_tick(site, state, float(msg["now_ts"]),
                                                    config.WINDOW_SECONDS, GRACE_S, MAX_LATE_WINDOWS)
             else:
-                state, emitted, too_late = windowing.on_reading(state, msg, config.WINDOW_SECONDS,
-                                                                msg.get("mode", "LIVE"), MAX_LATE_WINDOWS)
+                state, emitted, too_late = windowing.on_reading(state, {**msg, "ingest_ts": now_epoch()},
+                                                                config.WINDOW_SECONDS, msg.get("mode", "LIVE"),
+                                                                MAX_LATE_WINDOWS)
                 if too_late:
                     await dlq_topic.send(key=site, value={"reason": "too_late", "record": msg})
         except Exception as e:  # never let one bad record stop the stream

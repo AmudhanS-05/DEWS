@@ -35,7 +35,20 @@ def test_gap_is_zero_filled_with_carried_stage():
 
 def test_duplicate_reading_ignored_and_revision_replaces():
     st, out, _ = feed({}, [rd(T0, 1.0), rd(T0, 1.0), rd(T0 + 900, 1.1), rd(T0 + 900, 1.3)])
-    assert st["1"]["cur"] == [[T0, 1.0, True], [T0 + 900, 1.3, True]]
+    assert [x[:3] for x in st["1"]["cur"]] == [[T0, 1.0, True], [T0 + 900, 1.3, True]]
+
+
+def test_window_carries_the_trace_of_its_last_reading():
+    a, b = dict(rd(T0, 1.0), fetched_ts=T0 + 5, ingest_ts=T0 + 6), dict(rd(T0 + 900, 1.2), fetched_ts=T0 + 905, ingest_ts=T0 + 906)
+    _, out, _ = feed({}, [a, b, dict(b, fetched_ts=T0 + 999), rd(T0 + W, 2.0)])   # the duplicate keeps its first times
+    assert (out[0]["last_reading_ts"], out[0]["fetched_ts"], out[0]["ingest_ts"]) == (T0 + 900, T0 + 905, T0 + 906)
+
+
+def test_state_saved_before_the_trace_fields_still_closes_and_zero_fill_has_no_trace():
+    st = {"1": dict(wd.new_series_state("LIVE"), cur_start=T0, cur=[[T0, 1.0, True]])}
+    _, out, _ = feed(st, [rd(T0 + 2 * W, 2.0)])
+    assert out[0]["n_readings"] == 1 and out[0]["fetched_ts"] is None and out[0]["ingest_ts"] is None
+    assert out[1]["n_readings"] == 0 and out[1]["ingest_ts"] is None
 
 
 def test_late_reading_reemits_closed_window_as_revision():

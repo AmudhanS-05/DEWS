@@ -51,3 +51,18 @@ def test_current_advisory_prefers_newest_unsuperseded(conn):
                     "('a1|1','a1',1,'template','v1','superseded'),('a1|2','a1',2,'agents','v2','draft')")
         cur.execute("SELECT advisory_version, advisory_source FROM alert_overview WHERE alert_id = 'a1'")
         assert cur.fetchone() == (2, "agents")
+
+
+def test_waterfall_keeps_feed_delay_and_gross_to_live_and_marks_old_traces(conn):
+    apply(conn)
+    with conn.cursor() as cur:
+        for mode in ("LIVE", "SIMULATION"):
+            cur.execute("INSERT INTO latency_trace (trace_id, site_no, mode, reading_time, fetched_at, ingest_time, delivered_time) "
+                        "VALUES (%s, 's', %s, '2026-01-01 00:00Z', '2026-01-01 01:00Z', '2026-01-01 01:00:02Z', '2026-01-01 03:00Z')",
+                        (mode, mode))
+        cur.execute("INSERT INTO latency_trace (trace_id, site_no, mode) VALUES ('old', 's', 'LIVE')")
+        cur.execute("SELECT trace_id, feed_delay_s, ingest_s, net_total_s, gross_total_s, instrumented FROM latency_waterfall")
+        rows = {r[0]: tuple(float(x) if x is not None and not isinstance(x, bool) else x for x in r[1:]) for r in cur.fetchall()}
+    assert rows["LIVE"] == (3600.0, 2.0, 7200.0, 10800.0, True)
+    assert rows["SIMULATION"] == (None, 2.0, 7200.0, None, True)
+    assert rows["old"][-1] is False

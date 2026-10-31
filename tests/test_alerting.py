@@ -1,5 +1,6 @@
 import os
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -151,6 +152,8 @@ def conn():
 
 
 ADV = ALERT["alert_id"] + "|1"
+FC_LATER = {"site_no": "08158700", "mode": "SIMULATION", "window_start": "2019-05-04T03:00:00Z", "model": "rise_rate",
+            "horizon_h": 3, "forecast_stage": 6.8, "made_at": "2026-01-01T10:00:03Z"}
 
 
 def status(conn, table="advisories", key="advisory_id", val=ADV):
@@ -174,6 +177,35 @@ def test_approve_publishes_exactly_the_edited_text_and_marks_rows(conn):
     with pytest.raises(approval.ApprovalError):          # cannot approve twice
         approval.approve(conn, prod, ADV, "A. Person")
     assert len(prod.sent) == 1
+
+
+def test_human_and_delivery_times_land_on_the_alerts_own_trace(conn):
+    tr = {"reading_ts": 1556938800.0, "fetched_ts": 1767261600.0, "ingest_ts": 1767261601.0,
+          "window_close_time": 1767261602.0, "forecast_time": "2026-01-01T10:00:03Z"}
+    alert = dict(ALERT, alert_id="08158700|major|e", trace=tr)
+    # a newer forecast of the same gauge must not take the alert's times
+    later = dict(FC_LATER, window_start="2019-05-04T20:00:00Z", trace=dict(tr, reading_ts=1556999999.0))
+    rows = {}
+    for topic, m in ((config.TOPIC_FORECASTS, FC_LATER | {"trace": tr}), (config.TOPIC_FORECASTS, later), (config.TOPIC_ALERTS, alert)):
+        for table, row in sink.route(topic, m):
+            rows.setdefault(table, []).append(row)
+    sink.write_batch(conn, rows)
+    rec = approval.approve(conn, FakeProducer(), alert["alert_id"] + "|1", "A. Person")
+    notifier.mark_delivered(conn, rec, datetime.now(timezone.utc))
+    conn.commit()
+    with conn.cursor() as cur:
+        cur.execute("SELECT trace_id, human_s > 0, delivery_s >= 0, alert_s > 0 FROM latency_waterfall "
+                    "WHERE human_s IS NOT NULL OR delivery_s IS NOT NULL")
+        assert cur.fetchall() == [("08158700|SIMULATION|1556938800", True, True, True)]
+
+
+def test_a_rerun_of_the_forecast_keeps_the_first_forecast_time(conn):
+    tr = {"reading_ts": 1556938800.0, "fetched_ts": 1793400000.0, "ingest_ts": 1793400001.0, "window_close_time": 1793400002.0}
+    for made in ("2026-10-31T10:00:03Z", "2026-10-31T15:00:00Z"):
+        sink.write_batch(conn, {"latency_trace": [sink.trace_row(dict(FC_LATER, trace=tr, made_at=made))]})
+    with conn.cursor() as cur:
+        cur.execute("SELECT forecast_time = '2026-10-31T10:00:03Z' FROM latency_trace")
+        assert cur.fetchone() == (True,)
 
 
 def test_reject_sends_nothing(conn):

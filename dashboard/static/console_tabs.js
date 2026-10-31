@@ -28,8 +28,8 @@ async function loadMetrics(){
     if(!d.waterfall.length){ box.innerHTML='<div class="note">no traces yet: they appear once the forecaster has run</div>'; return; }
     box.innerHTML=d.waterfall.map(w=>{
       const vals=w.stages.filter(s=>s.n&&s.median_s>0).map(s=>s.median_s), top=Math.max(...vals,1), lg=v=>Math.log10(1+Math.max(0,v))/Math.log10(1+top)*100;
-      return `<h3>${w.mode==="SIMULATION"?"Replay (SIMULATION)":"Live"} <span class="note">${num(w.traces)} traces</span></h3><table><thead><tr><th>Stage</th><th>Median, log scale</th><th class="r">Median</th><th class="r">p95</th><th class="r">Traces measured</th></tr></thead><tbody>`+
-        w.stages.map(s=>`<tr><td>${esc(s.label)}</td><td>${s.n?`<span class="wbar" style="width:${lg(s.median_s).toFixed(1)}%"></span>`:'<span class="note">not measured yet</span>'}</td><td class="r">${fmtS(s.median_s)}</td><td class="r">${fmtS(s.p95_s)}</td><td class="r">${num(s.n)}</td></tr>`).join("")+"</tbody></table>";
+      return `<h3>${w.mode==="SIMULATION"?"Replay (SIMULATION)":"Live"} <span class="note">${num(w.traces)} traces${w.older_traces?`, ${num(w.older_traces)} older ones without full timing left out`:""}</span></h3><table><thead><tr><th>Stage</th><th>Median, log scale</th><th class="r">Median</th><th class="r">p95</th><th class="r">Traces measured</th></tr></thead><tbody>`+
+        w.stages.map(s=>`<tr><td>${esc(s.label)}</td><td>${s.n?`<span class="wbar" style="width:${lg(s.median_s).toFixed(1)}%"></span>`:`<span class="note">${s.applies?"not measured yet":"does not apply to a replay"}</span>`}</td><td class="r">${fmtS(s.median_s)}</td><td class="r">${fmtS(s.p95_s)}</td><td class="r">${num(s.n)}</td></tr>`).join("")+"</tbody></table>";
     }).join("");
   }catch(e){ box.innerHTML='<div class="note">cannot reach the console server</div>'; }
 }

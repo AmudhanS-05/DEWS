@@ -18,10 +18,12 @@ SELECT a.alert_id, a.site_no, a.mode, a.category, a.probability, a.horizon_h, a.
        EXTRACT(EPOCH FROM (a.delivered_at - a.approved_at)) AS approval_to_delivery_s
 FROM alerts a LEFT JOIN current_advisory c USING (alert_id);
 
--- Latency waterfall per trace: seconds spent between consecutive pipeline stages
+-- Latency waterfall per trace: seconds spent between consecutive pipeline stages.
+-- A replayed reading is years old and "fetched" when the replay sends it, so feed delay and the gross total apply to
+-- LIVE only. instrumented = false marks traces from before ingest_time was written: they have no complete waterfall.
 CREATE OR REPLACE VIEW latency_waterfall AS
 SELECT trace_id, site_no, mode, reading_time,
-       EXTRACT(EPOCH FROM (fetched_at - reading_time))        AS feed_delay_s,
+       CASE WHEN mode = 'LIVE' THEN EXTRACT(EPOCH FROM (fetched_at - reading_time)) END AS feed_delay_s,
        EXTRACT(EPOCH FROM (ingest_time - fetched_at))         AS ingest_s,
        EXTRACT(EPOCH FROM (window_close_time - ingest_time))  AS windowing_s,
        EXTRACT(EPOCH FROM (forecast_time - window_close_time)) AS forecast_s,
@@ -29,7 +31,8 @@ SELECT trace_id, site_no, mode, reading_time,
        EXTRACT(EPOCH FROM (approved_time - alert_time))       AS human_s,
        EXTRACT(EPOCH FROM (delivered_time - approved_time))   AS delivery_s,
        EXTRACT(EPOCH FROM (delivered_time - fetched_at))      AS net_total_s,
-       EXTRACT(EPOCH FROM (delivered_time - reading_time))    AS gross_total_s
+       CASE WHEN mode = 'LIVE' THEN EXTRACT(EPOCH FROM (delivered_time - reading_time)) END AS gross_total_s,
+       ingest_time IS NOT NULL                                AS instrumented
 FROM latency_trace;
 
 -- One row per agent run: when it ran, how many events, whether a reviewer verdict was reached

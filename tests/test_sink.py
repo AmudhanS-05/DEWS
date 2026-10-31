@@ -36,6 +36,22 @@ def test_window_forecast_and_alert_routes():
     assert (t, t2) == ("alerts", "advisory_retract") and row[-1] == "retracted"
 
 
+def test_alert_writes_its_own_trace_row_but_a_retract_does_not():
+    tr = {"reading_ts": 1556938800.0, "fetched_ts": 1556939100.0, "ingest_ts": 1556939101.0,
+          "window_close_time": 1556942400.0, "forecast_time": "2026-10-31T10:00:00Z"}
+    a = dict(ALERT, trace=tr)
+    row = dict(sink.route(config.TOPIC_ALERTS, a))["latency_trace_alert"]
+    assert row[0] == "08158700|SIMULATION|1556938800" and row[7] == "2026-10-31T10:00:00Z" and len(row) == 9
+    assert sink.alert_trace_row(a, now=1793500000.0)[8] == "2026-11-01T02:26:40Z"
+    assert "latency_trace_alert" not in dict(sink.route(config.TOPIC_ALERTS, dict(a, kind="retract")))
+
+
+def test_forecast_trace_row_carries_the_ingest_time():
+    fc = dict(FC, trace=dict(FC["trace"], ingest_ts=1556939101.0))
+    row = sink.trace_row(fc)
+    assert row[5] is not None and row[7] == FC["made_at"] and sink.trace_row(FC)[5] is None
+
+
 def test_missing_field_raises_for_the_caller_to_skip():
     with pytest.raises(KeyError):
         sink.route(config.TOPIC_AGG, {"site_no": "x"})

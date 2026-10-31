@@ -73,7 +73,7 @@ def forecast_record(agg: dict, pred: dict, now: float | None = None) -> dict:
         "p_minor": pred.get("p_minor"), "p_moderate": pred.get("p_moderate"), "p_major": pred.get("p_major"),
         "made_at": epoch_to_iso(now if now is not None else now_epoch()),
         "trace": {"reading_ts": agg.get("last_reading_ts"), "fetched_ts": agg.get("fetched_ts"),
-                  "window_close_time": to_epoch(close) if isinstance(close, str) else close},
+                  "ingest_ts": agg.get("ingest_ts"), "window_close_time": to_epoch(close) if isinstance(close, str) else close},
     }
 
 

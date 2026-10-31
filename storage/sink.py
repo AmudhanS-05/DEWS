@@ -53,7 +53,7 @@ def forecast_row(m: dict):
 
 
 def trace_row(m: dict):
-    """latency_trace from a forecast record: reading -> fetched -> window closed -> forecast made."""
+    """latency_trace from a forecast record: reading -> fetched -> ingested -> window closed -> forecast made."""
     t = m.get("trace") or {}
     if t.get("reading_ts") is None:
         return None
@@ -61,7 +61,19 @@ def trace_row(m: dict):
     iso = lambda k: epoch_to_iso(t[k]) if t.get(k) is not None else None  # noqa: E731
     mode = m.get("mode", "LIVE")
     return (f"{m['site_no']}|{mode}|{int(t['reading_ts'])}", m["site_no"], mode, iso("reading_ts"), iso("fetched_ts"),
-            iso("window_close_time"), epoch_to_iso(m["made_at"]) if isinstance(m.get("made_at"), (int, float)) else m.get("made_at"))
+            iso("ingest_ts"), iso("window_close_time"),
+            epoch_to_iso(m["made_at"]) if isinstance(m.get("made_at"), (int, float)) else m.get("made_at"))
+
+
+def alert_trace_row(m: dict, now: float | None = None):
+    """The alert's own trace, with alert_time = when the sink took the alert in and its draft became visible to a person.
+    The forecast and the alert come from different topics, so either may write the row first. A retract starts no wait."""
+    t = m.get("trace") or {}
+    if m.get("kind") == "retract" or t.get("reading_ts") is None:
+        return None
+    from common.timeutil import epoch_to_iso, now_epoch
+    row = trace_row({**m, "made_at": t.get("forecast_time")})
+    return row + (epoch_to_iso(now if now is not None else now_epoch()),)
 
 
 def alert_row(m: dict):
@@ -85,9 +97,16 @@ SQL = {
         p_moderate, p_major) VALUES %s ON CONFLICT (site_no, window_start, mode, model, horizon_h) DO UPDATE SET
         forecast_stage = EXCLUDED.forecast_stage, p_action = EXCLUDED.p_action, p_minor = EXCLUDED.p_minor,
         p_moderate = EXCLUDED.p_moderate, p_major = EXCLUDED.p_major""",
-    "latency_trace": """INSERT INTO latency_trace (trace_id, site_no, mode, reading_time, fetched_at, window_close_time,
-        forecast_time) VALUES %s ON CONFLICT (trace_id) DO UPDATE SET fetched_at = EXCLUDED.fetched_at,
-        window_close_time = EXCLUDED.window_close_time, forecast_time = EXCLUDED.forecast_time""",
+    # a forecast group re-reading the same window keeps the first forecast_time, so a re-run never reads as a slow forecast
+    "latency_trace": """INSERT INTO latency_trace (trace_id, site_no, mode, reading_time, fetched_at, ingest_time,
+        window_close_time, forecast_time) VALUES %s ON CONFLICT (trace_id) DO UPDATE SET fetched_at = EXCLUDED.fetched_at,
+        ingest_time = EXCLUDED.ingest_time, window_close_time = EXCLUDED.window_close_time,
+        forecast_time = CASE WHEN latency_trace.window_close_time IS NOT DISTINCT FROM EXCLUDED.window_close_time
+                             THEN COALESCE(latency_trace.forecast_time, EXCLUDED.forecast_time)
+                             ELSE EXCLUDED.forecast_time END""",
+    "latency_trace_alert": """INSERT INTO latency_trace (trace_id, site_no, mode, reading_time, fetched_at, ingest_time,
+        window_close_time, forecast_time, alert_time) VALUES %s ON CONFLICT (trace_id) DO UPDATE SET
+        alert_time = COALESCE(latency_trace.alert_time, EXCLUDED.alert_time)""",
     # v1 is written once; later versions come from the agents, a person's edits never get overwritten
     "advisories": """INSERT INTO advisories (advisory_id, alert_id, version, source, text) VALUES %s
         ON CONFLICT (advisory_id) DO NOTHING""",
@@ -119,6 +138,9 @@ def route(topic: str, m: dict) -> list[tuple[str, tuple]]:
         a = alert_row(m)
         status = "retracted" if a[-1] == "retract" else "draft"
         out.append(("alerts", a[:-1] + (status,)))        # (..., details, status)
+        t = alert_trace_row(m)
+        if t:
+            out.append(("latency_trace_alert", t))
         if status == "retracted":
             out.append(("advisory_retract", (m["alert_id"],)))
         else:                                              # advisory v1 within seconds of the alert
@@ -130,8 +152,8 @@ def write_batch(conn, rows: dict[str, list[tuple]]) -> int:
     """Upsert all rows in one transaction. Rows within one statement are de-duplicated by the caller."""
     n = 0
     with conn.cursor() as cur:
-        for table in ("gauge_readings", "windowed_aggregates", "risk_scores", "latency_trace", "alerts", "advisories",
-                      "advisory_retract"):
+        for table in ("gauge_readings", "windowed_aggregates", "risk_scores", "latency_trace", "latency_trace_alert",
+                      "alerts", "advisories", "advisory_retract"):
             batch = rows.get(table)
             if batch:
                 execute_values(cur, SQL[table], batch, page_size=500)
@@ -143,7 +165,7 @@ def write_batch(conn, rows: dict[str, list[tuple]]) -> int:
 def last_wins(table: str, batch: list[tuple]) -> list[tuple]:
     """ON CONFLICT cannot touch the same key twice in one statement: keep the newest row per key."""
     keys = {"gauge_readings": (0, 1, 2, 3, 7), "windowed_aggregates": (0, 1, 3), "risk_scores": (0, 1, 2, 3, 4),
-            "latency_trace": (0,), "alerts": (0,), "advisories": (0,), "advisory_retract": (0,)}[table]
+            "latency_trace": (0,), "latency_trace_alert": (0,), "alerts": (0,), "advisories": (0,), "advisory_retract": (0,)}[table]
     d: dict = {}
     for r in batch:
         d[tuple(r[i] for i in keys)] = r

@@ -24,6 +24,7 @@ import psycopg2
 from confluent_kafka import Consumer, TopicPartition
 
 from alerting import bulletin
+from alerting.approval import ALERT_TRACE_ID
 from common import config
 from common.envfile import load_env
 from common.kafka_io import JsonProducer
@@ -83,9 +84,7 @@ def mark_delivered(conn, rec: dict, when: datetime) -> None:
                     (when, rec["advisory_id"]))
         cur.execute("UPDATE alerts SET status = 'sent', delivered_at = %s, channel = 'email' WHERE alert_id = %s",
                     (when, rec["alert_id"]))
-        cur.execute("UPDATE latency_trace SET delivered_time = %s WHERE trace_id IN (SELECT trace_id FROM latency_trace "
-                    "WHERE site_no = split_part(%s, '|', 1) AND mode = %s AND approved_time IS NOT NULL "
-                    "ORDER BY approved_time DESC LIMIT 1)", (when, rec["alert_id"], rec.get("mode", "LIVE")))
+        cur.execute(f"UPDATE latency_trace SET delivered_time = %s WHERE trace_id = {ALERT_TRACE_ID}", (when, rec["alert_id"]))
 
 
 def alert_info(conn, alert_id: str):

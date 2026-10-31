@@ -16,13 +16,14 @@ hour), `accum_hours`, `rain_mm` (mean depth over the 10 km circle), `n_cells`, `
 
 **`aggregates.window`** (built): `site_no`, `series`, `mode`, `window_start`, `window_end`, `window_start_ts`,
 `n_readings` (0 = zero-filled), `revision`, `stage_last`, `stage_max`, `stage_min`, `rise_rate_ft_per_h`,
-`carried_forward`, `provisional`, `last_reading_ts`, `window_close_time`; from S2 also `rain_1h`, `rain_3h`,
+`carried_forward`, `provisional`, `last_reading_ts`, `fetched_ts`, `ingest_ts` (when the windowing worker read that
+last reading; added 31 Oct, null in a zero-filled window), `window_close_time`; from S2 also `rain_1h`, `rain_3h`,
 `rain_6h`. Source of truth: `streams/windowing.py`.
 
 **`forecasts.stage`** (S1): one record per gauge per window.
 `site_no`, `mode`, `window_start`, `model` (`rise_rate` | `persistence` | model name), `horizon_h`, `forecast_stage`,
 `p_action`, `p_minor`, `p_moderate`, `p_major` (null if the model gives no probability), `made_at`, `window_start_ts`
-(epoch, added 31 Oct) and `trace` = {`reading_ts`, `fetched_ts`, `window_close_time`}.
+(epoch, added 31 Oct) and `trace` = {`reading_ts`, `fetched_ts`, `ingest_ts`, `window_close_time`}.
 
 **`alerts.flood`** (S1): only when a forecast crosses an official category within the horizon.
 `alert_id` (`site_no|category|episode_start`), `kind` = `new` | `upgrade` | `retract`, `site_no`, `site_name`, `mode`,

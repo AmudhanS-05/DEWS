@@ -15,9 +15,10 @@ Why hand-rolled instead of a Faust windowed table:
   revised) re-emit that window as a revision, while it is within `max_late_windows`.
 
 State per site (JSON-serialisable): {series_id: series_state}
-series_state = {"cur_start": float|None, "cur": [[ts, value, provisional]],
-                "closed": {"<start>": [[ts, value, provisional], ...]},
+series_state = {"cur_start": float|None, "cur": [[ts, value, provisional, fetched_ts, ingest_ts]],
+                "closed": {"<start>": [[ts, value, provisional, fetched_ts, ingest_ts], ...]},
                 "last_stage": float|None, "mode": "LIVE"|"SIMULATION"}
+fetched_ts and ingest_ts are the latency trace of a reading. State saved before they existed holds 3-item readings.
 """
 from __future__ import annotations
 
@@ -42,15 +43,17 @@ def aggregate(site_no: str, series: str, start: float, w: int, readings: list, p
         "window_start_ts": start, "n_readings": n, "revision": revision,
         "stage_last": None, "stage_max": None, "stage_min": None,
         "rise_rate_ft_per_h": None, "carried_forward": False, "provisional": False,
-        "last_reading_ts": None,
+        "last_reading_ts": None, "fetched_ts": None, "ingest_ts": None,
     }
     if n == 0:
         agg["stage_last"] = prev_last
         agg["carried_forward"] = prev_last is not None
         return agg
-    vals = [v for _, v, _ in rs]
+    vals = [x[1] for x in rs]
     agg.update(stage_last=vals[-1], stage_max=max(vals), stage_min=min(vals),
-               provisional=any(p for _, _, p in rs), last_reading_ts=rs[-1][0])
+               provisional=any(x[2] for x in rs), last_reading_ts=rs[-1][0])
+    if len(rs[-1]) > 3:
+        agg.update(fetched_ts=rs[-1][3], ingest_ts=rs[-1][4])
     if n >= 2 and rs[-1][0] > rs[0][0]:
         agg["rise_rate_ft_per_h"] = (vals[-1] - vals[0]) / ((rs[-1][0] - rs[0][0]) / 3600.0)
     elif prev_last is not None:
@@ -58,15 +61,15 @@ def aggregate(site_no: str, series: str, start: float, w: int, readings: list, p
     return agg
 
 
-def _upsert(readings: list, ts: float, value: float, prov: bool) -> bool:
-    """Insert or replace the reading at ts. Returns True if anything changed."""
+def _upsert(readings: list, ts: float, value: float, prov: bool, fetched_ts=None, ingest_ts=None) -> bool:
+    """Insert or replace the reading at ts. Returns True if anything changed. A duplicate keeps its first trace times."""
     for item in readings:
         if item[0] == ts:
             if item[1] == value and bool(item[2]) == prov:
                 return False
-            item[1], item[2] = value, prov
+            item[1:] = [value, prov, fetched_ts, ingest_ts]
             return True
-    readings.append([ts, value, prov])
+    readings.append([ts, value, prov, fetched_ts, ingest_ts])
     return True
 
 
@@ -90,21 +93,22 @@ def on_reading(site_state: dict, r: dict, w: int, mode: str, max_late_windows: i
     series = str(r["series"])
     st = site_state.setdefault(series, new_series_state(mode))
     ts, v, prov = float(r["reading_ts"]), float(r["value"]), "P" in (r.get("qualifiers") or [])
+    trace = (r.get("fetched_ts"), r.get("ingest_ts"))
     ws = window_start(ts, w)
     emitted = []
     if st["cur_start"] is None:
         st["cur_start"] = ws
     if ws == st["cur_start"]:
-        _upsert(st["cur"], ts, v, prov)
+        _upsert(st["cur"], ts, v, prov, *trace)
     elif ws > st["cur_start"]:
         while st["cur_start"] < ws:          # close current + zero-fill any gap
             emitted.append(_close_current(r["site_no"], series, st, w, max_late_windows))
-        _upsert(st["cur"], ts, v, prov)
+        _upsert(st["cur"], ts, v, prov, *trace)
     else:                                    # late reading
         key = str(int(ws))
         if key not in st["closed"]:
             return site_state, emitted, True
-        if _upsert(st["closed"][key], ts, v, prov):
+        if _upsert(st["closed"][key], ts, v, prov, *trace):
             older = [k for k in st["closed"] if float(k) < ws]
             prev = None
             if older:
