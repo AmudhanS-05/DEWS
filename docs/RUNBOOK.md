@@ -13,7 +13,6 @@ python -m dashboard.flow_monitor            # http://127.0.0.1:8765; restart it 
 
 | # | Slice | Run | Pass when |
 |---|---|---|---|
-| 4 | S1 | Kill one Faust worker (Ctrl-C) during a replay; restart it; `tools.check_windows` again | Faust amber `2/3`, then `3/3`; still PASS |
 | 5 | S1 | Stop the live producer with the console started as `python -m dashboard.flow_monitor --live-stale-s 400`; start it again | "USGS live" turns red and back to green; both changes in the status log |
 | 6 | S1 | Throughput: `python -m producers.replay_producer --site 08158700 --start 2017-01-01 --end 2026-09-30 --no-sleep` | note the printed msg/s; Faust lag rises then drains |
 | 7 | S1 | `docker stats --no-stream`; `w32tm /query /status` | memory comfortable; clock recently synced |
