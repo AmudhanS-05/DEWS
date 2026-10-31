@@ -6,6 +6,18 @@ from __future__ import annotations
 
 CATEGORIES = ("action", "minor", "moderate", "major")
 
+
+def category_of(stage: float | None, levels: dict | None) -> str | None:
+    """Highest official NWPS category whose stage is at or below `stage` (None below action or without levels)."""
+    if stage is None or not levels:
+        return None
+    hit = [c for c in CATEGORIES if levels.get(c) is not None and stage >= levels[c]]
+    return hit[-1] if hit else None
+
+
+def rank(cat: str | None) -> int:
+    return CATEGORIES.index(cat) if cat in CATEGORIES else -1
+
 # Evidence says "rising" when either holds.
 EVIDENCE_RISE_RATE_FT_H = 0.3
 # Context says "rising" when either holds.

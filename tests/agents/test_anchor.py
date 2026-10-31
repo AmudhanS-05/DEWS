@@ -83,7 +83,7 @@ def test_wall_clock_raised_at_and_later_windows_still_give_the_alert_window(pg_e
     _q(pg_empty, "UPDATE alerts SET raised_at = '2026-10-31T08:00:00Z' WHERE alert_id = %s", (seed.REPLAY_ALERT,))
     res = graph.run_alert(Tools(pg_empty), seed.REPLAY_ALERT)
     ev = next(e["detail"] for e in res["events"] if e["agent"] == "evidence" and e["kind"] == "end")
-    assert ev["stage_last"] == 8.16 and round(ev["forecast_stage"], 2) == 24.72
+    assert ev["stage_last"] == 8.16 and round(ev["forecast_stage"], 2) == 24.72 and res["outcome"] == "saved"
 
 
 def test_illustrative_seed_then_replay_is_cleaned_and_never_mixed(pg_empty):

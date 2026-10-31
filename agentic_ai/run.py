@@ -31,7 +31,10 @@ def utf8_stdio() -> None:
 
 
 def _f(v, unit=""):
-    return "?" if v is None else f"{v:g}{unit}" if isinstance(v, (int, float)) else f"{v}{unit}"
+    """Numbers to 0.1 for display; a missing value is spelled out, never '?' or None."""
+    if v is None:
+        return "not available"
+    return f"{round(v, 1):g}{unit}" if isinstance(v, (int, float)) else f"{v}{unit}"
 
 
 def progress_line(e: dict) -> str | None:
@@ -56,7 +59,8 @@ def progress_line(e: dict) -> str | None:
         msg = (f"{d['direction']}: stage {_f(d.get('stage_last'), ' ft')}, rate {_f(d.get('rise_rate_ft_per_h'), ' ft/h')}, "
                f"forecast {_f(d.get('forecast_stage'), ' ft')}{ms}")
     elif a == "context" and k == "end":
-        msg = f"{d['direction']}: rain 3 h {_f(d.get('rain_3h'), ' mm')}, {d.get('n_neighbours', 0)} neighbour gauge(s){ms}"
+        rain = "rain data not available" if d.get("rain_3h") is None else f"rain 3 h {_f(d['rain_3h'], ' mm')}"
+        msg = f"{d['direction']}: {rain}, {d.get('n_neighbours', 0)} neighbour gauge(s){ms}"
     elif a == "writer" and k == "revision" and "llm_fallback" in d:
         msg = f"{d['primary']} failed ({d.get('primary_error')}); retried on {d['llm_fallback']}: {'ok' if d['ok'] else 'failed'}"
     elif a == "writer" and k == "revision" and "llm_failed" in d:

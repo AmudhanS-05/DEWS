@@ -18,8 +18,14 @@ _NUM = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)(\s*%)?")
 _ANY_NUM = re.compile(r"\d+(?:\.\d+)?")
 
 # Check ids, in the order the reviewer reports them.
-CHECKS = ("numbers", "category", "official_stage", "certainty", "probability", "horizon", "simulation",
-          "live_label", "provisional", "uncertain", "length")
+CHECKS = ("numbers", "precision", "category", "official_stage", "forecast_category", "certainty", "probability",
+          "horizon", "lead_time", "rain", "missing_value", "markdown", "simulation", "live_label", "provisional",
+          "uncertain", "length")
+
+_PRECISION = re.compile(r"(?<![\w.])\d+\.\d{2,}\s*(?:ft|feet|foot|mm)\b|(?<![\w.])\d+\.\d{3,}")
+_MISSING = re.compile(r"\b(?:null|None|NaN|nan|undefined)\b|(?:^|(?<=[\s:=(]))\?(?=[\s,.;)]|$)", re.M)
+_MARKDOWN = re.compile(r"\*\*|__|^\s*#{1,6}\s", re.M)
+_NA = re.compile(r"not\s+available|unavailable", re.I)
 
 _DASHES = "‐‑‒–—―−⁃﹘﹣－"
 _SPACES = "               　"
@@ -43,11 +49,13 @@ def allowed_numbers(facts: dict) -> tuple[list[float], list[float]]:
     plain: list[float] = []
     pct: list[float] = []
 
-    def walk(v, key=""):
+    def walk(v, key="", is_pct=False):
         if isinstance(v, bool) or v is None:
             return
         if isinstance(v, (int, float)):
-            if key.startswith("p_") or key == "probability":
+            if is_pct or key.endswith("_pct"):
+                pct.append(float(v))
+            elif key.startswith("p_") or key == "probability":
                 pct.append(round(float(v) * 100, 1))
             else:
                 plain.append(float(v))
@@ -55,10 +63,10 @@ def allowed_numbers(facts: dict) -> tuple[list[float], list[float]]:
             plain.extend(float(x) for x in _ANY_NUM.findall(normalize(v)))
         elif isinstance(v, dict):
             for k, x in v.items():
-                walk(x, k)
+                walk(x, k, is_pct or key.endswith("_pct"))
         elif isinstance(v, (list, tuple)):
             for x in v:
-                walk(x, key)
+                walk(x, key, is_pct)
 
     walk(facts)
     plain.extend([1, 2, 3, 4, 5, 6])   # list numbering / "Update n" are checked separately by wording
@@ -81,14 +89,16 @@ def check_numbers(draft: str, facts: dict) -> list[str]:
 
 
 def states_probability(draft: str, p: float) -> bool:
-    """The alert probability appears as a percentage (79%) or, accepted too, as a decimal (0.79)."""
-    d = normalize(draft)
-    want = p * 100
-    for m in _NUM.finditer(d):
-        v = float(m.group(1))
-        if (m.group(2) and abs(v - want) <= 1.0) or (not m.group(2) and v < 1 and abs(v - p) <= 0.006):
-            return True
-    return False
+    """The alert probability appears as a whole percentage (79%)."""
+    want = round(p * 100)
+    return any(m.group(2) and "." not in m.group(1) and int(float(m.group(1))) == want
+               for m in _NUM.finditer(normalize(draft)))
+
+
+def _near(draft: str, a: str, b: re.Pattern, span: int = 80) -> bool:
+    """Regex `a` (case-insensitive) followed within `span` characters on the same line by pattern `b`."""
+    return any(b.search(line[m.end():m.end() + span]) for line in draft.splitlines()
+               for m in re.finditer(a, line, re.I))
 
 
 def review_detailed(draft: str, alert: dict, facts: dict, confidence: str = "normal") -> list[tuple[str, str]]:
@@ -99,20 +109,42 @@ def review_detailed(draft: str, alert: dict, facts: dict, confidence: str = "nor
     bad = check_numbers(draft, facts)
     if bad:
         out.append(("numbers", f"numbers not in the evidence: {', '.join(bad)} (copy numbers exactly from FACTS)"))
+    prec = _PRECISION.findall(draft)
+    if prec:
+        out.append(("precision", f"too many decimals: {', '.join(x.strip() for x in prec)} "
+                                 "(stages and rates to 0.1 ft, e.g. 24.7 ft)"))
     cat = alert["category"]
     if cat.upper() not in draft:
         out.append(("category", f"official category '{cat}' is not named (write it in capitals, e.g. {cat.upper()})"))
     level = (alert.get("official_levels") or {}).get(cat)
     if level is not None and not any(abs(n - level) <= 0.06 for n in _nums(draft)):
         out.append(("official_stage", f"official {cat} stage {level} ft is not stated"))
+    out += _forecast_category(draft, alert)
     for ph in rules.FORBIDDEN_PHRASES:
         if ph in low:
             out.append(("certainty", f"certainty language: '{ph}'"))
     p = alert.get("probability")
     if p is not None and not states_probability(draft, p):
-        out.append(("probability", f"probability not stated (write it as a percentage: {round(p * 100)}%)"))
+        out.append(("probability", f"probability not stated as a whole percentage (write {round(p * 100)}%, "
+                                   "not a decimal such as 0.79)"))
+    if p is None and not _near(draft, "probability", _NA):
+        out.append(("probability", "the model gives no probability: write 'probability: not available'"))
     if alert.get("horizon_h") is not None and not re.search(r"\b\d+(\.\d+)?\s*h\b|hours?", draft):
         out.append(("horizon", f"forecast horizon not stated (write: within {alert['horizon_h']:g} h)"))
+    lt = facts.get("lead_time_h")
+    if isinstance(lt, (int, float)):
+        if not _near(draft, r"lead[\s-]*time", re.compile(rf"(?<![\d.]){lt:.1f}(?![\d])")):
+            out.append(("lead_time", f"lead time not stated (write: Lead time to {cat.upper()}: about {lt:.1f} h)"))
+    elif not _near(draft, r"lead[\s-]*time", _NA):
+        out.append(("lead_time", f"lead time must say 'not available' (write: Lead time to {cat.upper()}: not available)"))
+    if (facts.get("context") or {}).get("rain") == "rain data not available" and "rain data not available" not in low:
+        out.append(("rain", "radar rain is missing: write 'rain data not available'"))
+    miss = sorted({m.group(0) for m in _MISSING.finditer(draft)})
+    if miss:
+        out.append(("missing_value", f"missing value written as {', '.join(repr(x) for x in miss)} "
+                                     "(write 'not available')"))
+    if _MARKDOWN.search(draft):
+        out.append(("markdown", "Markdown in a plain-text advisory (remove ** / __ / # headings)"))
     if alert["mode"] == "SIMULATION" and "SIMULATION" not in draft:
         out.append(("simulation", "SIMULATION label missing for replayed data (write the word SIMULATION in capitals)"))
     if alert["mode"] != "SIMULATION" and "SIMULATION" in draft:
@@ -123,6 +155,25 @@ def review_detailed(draft: str, alert: dict, facts: dict, confidence: str = "nor
         out.append(("uncertain", "uncertain case must say UNCERTAIN and state both the evidence and the context signal"))
     if len(draft) > rules.MAX_ADVISORY_CHARS:
         out.append(("length", f"too long: {len(draft)} > {rules.MAX_ADVISORY_CHARS} characters"))
+    return out
+
+
+def _forecast_category(draft: str, alert: dict) -> list[tuple[str, str]]:
+    """When the forecast crosses a higher official category than the alert's, the draft must name it with its stage
+    and must not say the forecast reaches the alert's (lower) category."""
+    from agentic_ai.advisory import higher_forecast_category
+    hi = higher_forecast_category(alert)
+    if not hi:
+        return []
+    cat, lv = alert["category"], alert["official_levels"]
+    out = []
+    if hi.upper() not in draft or not any(abs(n - lv[hi]) <= 0.06 for n in _nums(draft)):
+        out.append(("forecast_category", f"the forecast {alert['forecast_stage']:.1f} ft crosses the official "
+                                         f"{hi.upper()} stage ({lv[hi]:.1f} ft): name {hi.upper()} and its stage"))
+    if re.search(rf"forecast(?:ed)?\s+(?:to\s+)?(?:reach|cross|exceed|rise\s+(?:to|above))\w*\s+(?:the\s+)?"
+                 rf"(?:official\s+)?{cat.upper()}\b", draft):
+        out.append(("forecast_category", f"the forecast is called {cat.upper()} but it crosses {hi.upper()}: say the "
+                                         f"forecast reaches {hi.upper()}; {cat.upper()} is the alert's category"))
     return out
 
 
