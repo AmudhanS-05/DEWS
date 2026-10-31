@@ -64,7 +64,7 @@ def progress_line(e: dict) -> str | None:
     elif a == "writer" and k == "end":
         src = f"{d['provider']} {d.get('model') or ''}".strip() if d.get("llm") else "template text"
         msg = (f"attempt {d['attempt']}/{d.get('max_attempts', 3)}: {src}, {d['chars']} chars, {d['tokens']} tokens"
-               f"{' (fallback from ' + d['fallback_from'] + ')' if d.get('fallback_from') else ''}{ms}")
+               f"{' (fallback from ' + d['fallback_from'] + ')' if d.get('fallback_from') and d.get('llm') else ''}{ms}")
     elif a == "reviewer" and k == "verdict":
         msg = f"attempt {d['attempt']}/{d.get('max_attempts', 3)}: {d['verdict'].upper()}"
         if d["reasons"]:

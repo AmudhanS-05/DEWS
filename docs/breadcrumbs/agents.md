@@ -1,4 +1,36 @@
 # Agents breadcrumbs (cloud session; core merges these lines into BREADCRUMBS.md)
+
+## Run locally (Windows laptop, PowerShell, from the repo folder)
+```
+..\spaenv\Scripts\Activate.ps1
+pip install -r requirements-agents.txt          # adds langchain-google-genai 4.4.2
+# .env: LLM_PROVIDER=groq, GROQ_API_KEY=..., GROQ_MODEL=openai/gpt-oss-120b,
+#       LLM_FALLBACK=gemini + GEMINI_API_KEY=... (or LLM_FALLBACK=none), LANGSMITH_TRACING=true + LANGSMITH_API_KEY=...
+cd docker; docker compose up -d; cd ..
+python -m agentic_ai.seed
+python -m agentic_ai.run --alert-id '08158700|minor|2019-05-04T03:00:00Z'           # add --force to re-run
+python -m pytest -q tests/agents                                                   # always LLM_PROVIDER=none
+```
+No PYTHONIOENCODING needed any more (the CLI switches the console to UTF-8). Expected output, one line per step as it
+happens (values from the seed; timings and tokens vary):
+```
+LLM_PROVIDER=groq (openai/gpt-oss-120b)  LLM_FALLBACK=gemini  LangSmith tracing: on
+[  0.04s] coordinator plan evidence -> context -> writer -> reviewer; update 1; SIMULATION (7 ms)
+[  0.06s] evidence    rising: stage 2.6 ft, rate 0.7 ft/h, forecast 6.8 ft (9 ms)
+[  0.06s] context     rising: rain 3 h 27 mm, 4 neighbour gauge(s) (16 ms)
+[  2.10s] writer      attempt 1/3: groq openai/gpt-oss-120b, 640 chars, 1500 tokens (2000 ms)
+[  3.00s] reviewer    attempt 1/3: PASS                  (a FAIL line lists the reasons, then attempt 2/3)
+[  3.01s] coordinator saved 08158700|minor|2019-05-04T03:00:00Z|2 (normal)
+
+<the advisory text: SIMULATION ..., MINOR 5.5 ft, 79%, within 6 h, provisional>
+
+advisory 08158700|minor|2019-05-04T03:00:00Z|2  version 2  outcome saved (normal, reviewer pass after 1/3 attempt(s))  tokens ...  ... events  3.0 s
+LangSmith trace: https://smith.langchain.com/o/<org>/projects/p/<project>/r/<run>?poll=true
+```
+A second run without --force prints `dropped: duplicate: v2 exists (<id>), use --force to re-run` (exit 0). With
+LLM_PROVIDER=none the writer line says `template text, 760 chars, 0 tokens` and the run is saved the same way. If
+Groq fails, you see `groq failed (...); retried on gemini: ok|failed`, and if both fail the template text is used.
+
 [agents] 31 Oct: A1.1 `requirements-agents.txt` written (langgraph 1.2.19, langchain-groq 1.1.3, langchain-ollama 1.1.0, langsmith 0.14.16, psycopg2-binary 2.9.9); `pip install` of the same set resolved cleanly on Python 3.13 in the cloud clone (psycopg2-binary 2.9.13 there; 2.9.9 pinned to match requirements.txt, not re-installed here).
 [agents] 31 Oct: A1.2 `agentic_ai/tools.py` (all 10 read tools + get_open_alerts; writes save_advisory, log_agent_run, log_agent_event) and `python -m agentic_ai.seed` done. Tested against a REAL throwaway PostgreSQL 16 (cloud), 9 tests pass (`AGENTS_TEST_DSN` set; without it they skip). Seed = DRWT2 May 2019, SIMULATION: minor alert 08158700|minor|2019-05-04T03:00:00Z (stage 2.6 ft, forecast 6.8 ft in 6 h, p 0.79) + moderate upgrade in the same episode. CAVEAT: stage/rain/forecast values are an illustrative shape, NOT the measured USGS record (no network); official levels are real. Core: `advisories`, `agent_events`, `agent_runs` (+ `gauge_impacts`, `past_floods`, both empty until loaded; get_impacts returns [] rather than inventing NWS text) are defined in `agentic_ai/schema_agents.sql`, applied by `ensure_schema()`; fold them into storage/schema.sql when you add them. `alerts` has no stage/forecast columns, so get_alert rebuilds them from windowed_aggregates/risk_scores at raised_at.
 [agents] 31 Oct: A1.4 `agentic_ai/llm.py` done: `LLM_PROVIDER` groq|ollama|none, per-call timeout, never raises (text=None + error on failure so the deterministic text / template v1 stays). Tested: none, unknown provider -> none, groq without key fails soft, ollama unreachable fails soft in <10 s (4 tests). NOT tested live: Groq is blocked here, user runs the live check.
@@ -7,3 +39,6 @@
 [agents] 31 Oct: A1.5 `python -m agentic_ai.run` done: `--alert-id <id>` (one alert from PostgreSQL; `--force` re-runs) or, with no argument, consumer group `agent` on `alerts.flood` (manual commit after PostgreSQL is written, waits up to 10 s for the sink to have the alert row, skips retractions and garbage; never produces to Kafka). Tested: CLI on the real throwaway PostgreSQL 16 seeded alert (saved, reviewer pass, 34 events; second run dropped as duplicate); consume loop tested with a fake confluent_kafka Consumer (group `agent`, commit after the advisory exists). NOT tested: a real Kafka broker (none in the cloud; confluent_kafka not installed there). 4 new tests; tests/agents = 40 pass with a database, 30 pass + 10 skip without.
 [agents] 31 Oct: S1 fix, cause of the laptop `v1_kept` run found: the reviewer's probability check demanded a `%` sign and gpt-oss-120b wrote "~0.79 probability", so every attempt failed "probability not stated" (run 1 also wrote the label in lower case: "SIMULATION label missing"). `checks.normalize()` now maps U+2013/U+2011/U+202F/U+00A0 and similar to ASCII before every check and in saved text; probability accepted as 79% or 0.79 (value still checked); reasons say how to fix. 8 regression tests from the laptop draft. Reproduced offline only (Groq rejects the key injected in this cloud session).
 [agents] 31 Oct: CONTRACTS env list changed: `GROQ_MODEL` (default openai/gpt-oss-120b), `LLM_PROVIDER=gemini` (Google AI Studio, `GEMINI_API_KEY`, `GEMINI_MODEL` default gemini-2.5-flash, langchain-google-genai 4.4.2 pinned), `LLM_FALLBACK=gemini|groq|none` (a failed/rate-limited call retried once on it, then template v1 stays). Ollama stays an optional provider. Tested with mocked chat models only (8 tests): this session has no GEMINI_API_KEY; generativelanguage.googleapis.com is reachable (403 without a key), so a live Gemini check needs the key in .env.
+[agents] 31 Oct: S1 fix, writer prompt: `advisory.requirements()` adds one numbered instruction per deterministic reviewer check, with the exact values (MINOR, 5.5 ft, 79%, within 6 h, SIMULATION, provisional, ...). Tests assert the ids equal `checks.CHECKS` and that every check a bad draft fails was in the prompt. 5-run live attempt count NOT measured: Groq returns 401 "Invalid API Key" for the key this cloud session injects (LangSmith 403 likewise), so the user measures it on the laptop.
+[agents] 31 Oct: CLI: stdout/stderr reconfigured to UTF-8 (errors=replace), tested by printing U+202F/U+2011 through a cp1252 stream. Live progress line per agent step (elapsed time + ms), writer `attempt n/3` with provider/model, reviewer verdict + reasons, Groq->fallback line, final line with advisory id, version, outcome, tokens, events, seconds and the LangSmith trace URL (root run id fixed per run; URL needs a working key, else "project dews-agents, run <id>"). Duplicate: "v2 exists (<id>), use --force to re-run". Measured here on real PostgreSQL 16: none -> saved v2, 1/3, 34 events, 0.08 s; groq with a rejected key + fallback gemini without key -> both fail soft in 1.4 s, template text, saved v3, 36 events, 1.82 s. Events fixture regenerated (detail gains ms, max_attempts, model).
+[agents] 31 Oct: A2.1 context worker feeds get_rain (3 h rain) and get_neighbours (upstream readings) into `rules.context_direction`. A2.2 `rules.evidence_direction / context_direction / disagreement` (pure); synthetic tests rain/no rise and rise/no rain -> disagreement -> UNCERTAIN draft naming both signals, saved; unknown context never disagrees (7 tests). A2.3 agent_events: PostgreSQL test shows each event is in the table before the next step, in event_id/ts order, only CONTRACTS agent/kind values; Groq live end to end NOT done here (key rejected). tests/agents: 74 passed with PostgreSQL 16. Full `pytest -q` not run here: core requirements (confluent-kafka, faust) do not build on this Python 3.13 container.
