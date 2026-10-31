@@ -148,8 +148,11 @@ def main(argv=None):
     p.add_argument("--label", default="m1.4-baselines")
     p.add_argument("--gauges", default="config/gauge_locations.csv")
     p.add_argument("--out", default="ml/figures/baselines.csv")
+    p.add_argument("--data-dir", help="folder holding raw/usgs/ (default: DATA_DIR env or ./data)")
     p.add_argument("--insert", action="store_true", help="also INSERT into evaluation_runs (needs the DB up)")
     a = p.parse_args(argv)
+    if a.data_dir:
+        config.DATA_DIR = a.data_dir
     rbs, cbs = {}, {}
     with open(a.gauges, encoding="utf-8") as f:
         for g in _csv.DictReader(f):

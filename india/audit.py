@@ -15,7 +15,7 @@ import csv
 import os
 from statistics import median
 
-from common import hydro
+from common import config, hydro
 from ml.dataset import primary_series
 
 COLUMNS = ["site_no", "n_readings", "interval_min", "archive_days", "missing_pct", "longest_gap_h", "events",
@@ -66,7 +66,10 @@ def main(argv=None):
     p.add_argument("--start", default="2015-01-01")
     p.add_argument("--end", default="2025-12-31")
     p.add_argument("--out", default="india/figures/audit_us.csv")
+    p.add_argument("--data-dir", help="folder holding raw/usgs/ (default: DATA_DIR env or ./data)")
     a = p.parse_args(argv)
+    if a.data_dir:
+        config.DATA_DIR = a.data_dir
     rbs, minor = {}, {}
     with open(a.gauges, encoding="utf-8") as f:
         for g in csv.DictReader(f):

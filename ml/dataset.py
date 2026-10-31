@@ -112,3 +112,35 @@ def to_csv(rows: list[dict], path: str) -> None:
         wr = csv.DictWriter(f, fieldnames=list(rows[0]))
         wr.writeheader()
         wr.writerows(rows)
+
+
+def main(argv=None):
+    import argparse
+    import os
+    from producers.replay_producer import load_readings
+    p = argparse.ArgumentParser(description="Build the pooled dataset from cached USGS history.")
+    p.add_argument("--gauges", default="config/gauge_locations.csv")
+    p.add_argument("--start", default="2015-01-01")
+    p.add_argument("--end", default="2025-12-31")
+    p.add_argument("--data-dir", help="folder holding raw/usgs/ (default: DATA_DIR env or ./data)")
+    p.add_argument("--out", default="ml/figures/pooled_dataset.csv")
+    a = p.parse_args(argv)
+    if a.data_dir:
+        config.DATA_DIR = a.data_dir
+    rbs, cbs = {}, {}
+    with open(a.gauges, encoding="utf-8") as f:
+        for g in csv.DictReader(f):
+            try:
+                cbs[g["site_no"]] = {k: float(g[k]) for k in CATEGORIES}
+                rbs[g["site_no"]] = load_readings(g["site_no"], a.start, a.end)
+            except (SystemExit, ValueError):
+                cbs.pop(g["site_no"], None)
+                print(f"skip {g['site_no']}: no cached data or missing categories")
+    rows = build_pooled(rbs, cbs)
+    os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
+    to_csv(rows, a.out)
+    print(f"{len(rows)} rows, {len(rbs)} gauges -> {a.out}")
+
+
+if __name__ == "__main__":
+    main()
