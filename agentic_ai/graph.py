@@ -175,6 +175,7 @@ def build_graph(tools, run: Run):
         fallback = advisory.template_text(a, s["evidence"], s["context"], s["confidence"], s["update_n"], s["disagreement"])
         reply = llm.complete(advisory.SYSTEM_PROMPT, advisory.llm_user_prompt(facts, s["confidence"], s["disagreement"], s["feedback"]))
         text, err = (reply.text, None) if reply.text else (fallback, reply.error)
+        text = checks.normalize(text)   # plain ASCII dashes/spaces in what is reviewed, saved and shown
         if reply.provider != "none" and not reply.text:
             run.event("writer", "revision", {"llm_failed": reply.error, "using": "deterministic template text"})
         for line in text.splitlines():
