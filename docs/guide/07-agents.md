@@ -1,0 +1,94 @@
+# 07 Agents: the multi-agent advisory writer
+
+The agent layer is the Agentic AI (AI373TA) part of the project. It takes a forecaster alert (numbers) and writes a
+checked, plain-language advisory (version 2) for a duty officer to approve. **Agents draft and check only.** They never
+publish to Kafka and never send email, and nothing reaches anyone without a person clicking Approve.
+
+## Two layers
+
+- **Reactive:** the moment an alert lands, the sink writes **v1**, a fixed template with no LLM
+  (`alerting/template.py`). It takes seconds and always works.
+- **Deliberative:** the agents then build **v2**. If the reviewer passes it, v2 replaces v1 in the console. If an agent,
+  a tool or the LLM fails, v1 simply stays. If the officer approves v1 first, timeliness wins.
+
+## The graph (LangGraph, Coordinator–Worker–Delegator)
+
+```mermaid
+flowchart LR
+  A[alerts.flood<br/>or --alert-id] --> C[Coordinator<br/>triage + plan]
+  C -->|duplicate / retraction| X[stop]
+  C --> E[Evidence worker<br/>the gauge itself]
+  C --> K[Context worker<br/>rain + neighbours]
+  E --> R[Reconcile<br/>disagreement rule]
+  K --> R
+  R --> W[Writer] --> V[Reviewer]
+  V -->|fail, up to 2 revisions| W
+  V -->|pass| S[save v2 draft]
+  V -->|still failing| K1[keep v1]
+```
+
+| Node | Does | Tools (read-only, PostgreSQL) |
+|---|---|---|
+| Coordinator | loads the alert, drops duplicates and retractions, marks "Update n" for a repeat in the same episode | `get_alert`, `get_episode_history` |
+| Evidence worker | stage trend, rise rate, forecast, official levels; says *rising* or *not rising* | `get_recent_windows`, `get_forecast`, `get_official_levels`, `get_past_floods` |
+| Context worker | radar rain over the catchment, upstream/downstream gauges, impacts; says *rising* or *not rising* | `get_rain`, `get_neighbours`, `get_gauge_info`, `get_impacts` |
+| Reconcile | if the two directions disagree (heavy rain but a flat gauge, or a rising gauge with no rain, which may be a sensor fault), the advisory is marked **UNCERTAIN** and states both signals. One side never wins silently | rules in `agentic_ai/rules.py` |
+| Writer | writes the advisory from the facts; with an LLM, the prompt lists every reviewer rule with the exact values | LLM or deterministic text |
+| Reviewer | deterministic checks first, then (only with an LLM, and only on a draft that passed) an LLM judgement | `agentic_ai/checks.py` |
+
+**Reviewer checks:** every number matches the evidence; the official category is named, with its official stage; no
+certainty phrases ("will flood"); probability and horizon stated; `SIMULATION` label on replayed data and no such label
+on live data; provisional-data note; both signals named when uncertain; at most 900 characters. A failed draft goes
+back to the writer with reasons, at most twice.
+
+**Thresholds** (in `rules.py`): evidence says rising at 0.3 ft/h or more, or when the forecast reaches the category.
+Context says rising with 10 mm or more of rain in 3 h, or an upstream rise of 0.5 ft or more in 3 h. When there is neither radar rain nor an upstream reading, context is *unknown* and never counts as a
+disagreement. Until rain is streamed into the pipeline (S2), only replayed or seeded data carries rain.
+
+**Logged for evaluation:** every step writes `agent_events` (start, end, tool_call, verdict, disagreement, revision) and
+`agent_runs`. The view `agent_run_summary` gives duration, tool calls and review rounds per run. The console's planned
+Agents tab will animate these events.
+
+## Run it
+
+```powershell
+python -m agentic_ai.seed                                                   # optional: hand-made DRWT2 2019 test alert
+python -m agentic_ai.run --alert-id "08158700|minor|2019-05-04T03:00:00Z"   # one alert; --force to re-run
+python -m agentic_ai.run                                                    # consumer group `agent` on alerts.flood
+```
+
+The seed's official levels are real, but its stage, rain and forecast values are an **illustrative shape, not the
+measured USGS record**. It exists so the agents can be developed without the pipeline. `--dsn` points at another
+database and `--quiet` hides the per-step lines.
+
+One line is printed per step as it happens, then the advisory and a summary. With `LLM_PROVIDER=none` (verified here
+on a scratch PostgreSQL 16, 31 Oct 2026):
+
+```
+[  0.05s] coordinator saved 08158700|minor|2019-05-04T03:00:00Z|2 (normal)
+...
+advisory 08158700|minor|2019-05-04T03:00:00Z|2  version 2  outcome saved (normal, reviewer pass after 1/3 attempt(s))  tokens 0  34 events  0.05 s
+```
+
+A second run without `--force` prints `dropped: duplicate: v2 exists (...)`. With Groq you see `writer attempt 1/3:
+groq openai/gpt-oss-120b, ... tokens`. If Groq fails, the run tries `LLM_FALLBACK` once and then falls back to the
+template text. With LangSmith on, the last line is the trace URL.
+
+## LLM providers
+
+Set in `.env` ([02 Setup](02-setup.md#agents-llm)): `LLM_PROVIDER` = `groq` (default, free tier, `GROQ_MODEL` default
+`openai/gpt-oss-120b`), `gemini` (Google AI Studio), `ollama` (local `qwen2.5:7b`, offline), or `none` (no LLM,
+deterministic, used by every test). Each call has a 30 s timeout and never raises.
+
+## Measured so far
+
+- `pytest tests/agents`: 74 passed with PostgreSQL 16 and `LLM_PROVIDER=none` (agents workstream, 31 Oct 2026).
+  The tests cover disagreement → UNCERTAIN, "Update 2" wording, a bad draft sent back then passed, still failing after
+  2 revisions → v1 kept, LLM and tool failures → v1 kept.
+- A first live Groq run on the laptop ended `v1_kept`: the reviewer rejected `~0.79 probability` and typographic
+  Unicode. The reviewer was fixed and regression tests were added. **A live re-run after the fix has not been measured
+  yet.**
+- Not built yet: the MCP server (S4), episodic memory beyond "Update n", agent evaluation (faithfulness, reviewer
+  catch rate, single-agent vs multi-agent ablation).
+
+Design rationale: `docs/BUILD_PHASES.md`, section "Phase 6b". Interfaces: `docs/CONTRACTS.md`.
