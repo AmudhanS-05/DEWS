@@ -1,69 +1,39 @@
-> **Flood update (1 Oct 2026):** the old weather prototype `streamlit_app.py` was removed;
-> it will be rebuilt in Phase 7 against the flood schema (`gauge_readings`,
-> `windowed_aggregates`, `risk_scores`, `alerts`, `feed_staleness`). The Power BI steps
-> below still apply; table names in step 5 change accordingly.
+# Console and dashboards
 
-# Live flow view (works now)
+Two front ends read the same pipeline:
 
-`python -m dashboard.flow_monitor` serves the architecture diagram as a live canvas at
-http://127.0.0.1:8765: per-topic msg/s and totals, per-consumer-group instances and lag,
-producer heartbeat, broker / under-replicated partition counts and PostgreSQL row counts.
-Dashed green lines move while messages flow. Stop a producer, a Faust worker or a broker and
-the node changes colour and the change is logged with a timestamp (read recovery time off it).
-Tabs: **Pipeline flow**, **Map** (every gauge coloured by its official NWS level, live or replay; needs `python -m tools.gauge_locations` once; offline view when there is no internet) and **Readings & alerts** (latest windows and alerts from PostgreSQL; fills once the sink exists). `--demo` runs it on scripted data without Kafka. Read-only: it never commits offsets.
-Producers are judged by what they publish (their topic's newest message), not by their process.
+| | What it is | Used for |
+|---|---|---|
+| Console (`dashboard/flow_monitor.py`) | Python standard-library HTTP server plus `dashboard/flow.html` and `dashboard/static/`, no framework | watching the pipeline, approving advisories, the demo |
+| Power BI (`dashboard/powerbi/README.md`) | Power BI Desktop on the PostgreSQL views | the dashboard named in the brief |
 
-# Dashboard: prototype (here) vs. Power BI (submission)
+## Console
 
-## Why two dashboards
-The project brief specifically asks for **Power BI**. Power BI Desktop only
-runs on Windows and needs a live connection to a running database — it can't
-run inside this Linux workspace. So:
+```powershell
+python -m dashboard.flow_monitor            # http://127.0.0.1:8765; restart it after every Python change
+python -m dashboard.flow_monitor --demo     # scripted data, no Kafka needed
+```
 
-- **`streamlit_app.py`** here is a quick prototype for day-to-day development —
-  run it locally next to the pipeline to sanity-check that data is flowing,
-  without needing Power BI installed.
-- **Power BI Desktop** (on your own Windows machine) is the actual dashboard
-  for demo/submission, connected directly to the same Postgres tables.
+Options: `--port`, `--interval` (seconds between Kafka probes), `--live-stale-s` (age at which a live feed turns red),
+`--lag-warn` (consumer lag that turns a node amber).
 
-## Power BI setup (on your Windows machine, once the pipeline is running)
+What it shows:
 
-1. Open Power BI Desktop → **Get Data** → **PostgreSQL database**.
-2. Server: `localhost`, Database: `disaster_warning`.
-3. Data Connectivity mode: **DirectQuery** (so the dashboard updates as new
-   rows land, rather than a one-time import) — needs the PostgreSQL ODBC/Npgsql
-   driver installed; Power BI prompts for this the first time.
-4. Credentials: user `spa_user`, password `spa_pass` (from `docker-compose.yml`
-   — change both before anything beyond the class demo).
-5. Load these tables/views:
-   - `windowed_aggregates` — trend charts (avg/min/max over time per station)
-   - `risk_scores` — a risk-score-over-time line, colored by `is_anomaly`
-   - `alerts` — a table/card visual for "active alerts", filtered on
-     `acknowledged = false`
-   - `evaluation_runs` — for the Phase II results slide (precision/recall/
-     latency numbers)
-6. Suggested visuals:
-   - Line chart: `avg_value` over `window_start`, one line per `station_id`,
-     small multiples by `sensor_type`
-   - Card: count of unacknowledged CRITICAL/HIGH alerts (this is your
-     "early-warning alert mechanism")
-   - Table: latest `alerts`, sorted by `raised_at` desc
-7. Set the report to auto-refresh (Power BI Service, if publishing) or just
-   hit **Refresh** during the live demo to show it's really DirectQuery, not
-   a static import — this is the detail examiners tend to check for in the
-   "real-time" requirement.
+- **Pipeline flow:** the architecture as a live diagram with per-topic msg/s and totals, per-consumer-group instances
+  and lag, producer heartbeat, broker and under-replicated partition counts, PostgreSQL row counts. Stop a producer, a
+  Faust worker or a broker and the node changes colour and the change is logged with a timestamp, so a recovery time
+  can be read off it. Producers are judged by what they publish (the newest message on their topic), not by their
+  process.
+- **Map:** every gauge against its own official NWS levels, live or replay, plus the monitored regions. Needs
+  `python -m tools.gauge_locations` once; basemap, imagery and elevation tiles need internet.
+- **Readings & alerts:** latest windows and alerts from PostgreSQL, and the advisory panel (Approve, Edit, Reject).
+- **Metrics and Agents:** throughput, lag and latency waterfall; the agent graph and the last run from `agent_events`.
 
-## If Power BI truly isn't available on demo day
-Fall back to `streamlit_app.py` and say so explicitly in the report — it's a
-legitimate real-time dashboard, just not the specific tool named in the brief.
-Note the substitution and the reason in `PROJECT_LOG.md` so it's not a surprise
-in the viva.
+Reads Kafka without ever committing offsets. The one thing it writes is a person's decision on an advisory: approving
+publishes to `alerts.approved`, which is the only topic the notifier sends from.
 
-## Map: globe, regions, 2D/3D, terrain
+## Add a monitored region
 
-The Map tab opens on a globe with one marker per monitored area. Double-click a marker (or Enter region) to fly in; Globe returns. In a
-region you can switch 2D / 3D and turn Terrain on (real elevation, needs internet for basemap and elevation tiles).
-
-Add another monitored area: append an entry to `config/regions.json` (`id`, `name`, `provider`, `lat`, `lon`, `gauges_csv`, `enabled`) and
-provide its gauge file with the same columns as `config/gauge_locations.csv` (official action/minor/moderate/major stages per gauge).
-Readings for any gauge on the topics are matched by `site_no`, so a new area needs no code change.
+Append an entry to `config/regions.json` (`id`, `name`, `provider`, `lat`, `lon`, `gauges_csv`, `enabled`) and provide
+its gauge file with the same columns as `config/gauge_locations.csv` (official action, minor, moderate and major stages
+per gauge). Readings for any gauge on the topics are matched by `site_no`, so a new area needs no code change.
