@@ -55,16 +55,21 @@ hour), `accum_hours`, `rain_mm` (mean depth over the 10 km circle), `n_cells`, `
 windows as `history` (oldest first) and `official_levels`. Must run in under 50 ms per call on the laptop and never
 raise (return the baseline with `model = "rise_rate"` on any error).
 
-**Sensor-fault flag (S3, PROPOSED by ml, 31 Oct 2026; core and agents to accept or amend):**
-`ml/anomaly.py`: `score_window(features: dict) -> {anomaly_score, suspect, reason}`, with `features` exactly as
-for `predict()` (latest `aggregates.window` + `history`, oldest first; `site_no` used for the gauge's scale).
-`anomaly_score` float (higher = more unusual; None if the detector is unavailable), `suspect` bool, `reason` one
-of `excursion` (spike), `reversal` (up-then-down), `jump_then_flat` (step), `creep` (slow drift), `flat_h`,
-`n_ratio`, `no_readings` (>= 3 h without readings), `pattern` (unusual combination), `unavailable`, or "" when not
-suspect. Never raises; loads `ml/models/anomaly_if.joblib` once. Proposed use: core adds `suspect` and `reason` to
-the `forecasts.stage` record (or a separate `quality.flags` topic) and the console marks suspect windows; agents may
-say "readings at <gauge> look like a sensor fault (<reason>)". A suspect flag never suppresses or raises a flood
-alert by itself (measured detection and false-flag rates: ml/MODEL_CARD.md).
+**Sensor-fault flag (S3, PROPOSED by ml, revised 31 Oct 2026 after the team decision; core and agents to accept
+or amend):** `ml/fault_rules.py`: `check_gauge(readings, site_no, ctx=None) -> {suspect, reasons, flags}`.
+`readings` = the gauge's recent `gauge.usgs` / `replay.gauge` readings, oldest first (at least the last 48 h; the
+rules work on readings, not on hourly windows). `ctx` = `Context.from_windows(windows_by_site, rain_by_site)` built
+from recent `aggregates.window` records of all gauges (neighbours within 60 km) and, if available, hourly rain per
+gauge from `rain.mrms`; without `ctx` the stuck and step rules cannot find independent evidence and stay silent.
+`reasons` is a list from the SHIPPED rules only: `no_readings` (>= 3 h without readings), `stuck` (identical value
+for >= 24 h while a nearby gauge moves >= 0.1 ft or >= 5 mm of rain fell), `step` (a jump that holds flat, with no
+rain and no matching change at nearby gauges); `unavailable` on error. `flags` = {rule: [flag_ts]}. Never raises;
+settings and per-gauge scales in `ml/models/fault_rules.json`. Shipping rule (team): a rule is included only if its
+false-flag rate on real flood windows (12 h before to 6 h after a minor crossing) is <= 1 % on the 2024-2026 test
+period; measured 0.49 % (no_readings), 0 % (stuck), 0 % (step). The spike rule is implemented but NOT shipped
+(1.07 %). The Isolation Forest (`ml/anomaly.py`) is not part of the contract (measured negative result,
+ml/MODEL_CARD.md). Proposed use: core shows `suspect`/`reasons` next to the gauge in the console; agents may say
+"readings at <gauge> look like a sensor fault (<reason>)". A flag never suppresses or raises a flood alert.
 
 ## Agent tools (MCP server, S4; plain Python functions in S1)
 

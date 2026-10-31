@@ -30,6 +30,15 @@ def main(argv=None):
     df = pd.read_parquet(FRAME)
     rain = pd.read_parquet("ml/rain_cache/mrms_circle.parquet")
     rain = rain[rain.radius_km == 10.0]
+    from common import config, hydro
+    from ml.dataset import primary_series
+    from ml.gauges import iter_gauges
+    rise = {}                                            # (site, crossing_ts) -> rise time from the raw readings
+    for gg in iter_gauges("config/gauge_locations.csv", None, "2020-10-01", "2026-10-31", config.DATA_DIR):
+        ser = sorted((r["reading_ts"], r["value"]) for r in primary_series(gg["readings"]))
+        for i in hydro.find_crossings(ser, gg["cats"]["minor"]):
+            rise[(gg["site_no"], round(ser[i][0]))] = round(hydro.rise_time_h(ser, i), 2)
+        del gg
     rows = []
     for site, g in df.groupby("site_no", sort=True):
         cr = [c for c in info[site]["crossings"] if c[0] >= ARCHIVE_START + 48 * 3600]
@@ -54,6 +63,7 @@ def main(argv=None):
             rows.append({"lid": info[site]["lid"], "site_no": site,
                          "crossing_utc": datetime.fromtimestamp(ct, timezone.utc).strftime("%Y-%m-%d %H:%M"),
                          "period": "test" if yr >= 2024 else ("validation" if yr >= 2021 else "train"),
+                         "rise_time_h": rise.get((site, round(ct))),
                          "slow_rise_ge_3h": bool(slow), "minor_ft": thr, "peak_next_24h_hourly_last_ft": peak,
                          "rain_24h_mm": round(float(r24.sum()), 1) if r24.notna().any() else None,
                          "rain_48h_mm": round(float(r48.sum()), 1) if r48.notna().any() else None,
