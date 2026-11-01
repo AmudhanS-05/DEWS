@@ -45,7 +45,7 @@ SINGLE_RULES = """RULES:
 2. Name the alert's official category in capitals (ACTION, MINOR, MODERATE, MAJOR) with its official stage from official_levels. If the forecast stage is at or above a higher official category's stage, say the forecast reaches that higher category (with its stage) and that the alert category is the alert's; never use any other threshold or category name.
 3. Say 'forecast to reach'; no certainty language (never 'will flood', 'certainly', 'guaranteed').
 4. Probability: the alert's probability as a whole %, or 'probability: not available' when it is null; if the forecast row gives a probability for another category, you may add it ('probability of reaching MINOR: 97%').
-5. State the horizon in hours ('within 3 h'). Lead time to the alert category = (official stage - current stage) / rise rate, one decimal: 'Lead time to MAJOR: about 0.9 h', or 'Lead time to MAJOR: not available' if the gauge is already above it or not rising.
+5. State the horizon in hours ('within 3 h'). Lead time to the alert category: compute (official stage - current stage) / rise rate; if that is within the horizon write it with one decimal ('Lead time to MAJOR: about 0.9 h'); if it is longer than the horizon (or the gauge is not rising) but the forecast stage reaches the category, write 'Lead time to MAJOR: within 3 h (model forecast)' and no rise-rate number; if the gauge is already above the category write 'Lead time to MAJOR: not available'.
 6. Radar rain: if rain is not available, write 'rain data not available'.
 7. Never write null, None, NaN or '?' (write 'not available'); never write a DATA field name (words joined with _) or true/false; plain words.
 8. Upstream gauges and radar rain are LEADING signals; downstream and nearby gauges are SUPPORTING context only (never a cause, a leading signal or a predictor of the rise here). Do not say why the water rises.
@@ -385,6 +385,10 @@ def _write_md(rows, sums, cr) -> None:
               f"| UNCERTAIN where the signals disagree | {a['uncertain_texts']} of {a['disagreements']} | "
               f"{b['uncertain_texts']} of {a['disagreements']} |",
               f"| checks failed (any text) | {', '.join(a['failed_checks']) or 'none'} | {', '.join(b['failed_checks']) or 'none'} |",
+              "", "Prompt correction (1 Nov): a first single-agent run told it to give the rise-rate lead time, "
+              "while the checks require 'within N h (model forecast)' when the rise rate is slower than the "
+              "forecast; it passed 1/14 (lead_time failed 12). That run is kept in runs_single_v1.jsonl and not "
+              "used here; the table above is the re-run with the same lead-time rule as the multi-agent writer.",
               "", "A single-agent text that fails a check would go to the officer only as an unchecked draft; in the "
               "multi-agent graph a failing draft is revised or template v1 stays.", ""]
         single_fail = {}
@@ -393,6 +397,20 @@ def _write_md(rows, sums, cr) -> None:
                 for c in (r["checks_failed"] or "").split(";"):
                     if c:
                         single_fail[c] = single_fail.get(c, 0) + 1
+        rounding = invented = 0
+        ref = {r["alert_id"]: r for r in rows if r["config"] == "multi" and r.get("facts")}
+        for r in rows:
+            if r["config"] == "single" and r["text"] and r["alert_id"] in ref:
+                plain, _ = checks.allowed_numbers(ref[r["alert_id"]]["facts"])
+                for b in checks.check_numbers(r["text"], ref[r["alert_id"]]["facts"]):
+                    v = float(b.rstrip("%"))
+                    if not b.endswith("%") and any(abs(v - p) <= 0.11 for p in plain):
+                        rounding += 1
+                    else:
+                        invented += 1
+        ab += [f"Single-agent numbers not in the evidence: {rounding + invented}; of these {rounding} are within "
+               f"0.1 of an evidence value (raw data rounded differently from the report precision) and {invented} "
+               "are further off (computed or invented values).", ""]
         if single_fail:
             ab += ["Single-agent check failures by check: " + ", ".join(f"{k} {v}" for k, v in
                                                                       sorted(single_fail.items(), key=lambda x: -x[1])), ""]
