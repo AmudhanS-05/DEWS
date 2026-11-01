@@ -204,6 +204,9 @@ CREATE TABLE IF NOT EXISTS agent_runs (
     tokens          INTEGER,
     verdict         TEXT
 );
+-- LangSmith link per agent run (agents, 1 Nov)
+ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS trace_run_id TEXT;
+ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS trace_url TEXT;
 
 -- NWS impact statements per stage (NWPS). Empty until loaded: the agents then say none is available.
 CREATE TABLE IF NOT EXISTS gauge_impacts (

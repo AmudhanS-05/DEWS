@@ -7,13 +7,17 @@ One forecast record per closed window per gauge (zero-filled windows too: the fo
 stage). The model is `ml.predict.predict()`; today that is the rise-rate baseline (no probabilities), from S3 the
 trained model. Revisions of already-closed windows are skipped, so a forecast is made once per window.
 
-Alerts (docs/CONTRACTS.md): raised only when the forecast reaches an official NWPS category above the category the
-gauge is in now. One *episode* per gauge and mode groups the alerts of one rise:
+Alerts (docs/CONTRACTS.md): two rules, and each alert records which one fired (`alert_rule`).
+  alert_by_model  when the model gives it (p_minor >= tau while the stage is below minor, the rule its detection numbers
+                  were measured with): a minor alert. The model says nothing about higher categories, so no upgrades.
+  forecast_stage  otherwise (rise-rate record): the forecast reaches an official NWPS category above the one the gauge is in.
+One *episode* per gauge and mode groups the alerts of one rise:
   new      first category forecast in the episode
   upgrade  a higher category is forecast later in the same episode
   retract  the forecast fell back below the lowest raised level for RETRACT_AFTER windows before the stage ever
-           reached it (a withdrawn warning, never silently dropped)
-The episode closes after END_AFTER calm windows. Alerts are drafts: nothing is sent without approval.
+           reached it (a withdrawn warning, never silently dropped). Under alert_by_model the forecast stands for its horizon,
+           so it is withdrawn only after max(RETRACT_AFTER, horizon) windows without the model alerting
+The episode closes after END_AFTER calm windows (under alert_by_model this is the 6 h cooldown; no new alert before then). Alerts are drafts: nothing is sent without approval.
 Episode state is saved to state/forecaster_state.json before the offsets are committed, so a restart continues the
 same episodes.
 """
@@ -23,6 +27,7 @@ import argparse
 import csv
 import json
 import logging
+import math
 import os
 import time
 from collections import deque
@@ -90,8 +95,10 @@ def step(state: dict, agg: dict, gauge: dict, predict, horizon_h: float = HORIZO
     alerts: list[dict] = []
     if cur is None or fstage is None:
         return fc, alerts
+    by_model = pred.get("alert_by_model")
+    rule = "forecast_stage" if by_model is None else "alert_by_model"
     cur_cat = category_of(cur, levels)
-    fc_cat = category_of(fstage, levels)
+    fc_cat = category_of(fstage, levels) if by_model is None else ("minor" if by_model and "minor" in levels else None)
     ep = state["episode"]
 
     if ep:
@@ -99,29 +106,31 @@ def step(state: dict, agg: dict, gauge: dict, predict, horizon_h: float = HORIZO
             if cur >= levels[a["category"]]:
                 a["reached"] = True
         lowest = min(levels[c] for c in (a["category"] for a in ep["raised"].values()))
-        ep["calm"] = ep["calm"] + 1 if (fstage < lowest and cur < lowest) else 0
-        if ep["calm"] >= RETRACT_AFTER:
+        quiet = fstage < lowest if by_model is None else not by_model
+        ep["calm"] = ep["calm"] + 1 if (quiet and cur < lowest) else 0
+        if ep["calm"] >= (RETRACT_AFTER if by_model is None else max(RETRACT_AFTER, math.ceil(horizon_h))):
             for a in list(ep["raised"].values()):
                 if not a["reached"] and not a.get("retracted"):
                     a["retracted"] = True
-                    alerts.append(_alert(agg, gauge, pred, a["category"], a["alert_id"], "retract", ep["start"], cur, fc))
-        if ep["calm"] >= END_AFTER or all(a.get("retracted") for a in ep["raised"].values()):
+                    alerts.append(_alert(agg, gauge, pred, a["category"], a["alert_id"], "retract", ep["start"], cur, fc, rule))
+        if ep["calm"] >= END_AFTER or (by_model is None and all(a.get("retracted") for a in ep["raised"].values())):
             state["episode"] = ep = None
 
     # a forecast of a higher category than the gauge is in now (and than any alert still standing) raises an alert
     if agg.get("n_readings", 0) > 0 and fc_cat and rank(fc_cat) > rank(cur_cat):
         standing = [rank(a["category"]) for a in (ep["raised"].values() if ep else []) if not a.get("retracted")]
-        if rank(fc_cat) > max(standing, default=-1):
+        cooling = by_model is not None and ep is not None and not standing
+        if rank(fc_cat) > max(standing, default=-1) and not cooling:
             kind = "upgrade" if ep and standing else "new"
             if ep is None:
                 ep = state["episode"] = {"start": agg["window_start"], "raised": {}, "calm": 0}
             alert_id = f"{agg['site_no']}|{fc_cat}|{ep['start']}"
             ep["raised"][fc_cat] = {"alert_id": alert_id, "category": fc_cat, "reached": cur >= levels[fc_cat]}
-            alerts.append(_alert(agg, gauge, pred, fc_cat, alert_id, kind, ep["start"], cur, fc))
+            alerts.append(_alert(agg, gauge, pred, fc_cat, alert_id, kind, ep["start"], cur, fc, rule))
     return fc, alerts
 
 
-def _alert(agg, gauge, pred, category, alert_id, kind, episode_start, cur, fc) -> dict:
+def _alert(agg, gauge, pred, category, alert_id, kind, episode_start, cur, fc, rule) -> dict:
     t = dict(fc["trace"])
     t["forecast_time"] = fc["made_at"]
     return {
@@ -129,7 +138,7 @@ def _alert(agg, gauge, pred, category, alert_id, kind, episode_start, cur, fc) -
         "mode": agg.get("mode", "LIVE"), "category": category, "probability": pred.get(f"p_{category}"),
         "horizon_h": pred["horizon_h"], "forecast_stage": pred.get("forecast_stage"), "current_stage": cur,
         "official_levels": gauge["levels"], "provisional_data": bool(agg.get("provisional")),
-        "model": pred["model"], "raised_at": fc["made_at"], "window_start": agg["window_start"],
+        "model": pred["model"], "alert_rule": rule, "tau": pred.get("tau"), "raised_at": fc["made_at"], "window_start": agg["window_start"],
         "window_start_ts": agg.get("window_start_ts"), "episode_start": episode_start, "trace": t,
     }
 

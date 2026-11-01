@@ -41,21 +41,39 @@ by its official NWS level. Readings arrive every 5 to 15 minutes but the feed se
 producer: after the stale threshold the node turns red and the change is logged. Without internet the map falls back
 to the bundled world image by itself (gauges and alerts keep working; sharper tiles and terrain need the network).
 
+**Main scene: AHOT2 and LLAT2, 25 to 27 October 2023, with radar rain.** Control tab (or by hand):
+```powershell
+python -m tools.reset_replay --site AHOT2,LLAT2 --start 2023-10-25 --end 2023-10-27 --yes
+python -m producers.mrms_qpe_producer --replay --start 2023-10-25 --end 2023-10-27 --speed 1800
+python -m producers.replay_producer --site AHOT2 --start 2023-10-25 --end 2023-10-27 --speed 1800
+python -m producers.replay_producer --site LLAT2 --start 2023-10-25 --end 2023-10-27 --speed 1800
+```
+(each in its own window. Start rain first and the gauges 15 s later: a window takes only the rain already in when it closes, and at this speed one hour lasts 2 s. The Control tab does this.) About 2.5 minutes of replay. What appears, measured on two runs in a row: Pipeline flow goes green through
+replay, Faust, forecaster and sink; on the Map (Replay) the rain discs grow first (LLAT2's first rain is about 30 hours before its crossing); `s3_v0` raises a minor
+alert with rule `alert_by_model` for LLAT2 in the 07:00 UTC window of 26 Oct and for AHOT2 in the 12:00 UTC window, each with a template draft in Readings & alerts.
+The first reading at minor came at 10:20 UTC (LLAT2) and 15:25 UTC (AHOT2). Then the Agents tab, then approve a draft. Say: "a forecast of crossing an official
+category, in SIMULATION; about 2.3 to 2.4 hours gross and 1.3 to 1.4 hours net of the one-hour feed delay". LLAT2 also raises a second alert on 27 Oct that is withdrawn:
+show it, it is a real false alarm. Use the Map's clock to step back through the rise. Fallback: the scene's rows stay until the next reset.
+
+**S1 check and the honest limit: DRWT2, 2 to 6 May 2019 (no radar rain, the archive starts in 2020).** Same pipeline, no alert: the river went from 3.05 ft to 8.16 ft
+between one hourly window and the next, and the model's probability in the last window below minor was 0.546, under its threshold of 0.827. Say: "this one was too fast to
+warn with an hourly feed. We report it; we did not tune the threshold to catch it."
+
 ## Demo checklist
 
 **The day before:**
 - [ ] `python -m pytest -q` green; `python -m tools.verify_slice S1` (then S2 to S5) read through.
-- [ ] Cached gauge files in `data/raw/usgs/` and replay dates tried once: `08158700` 2019-05-02..06; `AHOT2`, `LLAT2` 2023-10-25..27 with rain.
+- [ ] Cached gauge files in `data/raw/usgs/` and replay dates tried once: main scene `AHOT2`, `LLAT2` 2023-10-25..27 with rain (needs internet for the radar files); `08158700` 2019-05-02..06.
 - [ ] Groq key in `.env` and a real agent run; Ollama model pulled as the fallback (`qwen2.5:7b`).
 - [ ] Power BI: `dashboard/powerbi/DEWS.pbip` opens, password entered, pages built.
 
 **Before the audience arrives:**
 - [ ] `scripts\start_demo.ps1`; console at http://127.0.0.1:8765, all chips green.
-- [ ] Clear the flood to be shown: `python -m tools.reset_replay --site 08158700 --start 2019-05-02 --end 2019-05-06 --yes` (1.5 to 3 minutes: do it before the audience arrives).
+- [ ] Clear the floods to be shown, Reset on the Control tab or `python -m tools.reset_replay` (1.5 to 5 minutes each: do it before the audience arrives).
 - [ ] Laptop on mains, sleep off, notifications off, clock synced.
 
-**During the demo:** replay plus narration across Map, Pipeline flow and Agents. Run the replay, watch Pipeline flow, click the alert line to fly to the
-gauge, step through it with the Map's clock, approve a draft in Readings & alerts. Say "forecast of crossing an official category", and that replayed data is SIMULATION.
+**During the demo:** replay plus narration across Map, Pipeline flow and Agents, main scene first. Run the replay, watch Pipeline flow, click the alert line to fly to the
+gauge, step through it with the Map's clock, approve a draft in Readings & alerts. Then DRWT2 as the rise too fast to warn. Say "forecast of crossing an official category", and that replayed data is SIMULATION.
 
 **Fallbacks:**
 | If this fails | Do this |

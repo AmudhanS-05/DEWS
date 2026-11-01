@@ -167,6 +167,12 @@ def test_rain_summary_sums_hours_ending_at_the_newest_and_never_a_partial_sum():
     assert r["b"]["rain_3h"] is None and r["b"]["rain_1h"] == 1.0
 
 
+def test_only_a_langsmith_address_becomes_a_trace_link():
+    assert fm.safe_trace_url("https://smith.langchain.com/o/1/r/2") == "https://smith.langchain.com/o/1/r/2"
+    for bad in ("javascript:alert(1)", "https://evil.example/", None):
+        assert fm.safe_trace_url(bad) is None
+
+
 def test_agent_run_view_marks_an_agent_still_running():
     ev = [{"agent": "writer", "kind": "start", "detail": {}}, {"agent": "reviewer", "kind": "start", "detail": {}}, {"agent": "reviewer", "kind": "end", "detail": {"ms": 5}}]
     a = {x["agent"]: x for x in fm.agent_run_view(ev)["agents"]}

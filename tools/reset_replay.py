@@ -165,7 +165,7 @@ def stop_consumers(t: Task) -> None:
     t.update(2, "Faust workers and forecaster stopped")
 
 
-def start_consumers(t: Task, timeout_s: float = 240.0) -> float:
+def start_consumers(t: Task, timeout_s: float = 600.0) -> float:
     """Returns seconds until every worker logged Ready."""
     from tools.fault_drill import start_module, start_worker
     logs = {p: ROOT / "gate_output" / f"faust_{p}.log" for p in PORTS}

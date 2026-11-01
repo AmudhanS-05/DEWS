@@ -65,10 +65,11 @@ def drills_verdict(latest: dict[str, tuple[float | None, str]], scenarios=SCENAR
 
 
 def episode_lead_times(alerts: list[tuple[str, str]], windows: list[tuple[str, float | None]], level: float,
-                       feed_delay_h: float = 1.0) -> tuple[bool, str]:
+                       feed_delay_h: float = 1.0, window_h: float = 0.0) -> tuple[bool, str]:
     """alerts = (alert_id, kind); windows = (window_start, stage_last) ascending, ISO in one format. S1 asks for one `new`
     alert per episode and a measured lead time, negative allowed. Lead = first window with stage at `level` minus the window
-    that raised the alert, at window resolution; net subtracts the feed delay. Alerting before the crossing is S3's bar."""
+    that raised the alert, at window resolution; net subtracts the feed delay. Alerting before the crossing is S3's bar.
+    Pass readings as `windows` and window_h = 1 for the lead from when the raising window closed to the first reading at `level`."""
     from datetime import datetime
     new: dict[str, int] = {}
     for alert_id, kind in alerts:
@@ -84,7 +85,7 @@ def episode_lead_times(alerts: list[tuple[str, str]], windows: list[tuple[str, f
         if cross is None:
             parts.append(f"episode {ep}: stage never reached {level:g} ft")
             continue
-        gross = (datetime.fromisoformat(cross) - datetime.fromisoformat(start)).total_seconds() / 3600
+        gross = (datetime.fromisoformat(cross) - datetime.fromisoformat(start)).total_seconds() / 3600 - window_h
         parts.append(f"episode {ep}: lead {gross:+.1f} h gross, {gross - feed_delay_h:+.1f} h net of feed delay")
     return not bad, "; ".join(parts) + (f"; not exactly one new alert: {', '.join(bad)}" if bad else "")
 
@@ -165,23 +166,52 @@ def check_one_forecast_per_window():
     return n > 0 and without == 0 and extra == 0, f"{n} windows: {without} without a forecast, {extra} with more than one"
 
 
+SCENE = {"08156800": "AHOT2", "08151500": "LLAT2"}                    # the main demo scene, 2023-10-25..27, with radar rain
+SCENE_LIKE = "%|2023-10-%"
+
+
 def check_alert_and_v1():
     rows = _query("SELECT a.alert_id, count(v.*) FROM alerts a LEFT JOIN advisories v ON v.alert_id = a.alert_id AND v.version = 1 "
-                  "AND v.source = 'template' WHERE a.site_no = %s AND a.mode = 'SIMULATION' AND a.alert_id LIKE %s AND a.status <> 'retracted' GROUP BY 1",
-                  (DRWT2, f"{DRWT2}|%|2019-05-%"))
-    with_v1 = sum(1 for _, n in rows if n)
-    return with_v1 > 0, f"{len(rows)} alert(s) of the May 2019 replay, {with_v1} with a template v1 advisory"
+                  "AND v.source = 'template' WHERE a.site_no = ANY(%s) AND a.mode = 'SIMULATION' AND a.alert_id LIKE %s AND a.status <> 'retracted' GROUP BY 1",
+                  (list(SCENE), SCENE_LIKE))
+    sites = {r[0].split("|")[0] for r in rows if r[1]}
+    return sites == set(SCENE), f"{len(rows)} standing alert(s) of the main scene, template v1 on {', '.join(SCENE[x] for x in sorted(sites)) or 'none'}"
 
 
 def check_alert_once_per_episode():
-    """Runbook step 10. The rise-rate baseline alerts late (a measured finding): the lead time is reported, negative allowed."""
+    """Runbook step 10, on the main scene. Each gauge: one alert per episode, the rule that fired, lead time gross and net, negative allowed."""
     from streams.forecaster import load_gauges
-    minor = load_gauges()[DRWT2]["levels"]["minor"]
-    alerts = _query("SELECT alert_id, COALESCE(details->>'kind', 'new') FROM alerts WHERE site_no = %s AND mode = 'SIMULATION' AND alert_id LIKE %s ORDER BY 1",
-                    (DRWT2, f"{DRWT2}|%|2019-05-%"))
-    windows = [(w.isoformat(), s) for w, s in _query("SELECT window_start, stage_last FROM windowed_aggregates WHERE site_no = %s "
-                                                     "AND mode = 'SIMULATION' AND window_start >= %s AND window_start < %s ORDER BY 1", (DRWT2, *FLOOD))]
-    return episode_lead_times(alerts, windows, minor)
+    gauges, oks, parts = load_gauges(), [], []
+    for site, lid in SCENE.items():
+        alerts = _query("SELECT alert_id, COALESCE(details->>'kind', 'new') FROM alerts WHERE site_no = %s AND mode = 'SIMULATION' AND alert_id LIKE %s ORDER BY 1", (site, SCENE_LIKE))
+        rules = sorted({r[0] for r in _query("SELECT DISTINCT details->>'alert_rule' FROM alerts WHERE site_no = %s AND mode = 'SIMULATION' AND alert_id LIKE %s", (site, SCENE_LIKE)) if r[0]})
+        readings = [(t.isoformat(), v) for t, v in _query("SELECT reading_time, value FROM gauge_readings WHERE site_no = %s AND mode = 'SIMULATION' AND parameter = %s AND reading_time >= '2023-10-25' AND reading_time < '2023-10-28' ORDER BY 1", (site, config.PARAM_STAGE))]
+        ok, text = episode_lead_times(alerts, readings, gauges[site]["levels"]["minor"], window_h=1.0)
+        oks.append(ok)
+        parts.append(f"{lid} ({', '.join(rules) or 'no rule'}): {text}")
+    return all(oks), "; ".join(parts)
+
+
+def too_fast_report(alerts: int, tau, rows: list[tuple[str, float | None, float | None]], level: float) -> str:
+    """rows = (window_start, stage_last, p_minor) ascending: what the model said in the last window below `level`."""
+    cross = next((r for r in rows if r[1] is not None and r[1] >= level), None)
+    if cross is None:
+        return f"{alerts} alert(s), stage never reached {level:g} ft"
+    below = [r for r in rows if r[0] < cross[0] and r[1] is not None]
+    last = below[-1] if below else None
+    said = f"p_minor {last[2]:.3f} in the last window below minor ({last[0]})" if last and last[2] is not None else "no p_minor below minor"
+    return f"{alerts} alert(s) under the model rule; {said}, tau {tau if tau is None else round(tau, 3)}; stage first at {level:g} ft in window {cross[0]}, {cross[1]:.2f} ft"
+
+
+def check_may_2019_reported():
+    """DRWT2 May 2019 stays S1's end-to-end check and the example of a rise too fast to warn: forecasts must be there; an alert or none is reported, not required."""
+    from ml.predict import _load_model
+    from streams.forecaster import load_gauges
+    rows = _query("SELECT w.window_start, w.stage_last, r.p_minor FROM windowed_aggregates w JOIN risk_scores r USING (site_no, window_start, mode) "
+                  "WHERE w.site_no = %s AND w.mode = 'SIMULATION' AND w.window_start >= %s AND w.window_start < %s ORDER BY 1", (DRWT2, *FLOOD))
+    n = _one("SELECT count(*) FROM alerts WHERE site_no = %s AND mode = 'SIMULATION' AND alert_id LIKE %s AND details->>'alert_rule' = 'alert_by_model'", (DRWT2, f"{DRWT2}|%|2019-05-%"))
+    m = _load_model(3.0)
+    return bool(rows), too_fast_report(n, m and float(m["tau"]), [(w.isoformat(), st, p) for w, st, p in rows], load_gauges()[DRWT2]["levels"]["minor"])
 
 
 def _iso(ts: str) -> str:
@@ -355,8 +385,9 @@ CHECKS = {"S1": [
     ("core", "windowing, sink, forecaster, notifier running", check_groups),
     ("core", "May 2019 replay windows in PostgreSQL", check_replay_windows),
     ("core", "one forecast per window", check_one_forecast_per_window),
-    ("core", "alert with template v1 advisory", check_alert_and_v1),
-    ("core", "one alert per episode, lead time reported", check_alert_once_per_episode),
+    ("core", "May 2019: forecasts there, alert or too fast to warn reported", check_may_2019_reported),
+    ("core", "main scene: alert with template v1 advisory", check_alert_and_v1),
+    ("core", "main scene: one alert per episode, rule and lead time reported", check_alert_once_per_episode),
     ("core", "delivery only after human approval", check_delivered_after_approval),
     ("core", "topics match PostgreSQL", check_sink_matches),
     ("core", "no window emitted twice", check_no_duplicate_windows),

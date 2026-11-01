@@ -45,6 +45,19 @@ def test_a_withdrawn_alert_still_counts_as_its_episode_s_one_alert():
     assert not vs.episode_lead_times([("s|major|2019-05-04T01:00:00Z", "upgrade")], w, 5.5)[0]
 
 
+def test_lead_from_readings_counts_from_when_the_raising_window_closed():
+    r = [("2023-10-26T12:00:00+00:00", 4.0), ("2023-10-26T15:25:00+00:00", 7.0)]
+    ok, text = vs.episode_lead_times([("s|minor|2023-10-26T12:00:00Z", "new")], r, 7.0, window_h=1.0)
+    assert ok and "+2.4 h gross, +1.4 h net" in text
+
+
+def test_too_fast_report_says_what_the_model_said_before_the_crossing():
+    rows = [("a", 3.05, 0.546), ("b", 8.16, 0.895)]
+    text = vs.too_fast_report(0, 0.827, rows, 5.5)
+    assert "0 alert(s)" in text and "p_minor 0.546" in text and "tau 0.827" in text and "window b" in text
+    assert "never reached" in vs.too_fast_report(0, 0.827, rows[:1], 5.5)
+
+
 def test_episode_lead_time_is_reported_negative_allowed():
     w = [("2019-05-04T01:00:00+00:00", 4.0), ("2019-05-04T02:00:00+00:00", 6.0)]
     ok, text = vs.episode_lead_times([("s|minor|2019-05-04T01:00:00Z", "new"), ("s|major|2019-05-04T01:00:00Z", "upgrade")], w, 5.5)

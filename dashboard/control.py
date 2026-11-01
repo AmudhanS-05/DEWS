@@ -28,11 +28,12 @@ PROCESSES = {
     "mrms": {"label": "MRMS live rain producer", "module": "producers.mrms_qpe_producer"},
 }
 FLOODS = {
-    "drwt2_2019": {"label": "Onion Creek (DRWT2), 2 to 6 May 2019, no radar rain", "sites": ["08158700"], "start": "2019-05-02", "end": "2019-05-06", "speed": 3600, "rain": False},
-    "oct_2023": {"label": "Shoal Creek (AHOT2) and Llano (LLAT2), 25 to 27 Oct 2023, with radar rain", "sites": ["08156800", "08151500"], "start": "2023-10-25", "end": "2023-10-27", "speed": 1800, "rain": True},
+    "oct_2023": {"label": "Main scene: Shoal Creek (AHOT2) and Llano (LLAT2), 25 to 27 Oct 2023, with radar rain", "sites": ["08156800", "08151500"], "start": "2023-10-25", "end": "2023-10-27", "speed": 1800, "rain": True},
+    "drwt2_2019": {"label": "Too fast to warn: Onion Creek (DRWT2), 2 to 6 May 2019, no radar rain", "sites": ["08158700"], "start": "2019-05-02", "end": "2019-05-06", "speed": 3600, "rain": False},
 }
 DRILLS = {"faust": "Kill a Faust worker", "broker": "Stop a Kafka broker", "sink": "Kill the sink", "postgres": "Stop PostgreSQL",
           "notifier": "Kill the notifier", "producer": "Kill the live producer", "llm": "LLM down"}
+RAIN_HEAD_S = 15     # a window takes only the rain already in when it closes; the rain producer starts slower, so it goes first
 ACTIONS = {"start": PROCESSES, "stop": PROCESSES, "replay": FLOODS, "reset": FLOODS, "drill": DRILLS}
 
 
@@ -62,7 +63,7 @@ def job_commands(action: str, target: str, py: str) -> list[list[str]]:
         return [[py, "-m", "tools.reset_replay", "--site", ",".join(f["sites"]), "--start", f["start"], "--end", f["end"], "--yes"]]
     cmds = [[py, "-m", "producers.replay_producer", "--site", s, "--start", f["start"], "--end", f["end"], "--speed", str(f["speed"])] for s in f["sites"]]
     if f["rain"]:
-        cmds.append([py, "-m", "producers.mrms_qpe_producer", "--replay", "--start", f["start"], "--end", f["end"], "--speed", str(f["speed"])])
+        cmds.insert(0, [py, "-m", "producers.mrms_qpe_producer", "--replay", "--start", f["start"], "--end", f["end"], "--speed", str(f["speed"])])
     return cmds
 
 
@@ -130,13 +131,20 @@ class Control:
                 return 409, {"error": f"still running: {v['label']}"}
             name = f"{action}_{target}"
             label = f"{action} {ACTIONS[action][target]['label'] if action != 'drill' else DRILLS[target]}"
-            self.job = {"label": label, "started": time.time(), "log": f"gate_output/control_{name}.log",
-                        "procs": [spawn(c, LOGS / f"control_{name}_{i}.log") for i, c in enumerate(job_commands(action, target, sys.executable))]}
+            cmds = job_commands(action, target, sys.executable)
+            first = 1 if action == "replay" and FLOODS[target]["rain"] else len(cmds)
+            self.job = {"label": label, "started": time.time(), "log": f"gate_output/control_{name}_0.log",
+                        "procs": [spawn(c, LOGS / f"control_{name}_{i}.log") for i, c in enumerate(cmds[:first])]}
             self.note("Control panel", label, "started")
-            threading.Thread(target=self._watch, args=(self.job,), daemon=True).start()
+            later = [(c, LOGS / f"control_{name}_{i + first}.log") for i, c in enumerate(cmds[first:])]
+            threading.Thread(target=self._watch, args=(self.job, later), daemon=True).start()
         return 200, {"ok": True, "label": label}
 
-    def _watch(self, job: dict) -> None:
+    def _watch(self, job: dict, later: list | None = None) -> None:
+        from tools.fault_drill import spawn
+        if later:
+            time.sleep(RAIN_HEAD_S)
+            job["procs"].extend(spawn(c, log) for c, log in later)
         for p in job["procs"]:
             p.wait()
         job["ended"] = time.time()

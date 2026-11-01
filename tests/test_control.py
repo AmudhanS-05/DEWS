@@ -26,7 +26,7 @@ def test_commands_are_built_from_the_tables_and_rain_only_where_it_exists():
     drwt2 = ctl.job_commands("replay", "drwt2_2019", "py")
     assert len(drwt2) == 1 and drwt2[0][:3] == ["py", "-m", "producers.replay_producer"] and "08158700" in drwt2[0]
     oct23 = ctl.job_commands("replay", "oct_2023", "py")
-    assert len(oct23) == 3 and any("producers.mrms_qpe_producer" in c for c in oct23)
+    assert len(oct23) == 3 and "producers.mrms_qpe_producer" in oct23[0]      # rain first, or windows close without it
     assert ctl.job_commands("reset", "oct_2023", "py")[0][-1] == "--yes"
     assert ctl.job_commands("drill", "llm", "py") == [["py", "-m", "tools.fault_drill", "--scenario", "llm"]]
 

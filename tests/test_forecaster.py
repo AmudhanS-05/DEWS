@@ -156,3 +156,45 @@ def test_window_rain_fields_reach_predict():
     from ml.predict import model_features
     X = model_features(seen[0], GAUGE["levels"])
     assert X["rain_1h"] == 1.5 and X["rain_6h"] == 6.5
+
+
+def _by_model(flags):
+    """A fake model: forecast stage stays low, alert_by_model follows `flags`, one per window."""
+    it = iter(flags)
+    def p(features):
+        f = next(it)
+        return {"forecast_stage": features["stage_last"], "p_action": None, "p_minor": 0.9 if f else 0.1, "p_moderate": None, "p_major": None,
+                "horizon_h": 3.0, "model": "m", "tau": 0.8, "alert_by_model": f}
+    return p
+
+
+def _run_model(flags, stages=None):
+    st, al = forecaster.new_state(), []
+    p = _by_model(flags)
+    for i, f in enumerate(flags):
+        al += forecaster.step(st, window(i, (stages or [4.0] * len(flags))[i], 0.0), GAUGE, p, horizon_h=3, now=T0)[1]
+    return al
+
+
+def test_model_rule_raises_one_minor_alert_and_records_the_rule():
+    al = _run_model([False, True, True, False])
+    assert [(a["kind"], a["category"], a["alert_rule"], a["tau"]) for a in al] == [("new", "minor", "alert_by_model", 0.8)]
+
+
+def test_forecast_stage_rule_is_recorded_when_the_model_gives_no_flag():
+    fcs, alerts, _ = run([window(0, 4.0, 1.0), window(1, 5.0, 1.0)])
+    assert alerts and all(a["alert_rule"] == "forecast_stage" and a["tau"] is None for a in alerts)
+
+
+def test_model_saying_no_raises_nothing_even_when_the_stage_is_above_minor():
+    assert _run_model([False, False], [4.0, 20.0]) == []                     # too fast to warn: no alert after the fact
+
+
+def test_model_alert_stands_for_its_horizon_then_is_withdrawn_and_cools_down():
+    al = _run_model([True, False, False, False, True, False, False, False, False])
+    assert [a["kind"] for a in al] == ["new", "retract"]                     # retract after 3 quiet windows; True in the cooldown raises nothing
+
+
+def test_model_alert_reached_is_not_withdrawn():
+    al = _run_model([True, False, False, False, False], [4.0, 6.0, 6.0, 4.0, 4.0])
+    assert [a["kind"] for a in al] == ["new"]

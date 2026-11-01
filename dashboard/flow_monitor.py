@@ -754,6 +754,11 @@ def timeline_api(mode: str, start: float | None, end: float | None) -> dict:
         return {"ok": False, "error": (str(e).strip().splitlines() or ["error"])[0][:120]}
 
 
+def safe_trace_url(url: str | None) -> str | None:
+    """Only a LangSmith address becomes a link on the page."""
+    return url if isinstance(url, str) and url.startswith("https://smith.langchain.com/") else None
+
+
 def agent_run_view(events: list[dict]) -> dict:
     """Events of one run -> per agent: visited, time taken (from `end` events), tool calls, tokens, last verdict and attempts.
     `open` = started and not ended yet: that agent is running now, if the run is still recent."""
@@ -806,6 +811,9 @@ def agents_api(run_id: str | None = None) -> dict:
                 age = float(cur.fetchone()[0] or 0)
                 cur.execute("SELECT run_id, alert_id, ended_at FROM agent_run_summary ORDER BY ended_at DESC LIMIT 20")
                 runs = [{"run_id": r, "alert_id": a, "ended_at": e.isoformat()} for r, a, e in cur.fetchall()]
+                cur.execute("SELECT trace_url FROM agent_runs WHERE run_id = %s AND trace_url IS NOT NULL LIMIT 1", (run["run_id"],))
+                tr = cur.fetchone()
+                run["trace_url"] = safe_trace_url(tr[0]) if tr else None
             view = agent_run_view(events)
             return {"ok": True, "run": run, "runs": runs, **view, "active": age < ACTIVE_RUN_S and any(a["open"] for a in view["agents"]), "langsmith": langsmith_status(),
                     "advisory": {"version": adv[0], "source": adv[1], "status": adv[2]} if adv else None,

@@ -38,7 +38,8 @@ unless every one of the N hours is known, never 0 for unknown) and `rain_product
 **`alerts.flood`** (S1): only when a forecast crosses an official category within the horizon.
 `alert_id` (`site_no|category|episode_start`), `kind` = `new` | `upgrade` | `retract`, `site_no`, `site_name`, `mode`,
 `category` (`action` | `minor` | `moderate` | `major`), `probability`, `horizon_h`, `forecast_stage`,
-`current_stage`, `official_levels` {action, minor, moderate, major}, `provisional_data`, `model`, `raised_at` (wall
+`current_stage`, `official_levels` {action, minor, moderate, major}, `provisional_data`, `model`, `alert_rule`
+(`alert_by_model` | `forecast_stage`, which rule fired; added 1 Nov), `tau` (null under `forecast_stage`), `raised_at` (wall
 clock when it was raised), `window_start` / `window_start_ts` (the data time of the window that raised it, added 31
 Oct; for a replay this is the historical time, `raised_at` is not), `episode_start`, `trace` = forecast trace +
 `forecast_time`.
