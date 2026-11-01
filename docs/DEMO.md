@@ -41,6 +41,31 @@ by its official NWS level. Readings arrive every 5 to 15 minutes but the feed se
 producer: after the stale threshold the node turns red and the change is logged. Without internet the map falls back
 to the bundled world image by itself (gauges and alerts keep working; sharper tiles and terrain need the network).
 
+## Demo checklist
+
+**The day before:**
+- [ ] `python -m pytest -q` green; `python -m tools.verify_slice S1` (then S2 to S5) read through.
+- [ ] Cached gauge files in `data/raw/usgs/` and replay dates tried once: `08158700` 2019-05-02..06; `AHOT2`, `LLAT2` 2023-10-25..27 with rain.
+- [ ] Groq key in `.env` and a real agent run; Ollama model pulled as the fallback (`qwen2.5:7b`).
+- [ ] Power BI: `dashboard/powerbi/DEWS.pbip` opens, password entered, pages built.
+
+**Before the audience arrives:**
+- [ ] `scripts\start_demo.ps1`; console at http://127.0.0.1:8765, all chips green.
+- [ ] Clear the flood to be shown: `python -m tools.reset_replay --site 08158700 --start 2019-05-02 --end 2019-05-06 --yes` (about a minute).
+- [ ] Laptop on mains, sleep off, notifications off, clock synced.
+
+**During the demo:** replay plus narration across Map, Pipeline flow and Agents. Run the replay, watch Pipeline flow, click the alert line to fly to the
+gauge, step through it with the Map's clock, approve a draft in Readings & alerts. Say "forecast of crossing an official category", and that replayed data is SIMULATION.
+
+**Fallbacks:**
+| If this fails | Do this |
+|---|---|
+| No internet | The Map falls back to the bundled NASA image by itself (`?offline` forces it); terrain and sharp tiles are gone, gauges and alerts stay. Replays run from cached files; live feeds go stale and the console shows it |
+| Groq down or no key | Falls back to `LLM_FALLBACK`, then template v1 stays and nothing is blocked (`python -m tools.fault_drill --scenario llm`). Ollama needs `LLM_PROVIDER=ollama` |
+| Replay shows nothing, dead letters rise | The dates were replayed already: run `tools.reset_replay` for them |
+| Email cannot be sent | Show the bulletin and the `alerts.approved` record; say it was not delivered |
+| Power BI will not open | Use the console's Metrics tab; state the substitution |
+
 ## Questions to prepare for
 Why US data (only open source with live gauges, official levels and hourly radar, plus archives; India study shows
 what is missing); why pooled evaluation; why Faust instead of Kafka Streams; what "forecast of crossing an official

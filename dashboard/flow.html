@@ -95,6 +95,7 @@
           <div class="ph">Data layers</div>
           <label class="lrow"><input type="checkbox" data-layer="gauges" checked><span>Gauges</span><em id="n-gauges"></em></label>
           <label class="lrow"><input type="checkbox" data-layer="alerts" checked><span>Open alerts</span><em id="n-alerts"></em></label>
+          <label class="lrow" title="Radar rain (NOAA MRMS), mean depth over the 10 km circle around each gauge, last 3 hours. Shown on the flat map."><input type="checkbox" data-layer="rain" checked><span>Rain, last 3 h</span><em id="n-rain"></em></label>
           <label class="lrow"><input type="checkbox" data-layer="sweep" checked><span>Radar sweep</span><em></em></label>
           <label class="lrow"><input type="checkbox" data-layer="rings" checked><span>Range rings</span><em></em></label>
           <label class="lrow"><input type="checkbox" data-layer="grid" checked><span>Graticule</span><em></em></label>
@@ -150,6 +151,10 @@
     <h2>Pipeline: latency waterfall</h2>
     <div class="note" style="margin-bottom:6px">From the latency_waterfall view. Live and replay stay apart, and gross and net of feed delay are separate rows. A replay's gross total runs from when the replay sent the reading, not from its historical time. A stage with no timestamps yet reads "not measured yet", not zero. Bars use a log scale; read the figures for exact values.</div>
     <div id="mx-water"></div>
+    <h2>Forecast: detection on past floods</h2>
+    <div class="note" id="mx-det-note" style="margin-bottom:6px"></div>
+    <div style="margin-bottom:6px"><label class="note">Horizon <select id="mx-det-h" aria-label="Forecast horizon"></select></label></div>
+    <table><thead><tr><th>Evaluation</th><th>Data</th><th>Model</th><th class="r">Precision</th><th class="r">Recall</th><th class="r">F1</th><th class="r">False alarms</th><th class="r">Lead, gross</th><th class="r">Lead, net of feed delay</th></tr></thead><tbody id="mx-det"></tbody></table>
     <h2>Pipeline: fault drills</h2>
     <div class="note" style="margin-bottom:6px">Every run of tools.fault_drill, failed ones included, newest first.</div>
     <table><thead><tr><th>Scenario</th><th>Result</th><th class="r">Recovery</th><th>Data</th><th>Why it failed</th><th>When</th></tr></thead><tbody id="mx-drills"></tbody></table>
@@ -161,6 +166,7 @@
   <section id="tab-agents" hidden>
     <h2 style="margin-top:4px">Agent graph</h2>
     <div class="note" id="ag-note" style="margin-bottom:8px"></div>
+    <div class="ag-scrub"><label class="note">Run <select id="ag-run" aria-label="Agent run"></select></label><input type="range" id="ag-t" min="0" max="0" value="0" aria-label="Step through this run"><span class="note" id="ag-t-l"></span></div>
     <div class="canvas agraph" id="ag-graph"></div>
     <div class="legend">
       <span><span class="dot ok"></span>finished in this run</span>
@@ -199,7 +205,6 @@ const el = (n, a={}, t) => { const e = document.createElementNS(NS, n); for (con
 const gE = document.getElementById("edges"), gN = document.getElementById("nodes");
 const edgeEls = {}, nodeEls = {};
 for (const id in P) { const p = el("path", {d:P[id], class:"edge inactive", "marker-end":"url(#arr)"}); gE.appendChild(p); edgeEls[id] = p; }
-gE.appendChild(el("text", {x:353, y:166, class:"elabel"}, "planned"));
 function build(id, n) {
   const [x,y,w,h] = LAYOUT[id];
   const g = el("g", {class:"node "+n.kind});

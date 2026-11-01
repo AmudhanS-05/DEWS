@@ -33,6 +33,8 @@ import csv
 import json
 import math
 import os
+import re
+from pathlib import Path
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -71,7 +73,7 @@ EDGES = [
     ("e_p_mrms", "p_mrms", "t_rain", "t_rain", False),
     ("e_p_replay", "p_replay", "t_replay", "t_replay", False),
     ("e_gauge_faust", "t_gauge", "faust", "t_gauge", False),
-    ("e_rain_faust", "t_rain", "faust", "t_rain", True),       # Faust does not read rain.mrms yet (Phase 2b)
+    ("e_rain_faust", "t_rain", "faust", "t_rain", False),
     ("e_replay_faust", "t_replay", "faust", "t_replay", False),
     ("e_faust_agg", "faust", "t_agg", "t_agg", False),
     ("e_agg_sink", "t_agg", "sink", "t_agg", False),
@@ -581,11 +583,35 @@ def metrics_api() -> dict:
                         stages.append({"id": col, "label": label, "n": n, "median_s": med, "p95_s": p95,
                                        "applies": mode == "LIVE" or col != "feed_delay_s"})
                     out.append({"mode": mode, "traces": traces, "older_traces": older, "stages": stages})
-                return {"ok": True, "waterfall": out, "agents": agent_metrics(cur), "drills": drill_rows(cur), "langsmith": langsmith_status()}
+                return {"ok": True, "waterfall": out, "agents": agent_metrics(cur), "drills": drill_rows(cur), "detection": detection_rows(cur), "langsmith": langsmith_status()}
         finally:
             conn.close()
     except Exception as e:
         return {"ok": False, "error": (str(e).strip().splitlines() or ["error"])[0][:120]}
+
+
+def lead_times(notes: str | None) -> tuple:
+    """(gross, net) hours from an evaluation row's notes; None when the row has none."""
+    def one(k):
+        m = re.search(rf"{k}=(-?[0-9.]+)", notes or "")
+        return float(m.group(1)) if m else None
+    return one("lead_gross_h"), one("lead_net_h")
+
+
+def detection_rows(cur) -> dict:
+    """Pooled detection per run, model and horizon from evaluation_runs, plus the model the forecaster has active and last used."""
+    cur.execute("""SELECT data_source, run_label, model, horizon_h, precision, recall, f1, false_alarms, notes FROM evaluation_runs
+                   WHERE site_no = 'POOLED' AND run_label NOT LIKE 'fault_drill:%%' ORDER BY run_label, model, horizon_h""")
+    rows = [{"data_source": s, "run": r, "model": m, "horizon_h": h, "precision": p, "recall": c, "f1": f, "false_alarms": fa,
+             "lead_gross_h": lead_times(n)[0], "lead_net_h": lead_times(n)[1]} for s, r, m, h, p, c, f, fa, n in cur.fetchall()]
+    cur.execute("""SELECT DISTINCT ON (mode) mode, model, horizon_h, window_start FROM risk_scores ORDER BY mode, computed_at DESC NULLS LAST""")
+    used = [{"mode": m, "model": mo, "horizon_h": h, "window_start": w.isoformat()} for m, mo, h, w in cur.fetchall()]
+    try:
+        with open(Path(__file__).resolve().parent.parent / "ml" / "models" / "active.json", encoding="utf-8") as f:
+            active = json.load(f)
+    except (OSError, ValueError):
+        active = None
+    return {"rows": rows, "used": used, "active": active}
 
 
 def langsmith_status() -> dict:
@@ -646,12 +672,47 @@ def timeline_events(times: list[float], alerts: list[float] = (), gap_h: float =
 
 
 def timeline_series(rows: list[tuple]) -> dict:
-    """(site_no, window_start epoch, stage_last, n_readings) ascending -> site_no: [[t, stage, n], ...]; a window with no stage is left out."""
+    """(site_no, window_start epoch, stage_last, n_readings, rain_3h) ascending -> site_no: [[t, stage, n, rain_3h], ...]; a window with no stage is left out."""
     out: dict[str, list] = {}
-    for site, t, stage, n in rows:
+    for site, t, stage, n, rain in rows:
         if stage is not None:
-            out.setdefault(site, []).append([t, round(float(stage), 3), n])
+            out.setdefault(site, []).append([t, round(float(stage), 3), n, None if rain is None else round(float(rain), 2)])
     return out
+
+
+def rain_summary(rows: list[tuple]) -> dict:
+    """(site_no, hour_end epoch, rain_mm) newest first per site -> site_no: newest hour, and the sums over the hours ending then.
+    A sum with an hour missing is null, as in the windows."""
+    out: dict[str, dict] = {}
+    by: dict[str, dict] = {}
+    for site, t, mm in rows:
+        by.setdefault(site, {})[int(t)] = mm
+    for site, hours in by.items():
+        end = max(hours)
+        def total(n):
+            vals = [hours.get(end - k * 3600) for k in range(n)]
+            return None if any(v is None for v in vals) else round(sum(vals), 2)
+        out[site] = {"hour_end": end, "rain_1h": total(1), "rain_3h": total(3), "rain_6h": total(6)}
+    return out
+
+
+def rain_api(mode: str) -> dict:
+    """Newest catchment rain per gauge for the Map's rain layer; live and replay kept apart."""
+    if CTX["demo"]:
+        return {"ok": True, "rain": {}}
+    db_mode = "SIMULATION" if mode == "replay" else "LIVE"
+    try:
+        conn = pg_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""SELECT site_no, EXTRACT(EPOCH FROM window_end), rain_mm FROM catchment_rain c
+                               WHERE mode = %s AND window_end > (SELECT max(window_end) - interval '6 hours' FROM catchment_rain x
+                                                                 WHERE x.site_no = c.site_no AND x.mode = c.mode)""", (db_mode,))
+                return {"ok": True, "mode": db_mode, "rain": rain_summary([(s, float(t), m) for s, t, m in cur.fetchall()])}
+        finally:
+            conn.close()
+    except Exception as e:
+        return {"ok": False, "error": (str(e).strip().splitlines() or ["error"])[0][:120]}
 
 
 TIMELINE_MAX_S = 21 * 86400
@@ -677,9 +738,9 @@ def timeline_api(mode: str, start: float | None, end: float | None) -> dict:
                     pick = next((e for e in events if e["alerts"]), events[0])
                     start, end = pick["start"], pick["end"]
                 start = max(start, end - TIMELINE_MAX_S)
-                cur.execute("""SELECT site_no, EXTRACT(EPOCH FROM window_start), stage_last, n_readings FROM windowed_aggregates
+                cur.execute("""SELECT site_no, EXTRACT(EPOCH FROM window_start), stage_last, n_readings, rain_3h FROM windowed_aggregates
                                WHERE mode = %s AND window_start >= to_timestamp(%s) AND window_start < to_timestamp(%s) ORDER BY 2""", (db_mode, start, end))
-                rows = [(s, float(t), st, n) for s, t, st, n in cur.fetchall()]
+                rows = [(s, float(t), st, n, r) for s, t, st, n, r in cur.fetchall()]
             return {"ok": True, "mode": db_mode, "start": start, "end": end, "events": events, "series": timeline_series(rows),
                     "alerts": [a for a in alerts if start <= a["t"] <= end]}
         finally:
@@ -714,8 +775,8 @@ def agent_run_view(events: list[dict]) -> dict:
 ACTIVE_RUN_S = 120      # a run with an agent still open but silent for longer than this crashed; it is not shown as running
 
 
-def agents_api() -> dict:
-    """The newest run in agent_events, without the writer's token stream (read-only)."""
+def agents_api(run_id: str | None = None) -> dict:
+    """The newest run in agent_events (or `run_id`), without the writer's token stream (read-only), and the recent runs to pick from."""
     if CTX["demo"]:
         return {"ok": True, "run": None, "langsmith": langsmith_status()}
     try:
@@ -723,7 +784,7 @@ def agents_api() -> dict:
         try:
             with conn.cursor() as cur:
                 cur.execute("SELECT run_id, alert_id, started_at, ended_at, duration_s, events, tool_calls, review_rounds, last_verdict "
-                            "FROM agent_run_summary ORDER BY ended_at DESC LIMIT 1")
+                            "FROM agent_run_summary WHERE %s::text IS NULL OR run_id = %s ORDER BY ended_at DESC LIMIT 1", (run_id, run_id))
                 row = cur.fetchone()
                 if not row:
                     return {"ok": True, "run": None, "langsmith": langsmith_status()}
@@ -738,10 +799,12 @@ def agents_api() -> dict:
                 adv = cur.fetchone()
                 cur.execute("SELECT EXTRACT(EPOCH FROM (now() - max(ts))) FROM agent_events WHERE run_id = %s", (run["run_id"],))
                 age = float(cur.fetchone()[0] or 0)
+                cur.execute("SELECT run_id, alert_id, ended_at FROM agent_run_summary ORDER BY ended_at DESC LIMIT 20")
+                runs = [{"run_id": r, "alert_id": a, "ended_at": e.isoformat()} for r, a, e in cur.fetchall()]
             view = agent_run_view(events)
-            return {"ok": True, "run": run, **view, "active": age < ACTIVE_RUN_S and any(a["open"] for a in view["agents"]), "langsmith": langsmith_status(),
+            return {"ok": True, "run": run, "runs": runs, **view, "active": age < ACTIVE_RUN_S and any(a["open"] for a in view["agents"]), "langsmith": langsmith_status(),
                     "advisory": {"version": adv[0], "source": adv[1], "status": adv[2]} if adv else None,
-                    "events": [e for e in events if e["kind"] != "token_chunk"][-80:]}
+                    "events": [e for e in events if e["kind"] != "token_chunk"][-400:]}
         finally:
             conn.close()
     except Exception as e:
@@ -876,12 +939,15 @@ def make_handler():
                            "regions": regions_summary(load_regions(), latest, live, time.time(), CTX["stale_s"])}).encode())
             elif self.path == "/api/metrics":
                 self._send(200, "application/json", json.dumps(metrics_api()).encode())
+            elif self.path.startswith("/api/rain"):
+                self._send(200, "application/json", json.dumps(rain_api(parse_qs(urlparse(self.path).query).get("mode", ["live"])[0])).encode())
             elif self.path.startswith("/api/timeline"):
                 q = parse_qs(urlparse(self.path).query)
                 num = lambda k: float(q[k][0]) if q.get(k) else None  # noqa: E731
                 self._send(200, "application/json", json.dumps(timeline_api(q.get("mode", ["live"])[0], num("start"), num("end"))).encode())
-            elif self.path == "/api/agents":
-                self._send(200, "application/json", json.dumps(agents_api(), default=str).encode())
+            elif self.path.startswith("/api/agents"):
+                run = parse_qs(urlparse(self.path).query).get("run", [None])[0]
+                self._send(200, "application/json", json.dumps(agents_api(run), default=str).encode())
             elif self.path == "/api/advisories":
                 self._send(200, "application/json", json.dumps(advisories_api()).encode())
             elif self.path == "/api/db":

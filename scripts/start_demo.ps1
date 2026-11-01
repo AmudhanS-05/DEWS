@@ -1,4 +1,4 @@
-# Start everything the demo needs (C1.9): Docker stack, 3 Faust workers, sink, forecaster, notifier, live producer, console.
+# Start everything the demo needs (C1.9): Docker stack, 3 Faust workers, sink, forecaster, notifier, live gauge and rain producers, console.
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\start_demo.ps1
 #   powershell -ExecutionPolicy Bypass -File scripts\start_demo.ps1 -NoLiveProducer
@@ -62,6 +62,7 @@ $services = @(
     @{ name = 'console'; pattern = '-m dashboard[.]flow_monitor'; exe = $python; args = @('-m', 'dashboard.flow_monitor') }
 )
 if (-not $NoLiveProducer) {
+    $services += @{ name = 'mrms_producer'; pattern = '-m producers[.]mrms_qpe_producer'; exe = $python; args = @('-m', 'producers.mrms_qpe_producer') }
     $services += @{ name = 'usgs_producer'; pattern = '-m producers[.]usgs_iv_producer'; exe = $python; args = @('-m', 'producers.usgs_iv_producer') }
 }
 

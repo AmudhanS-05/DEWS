@@ -14,7 +14,7 @@ What it does, in order:
   3. writes a tombstone for the gauge to Faust's replay changelogs and removes the gauge's replay entry from the forecaster's
      state file. Live state is never touched;
   4. deletes SIMULATION rows of that gauge and date range (--end included), in one transaction: readings, windows, forecasts,
-     traces, alerts raised in the range and their advisories and agent records. Alerts and advisories are first saved to
+     rain, traces, alerts raised in the range and their advisories and agent records. Alerts and advisories are first saved to
      gate_output/reset_replay_<time>.jsonl. evaluation_runs and LIVE rows are never touched;
   5. starts the workers and the forecaster again and waits for Faust to be ready.
 The Kafka topics keep their history. tools.check_windows and tools.check_sink read state/replay_resets.json and leave out replay
@@ -41,7 +41,7 @@ ROOT = Path(__file__).resolve().parent.parent
 RESETS_FILE = Path(config.STATE_DIR) / "replay_resets.json"
 FORECASTER_STATE = Path(config.STATE_DIR) / "forecaster_state.json"
 PORTS = (6066, 6067, 6068)
-CHANGELOGS = ("flood-windowing-window_state_replay-changelog", "flood-windowing-rain_state_replay-changelog")
+CHANGELOGS = ("flood-windowing-window_state_replay-changelog",)     # a gauge's rain hours live in the same per-site state
 SITE_MODE = "site_no = %(site)s AND mode = 'SIMULATION'"
 ALERTS_IN_RANGE = ("SELECT alert_id FROM alerts WHERE site_no = %(site)s AND mode = 'SIMULATION' AND split_part(alert_id, '|', 3) ~ '^[0-9]{4}-' "
                    "AND split_part(alert_id, '|', 3)::timestamptz >= %(start)s AND split_part(alert_id, '|', 3)::timestamptz < %(end)s")
@@ -54,6 +54,7 @@ DELETES = [
     ("latency_trace", f"{SITE_MODE} AND reading_time >= %(start)s AND reading_time < %(end)s"),
     ("risk_scores", f"{SITE_MODE} AND window_start >= %(start)s AND window_start < %(end)s"),
     ("windowed_aggregates", f"{SITE_MODE} AND window_start >= %(start)s AND window_start < %(end)s"),
+    ("catchment_rain", f"{SITE_MODE} AND window_end >= %(start)s AND window_end < %(end)s"),
     ("gauge_readings", f"{SITE_MODE} AND reading_time >= %(start)s AND reading_time < %(end)s"),
 ]
 

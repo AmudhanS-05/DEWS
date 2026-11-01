@@ -6,7 +6,7 @@
   --producer:rgba(40,110,105,.28); --topic:rgba(70,85,170,.28); --group:rgba(150,110,60,.24); --store:rgba(50,80,125,.3); --manual:rgba(25,40,70,.3); --info:rgba(50,80,125,.3);
   --ok:#6fc9b6; --idle:#7fa9d8; --warn:#d9b95f; --down:#e0756a; --absent:#5e7088;
   --s-normal:#6fc9b6; --s-action:#d9b95f; --s-minor:#e6934a; --s-moderate:#e0655a; --s-major:#b093e0; --s-stale:#667a92; --s-nodata:#4f6078;
-  --sky0:#02040a; --sky1:#081226; --shadow:0 14px 40px rgba(0,0,0,.45);
+  --rain:#62aefc; --sky0:#02040a; --sky1:#081226; --shadow:0 14px 40px rgba(0,0,0,.45);
   --page:radial-gradient(1200px 700px at 15% -10%,rgba(40,80,170,.22),transparent 60%),radial-gradient(1000px 700px at 95% 10%,rgba(90,60,170,.12),transparent 60%),linear-gradient(#02040a,#071022);
 }
 :root[data-theme=light]{
@@ -15,7 +15,7 @@
   --producer:rgba(70,170,150,.2); --topic:rgba(90,120,220,.16); --group:rgba(225,160,90,.2); --store:rgba(90,160,220,.18); --manual:rgba(255,255,255,.4); --info:rgba(90,160,220,.18);
   --ok:#1c7566; --idle:#22629f; --warn:#856405; --down:#a82f26; --absent:#5f7388;
   --s-normal:#1c7566; --s-action:#8a6a10; --s-minor:#a85410; --s-moderate:#a82f26; --s-major:#6a459f; --s-stale:#5f7388; --s-nodata:#7c90a5;
-  --sky0:#4ea6e6; --sky1:#dff3fe; --shadow:0 12px 34px rgba(20,80,130,.16);
+  --rain:#1560b8; --sky0:#4ea6e6; --sky1:#dff3fe; --shadow:0 12px 34px rgba(20,80,130,.16);
   --page:radial-gradient(1100px 600px at 85% -10%,rgba(255,255,255,.85),transparent 60%),linear-gradient(#a9dbf7,#e6f6ff 55%,#f4fbff);
 }
 *{box-sizing:border-box}
@@ -205,6 +205,8 @@ body.landing .alertbar{display:none}
 .advhead b{color:var(--ink);font-weight:600}
 
 /* metrics and agents */
+.ag-scrub{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+.ag-scrub input[type=range]{flex:1;min-width:180px;padding:0;border:0;background:none;accent-color:var(--accent)}
 .spark{display:block}
 .mx-two{display:grid;grid-template-columns:minmax(260px,1fr) minmax(320px,1.4fr);gap:12px;align-items:start}
 @media(max-width:760px){.mx-two{grid-template-columns:1fr}}

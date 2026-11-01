@@ -34,7 +34,19 @@ async function loadMetrics(){
     }).join("");
   }catch(e){ box.innerHTML='<div class="note">cannot reach the console server</div>'; }
 }
+let detRows=[], detKey="";
+function drawDetection(det){
+  if(!det) return; detRows=det.rows||[];
+  const hs=[...new Set(detRows.map(r=>r.horizon_h))].sort((a,b)=>a-b), sel=$("mx-det-h"), k=hs.join();
+  if(k!==detKey){ detKey=k; const cur=sel.value||"3"; sel.innerHTML=hs.map(h=>`<option value="${h}">${h} h</option>`).join(""); sel.value=hs.includes(+cur)?cur:(hs[0]||""); }
+  const a=det.active, used=(det.used||[]).map(u=>`${u.mode==="SIMULATION"?"replay":"live"}: ${esc(u.model)} at ${u.horizon_h} h`).join(", ");
+  $("mx-det-note").innerHTML=`Forecast of crossing an official category, pooled over the gauges, from evaluation_runs. Active model: <b>${a?esc(a.name)+" at "+(a.horizons||[]).join(", ")+" h":"none (rise-rate rule)"}</b>${used?". Last forecast: "+used:""}. Other horizons use the rise-rate rule.`;
+  const pct=v=>v==null?"":(+v).toFixed(2), hrs=v=>v==null?"":(+v).toFixed(2)+" h", rows=detRows.filter(r=>String(r.horizon_h)===sel.value);
+  $("mx-det").innerHTML=rows.map(r=>`<tr><td>${esc(r.run)}</td><td>${esc(r.data_source)}</td><td>${esc(r.model)}</td><td class="r">${pct(r.precision)}</td><td class="r">${pct(r.recall)}</td><td class="r">${pct(r.f1)}</td><td class="r">${r.false_alarms==null?"":num(r.false_alarms)}</td><td class="r">${hrs(r.lead_gross_h)}</td><td class="r">${hrs(r.lead_net_h)}</td></tr>`).join("")||'<tr><td colspan="9" class="note">no evaluation rows: python -m ml.import_runs</td></tr>';
+}
+$("mx-det-h").addEventListener("change",()=>loadMetrics());
 function drawAgentMetrics(d){
+  drawDetection(d.detection);
   const ls=d.langsmith||{};
   $("mx-ls").innerHTML=`Measured from agent_events in PostgreSQL. LangSmith is separate: when tracing is on, it keeps the full trace of each run (prompts, tool calls, tokens) in the cloud; these figures do not depend on it. Tracing is <b>${ls.enabled?"on, project "+esc(ls.project):"off"}</b>${ls.enabled?' · <a href="https://smith.langchain.com" target="_blank" rel="noopener">open LangSmith</a>':""}.`;
   $("mx-drills").innerHTML=(d.drills||[]).map(r=>`<tr><td>${esc(r.scenario)}</td><td class="${r.status==="failed"?"tag-bad":"tag-ok"}">${esc(r.status)}</td><td class="r">${r.recovery_s==null||r.recovery_s<0?"":r.recovery_s.toFixed(1)+" s"}</td><td>${esc(r.data_source)}</td><td>${esc(r.reason||"")}</td><td class="t">${new Date(r.at).toLocaleString([], {hour12:false})}</td></tr>`).join("")||'<tr><td colspan="6" class="note">no drills recorded</td></tr>';
@@ -82,15 +94,35 @@ function agentGraph(d){
   return `<svg viewBox="0 0 1120 470" role="img" aria-label="Live agent flow"><defs><marker id="agarr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#52657a"/></marker></defs>${edges}${back}${nodes}</svg>`;
 }
 const setHtml=(id,h)=>{ const e=$(id); if(e.dataset.h!==h){ e.innerHTML=h; e.dataset.h=h; } };     // an unchanged graph keeps its dashes moving
+/* step through a recorded run: the graph as it stood after event i (same counting as agent_run_view in flow_monitor.py) */
+function agentsAt(events,i){
+  const by={}; let revisions=0, disagreements=0;
+  for(const e of events.slice(0,i+1)){ const a=by[e.agent]=by[e.agent]||{agent:e.agent,starts:0,ends:0,ms:0,tool_calls:0,tokens:0,verdict:null}, x=e.detail||{};
+    if(e.kind==="start") a.starts++; else if(e.kind==="end"){ a.ends++; a.ms+=x.ms||0; a.tokens+=x.tokens||0; } else if(e.kind==="tool_call") a.tool_calls++; else if(e.kind==="verdict") a.verdict=x.verdict; else if(e.kind==="revision") revisions++; else if(e.kind==="disagreement") disagreements++; }
+  const agents=Object.values(by); agents.forEach(a=>a.open=a.starts>a.ends);
+  return {agents,revisions,disagreements};
+}
+let agLast=null, agPick="", agFollow=true;
+function drawAgentStep(){
+  const d=agLast; if(!d||!d.run) return; const ev=d.events||[], rg=$("ag-t");
+  rg.max=Math.max(0,ev.length-1); if(agFollow) rg.value=rg.max;
+  const i=+rg.value, end=i>=ev.length-1;
+  $("ag-t-l").textContent=ev.length?`step ${i+1} of ${ev.length} · ${new Date(ev[i].ts).toLocaleTimeString([], {hour12:false})} · ${ev[i].agent} ${ev[i].kind}`:"";
+  setHtml("ag-graph",agentGraph(end?d:{...d,...agentsAt(ev,i),active:true,advisory:null}));
+}
+$("ag-t").addEventListener("input",()=>{ agFollow=+$("ag-t").value>=+$("ag-t").max; drawAgentStep(); });
+$("ag-run").addEventListener("change",e=>{ agPick=e.target.value; agFollow=true; loadAgents(); });
 async function loadAgents(){
   try{
-    const d=await (await fetch("/api/agents")).json();
+    const d=await (await fetch("/api/agents"+(agPick?"?run="+encodeURIComponent(agPick):""))).json(); agLast=d;
+    const sel=$("ag-run"), opts=`<option value="">newest run (follows live)</option>`+(d.runs||[]).map(r=>`<option value="${esc(r.run_id)}">${new Date(r.ended_at).toLocaleString([], {hour12:false})} · ${esc(String(r.alert_id).split("|").slice(0,2).join(" "))}</option>`).join("");
+    if(sel.dataset.h!==opts){ sel.innerHTML=opts; sel.dataset.h=opts; sel.value=agPick; }
     if(!d.ok){ $("ag-note").textContent=d.error; setHtml("ag-graph",agentGraph({})); return; }
     const ls=d.langsmith&&d.langsmith.enabled?` · LangSmith traces in project <b>${esc(d.langsmith.project)}</b> (<a href="https://smith.langchain.com" target="_blank" rel="noopener">open</a>)`:" · LangSmith tracing off";
     if(!d.run){ $("ag-note").innerHTML="No agent run recorded yet. A run appears after python -m agentic_ai.run --alert-id &lt;id&gt;."+ls; setHtml("ag-graph",agentGraph({})); $("ag-agents").innerHTML=""; $("ag-events").innerHTML=""; return; }
     const r=d.run;
     $("ag-note").innerHTML=`${d.active?"<b>Running now</b>":"Last run"} <b>${esc(r.run_id)}</b> for alert <b>${esc(r.alert_id)}</b>${r.mode?" · <b>"+esc(r.mode)+"</b>":""} · ${r.duration_s==null?"":r.duration_s.toFixed(1)+" s"} · ${r.review_rounds} review round${r.review_rounds===1?"":"s"} · last verdict ${esc(r.last_verdict||"none")} · ${d.disagreements} disagreement${d.disagreements===1?"":"s"} · ${new Date(r.ended_at).toLocaleString([], {hour12:false})}${ls}`;
-    setHtml("ag-graph",agentGraph(d));
+    drawAgentStep();
     $("ag-agents").innerHTML=d.agents.map(a=>`<tr><td>${esc(a.agent)}</td><td class="r">${a.starts}</td><td class="r">${a.ms?(a.ms/1000).toFixed(1)+" s":""}</td><td class="r">${a.tool_calls||""}</td><td class="r">${a.tokens?num(a.tokens):""}</td><td>${esc(a.verdict||"")}</td></tr>`).join("");
     $("ag-events").innerHTML=d.events.slice().reverse().map(e=>{ const dt=e.detail||{}, txt=dt.name||dt.tool||(dt.reasons&&dt.reasons.length?dt.reasons.join("; "):"")||dt.verdict||""; return `<tr><td class="t">${new Date(e.ts).toLocaleTimeString([], {hour12:false})}</td><td>${esc(e.agent)}</td><td>${esc(e.kind)}</td><td>${esc(String(txt).slice(0,140))}</td></tr>`; }).join("");
   }catch(e){ $("ag-note").textContent="cannot reach the console server"; }

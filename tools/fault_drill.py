@@ -525,7 +525,20 @@ def record(label: str, recovery: float | None, notes: str, data_source: str = "r
                     (label, data_source, recovery, notes, "passed" if ok else "failed", None if ok else failure_reason(notes) or "drill failed"))
 
 
-SCENARIOS = {"faust": faust_drill, "broker": broker_drill, "sink": sink_drill, "postgres": postgres_drill,
+def llm_drill(a) -> dict:
+    """LLM down (C4.3): the agents' own check, agentic_ai/drill.py. Template v1 stays and nothing is blocked. Uses the newest replayed alert."""
+    from agentic_ai.drill import llm_down
+    with Task("LLM down drill (forced down, no network call)", total=1, unit=" run") as t:
+        res = llm_down()
+        t.update(1, "agents finished")
+        notes = str(res.get("notes", ""))
+        if not res.get("ok"):
+            notes += "; FAILED: LLM down check"
+        t.summary(f"{'PASS' if res.get('ok') else 'FAIL'}: recovery_time_s={res.get('recovery_time_s')}; {notes}")
+    return {"ok": bool(res.get("ok")), "recovery_time_s": res.get("recovery_time_s"), "notes": notes, "data_source": "replay"}
+
+
+SCENARIOS = {"llm": llm_drill, "faust": faust_drill, "broker": broker_drill, "sink": sink_drill, "postgres": postgres_drill,
              "notifier": notifier_drill, "producer": producer_drill}
 
 

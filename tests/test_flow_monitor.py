@@ -27,7 +27,7 @@ def test_healthy_flow_and_unbuilt_parts_are_absent_not_red():
     assert status(v, "t_gauge") == "ok" and status(v, "faust") == "ok"
     assert status(v, "forecaster") == "absent" and status(v, "p_mrms") == "absent"
     assert status(v, "t_rain") == "idle"            # exists, empty: waiting, not broken
-    assert edge(v, "e_gauge_faust") == "flow" and edge(v, "e_rain_faust") == "planned"
+    assert edge(v, "e_gauge_faust") == "flow" and edge(v, "e_rain_faust") != "planned"
     assert edge(v, "e_agg_fore") == "inactive"
 
 
@@ -157,7 +157,14 @@ def test_timeline_events_split_at_gaps_newest_first_and_count_alerts():
 
 
 def test_timeline_series_leaves_out_windows_without_a_stage():
-    assert fm.timeline_series([("a", 1.0, 2.34567, 3), ("a", 2.0, None, 0), ("b", 1.0, 1, 0)]) == {"a": [[1.0, 2.346, 3]], "b": [[1.0, 1.0, 0]]}
+    assert fm.timeline_series([("a", 1.0, 2.34567, 3, 1.234), ("a", 2.0, None, 0, None), ("b", 1.0, 1, 0, None)]) == {"a": [[1.0, 2.346, 3, 1.23]], "b": [[1.0, 1.0, 0, None]]}
+
+
+def test_rain_summary_sums_hours_ending_at_the_newest_and_never_a_partial_sum():
+    h = 3600
+    r = fm.rain_summary([("a", 3 * h, 1.0), ("a", 2 * h, 2.0), ("a", h, 3.0), ("b", 3 * h, 1.0), ("b", h, 3.0)])
+    assert r["a"] == {"hour_end": 3 * h, "rain_1h": 1.0, "rain_3h": 6.0, "rain_6h": None}
+    assert r["b"]["rain_3h"] is None and r["b"]["rain_1h"] == 1.0
 
 
 def test_agent_run_view_marks_an_agent_still_running():

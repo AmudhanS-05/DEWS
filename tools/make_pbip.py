@@ -105,7 +105,7 @@ def files_for(schema: dict[str, list[tuple[str, str]]], server: str, database: s
         f"{rp}/.platform": json.dumps({"$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
                                        "metadata": {"type": "Report", "displayName": NAME},
                                        "config": {"version": "2.0", "logicalId": guid("rp")}}, indent=2),
-        f"{rp}/report.json": json.dumps({"config": json.dumps({"version": "5.53", "activeSectionIndex": 0}), "layoutOptimization": 0, "resourcePackages": [],
+        f"{rp}/report.json": json.dumps({"config": json.dumps({"version": "5.53", "themeCollection": {"baseTheme": {"name": "CY24SU06", "version": "5.53", "type": 2}}, "activeSectionIndex": 0}), "layoutOptimization": 0, "resourcePackages": [],
                                          "sections": [{"config": "{}", "displayName": "Page 1", "displayOption": 1, "filters": "[]", "height": 720, "name": "page1", "visualContainers": [], "width": 1280}]}, indent=2),
     }
     for t in tables:

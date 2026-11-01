@@ -11,4 +11,5 @@ psycopg2-binary==2.9.9
 # wheel (no separate ecCodes install); tested with eccodes 2.50.0 / eccodeslib 2.50.0.33 / numpy 2.5.3 (Python 3.13).
 numpy
 eccodes
-eccodeslib
+eccodeslib; sys_platform != "win32"      # no Windows wheel
+ecmwflibs; sys_platform == "win32"        # ships the ecCodes binary on Windows (tested: eccodes 2.50.0, Python 3.12)

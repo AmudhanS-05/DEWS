@@ -23,6 +23,7 @@ function Show-Step([int]$done, [int]$total, [string]$note) {
 # Upstream first, so nothing downstream stops while its input still moves.
 $services = @(
     @{ name = 'live producer'; pattern = '-m producers[.]usgs_iv_producer' },
+    @{ name = 'rain producer'; pattern = '-m producers[.]mrms_qpe_producer' },
     @{ name = 'replay'; pattern = '-m producers[.]replay_producer' },
     @{ name = 'Faust workers'; pattern = 'faust_app.*worker' },
     @{ name = 'forecaster'; pattern = '-m streams[.]forecaster' },

@@ -37,6 +37,48 @@ table catchment_rain
 		summarizeBy: none
 		sourceColumn: computed_at
 
+	column mode
+		dataType: string
+		lineageTag: b9e515bd-50d4-5695-a0f7-4bf74a530274
+		summarizeBy: none
+		sourceColumn: mode
+
+	column rain_mm_5km
+		dataType: double
+		lineageTag: 8fed781b-92d4-5f15-8cb3-c0d44397f504
+		summarizeBy: none
+		sourceColumn: rain_mm_5km
+
+	column rain_mm_25km
+		dataType: double
+		lineageTag: 09ff445b-5075-56a9-bcd5-59e52cc0057e
+		summarizeBy: none
+		sourceColumn: rain_mm_25km
+
+	column coverage_10km
+		dataType: double
+		lineageTag: f729edb0-150c-5e43-bb41-1bead9b55d7d
+		summarizeBy: none
+		sourceColumn: coverage_10km
+
+	column n_cells_10km
+		dataType: int64
+		lineageTag: cae9c1c7-0363-56e0-8972-a90b82cd66ce
+		summarizeBy: none
+		sourceColumn: n_cells_10km
+
+	column file_time
+		dataType: dateTime
+		lineageTag: 28140da8-a044-5f4e-a552-80ad94293b13
+		summarizeBy: none
+		sourceColumn: file_time
+
+	column fetched_at
+		dataType: dateTime
+		lineageTag: 04441ec1-b3a1-52d2-80a4-51d65eb6c00e
+		summarizeBy: none
+		sourceColumn: fetched_at
+
 	partition catchment_rain = m
 		mode: directQuery
 		source =

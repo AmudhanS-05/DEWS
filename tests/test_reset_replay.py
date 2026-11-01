@@ -76,7 +76,7 @@ def conn():
 
 
 def _window(site, when, mode):
-    return (site, when, when, mode, 1, 1.0, 1.0, 1.0, 0.0, None, None, None, False)
+    return (site, when, when, mode, 1, 1.0, 1.0, 1.0, 0.0, None, None, None, None, False)
 
 
 def test_delete_touches_only_that_site_mode_and_range_and_saves_alerts(conn, tmp_path):

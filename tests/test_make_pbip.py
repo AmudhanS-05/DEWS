@@ -18,6 +18,12 @@ def test_project_files_are_there_and_json_parses():
     assert json.loads(FILES["DEWS.Report/definition.pbir"])["datasetReference"]["byPath"]["path"] == "../DEWS.SemanticModel"
 
 
+def test_report_config_includes_a_base_theme():
+    report = json.loads(FILES["DEWS.Report/report.json"])
+    config = json.loads(report["config"])
+    assert config["themeCollection"]["baseTheme"]["name"] == "CY24SU06"
+
+
 def test_tables_are_directquery_to_the_local_database_and_hold_no_secret():
     t = FILES["DEWS.SemanticModel/definition/tables/alerts.tmdl"]
     assert "mode: directQuery" in t and 'PostgreSQL.Database("localhost:5432", "disaster_warning")' in t and 'Item="alerts"' in t

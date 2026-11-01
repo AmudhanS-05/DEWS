@@ -85,6 +85,12 @@ table windowed_aggregates
 		summarizeBy: none
 		sourceColumn: emitted_at
 
+	column rain_24h
+		dataType: double
+		lineageTag: 1799beda-2342-55c1-bc66-c4cc141fba1f
+		summarizeBy: none
+		sourceColumn: rain_24h
+
 	partition windowed_aggregates = m
 		mode: directQuery
 		source =

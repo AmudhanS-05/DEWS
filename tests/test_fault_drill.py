@@ -45,4 +45,4 @@ def test_failed_and_recovered():
 
 
 def test_every_runbook_scenario_exists():
-    assert set(fd.SCENARIOS) == {"faust", "broker", "sink", "postgres", "notifier", "producer"}
+    assert set(fd.SCENARIOS) == {"faust", "broker", "sink", "postgres", "notifier", "producer", "llm"}

@@ -50,6 +50,17 @@ def test_episode_lead_time_is_reported_negative_allowed():
     assert "never reached" in vs.episode_lead_times([("s|minor|2019-05-04T01:00:00Z", "new")], w[:1], 5.5)[1]
 
 
+def test_rain_must_show_before_the_stage_reaches_the_level():
+    w = [("a", 1.0, 0.0), ("b", 1.0, 5.0), ("c", 9.0, 2.0)]
+    assert vs.rain_leads(w, 8.0)[0]
+    assert not vs.rain_leads([("a", 9.0, 0.0), ("b", 9.0, 5.0)], 8.0)[0]
+    assert not vs.rain_leads([("a", 1.0, None)], 8.0)[0]
+
+
+def test_every_slice_has_checks():
+    assert set(vs.CHECKS) == {"S1", "S2", "S3", "S4", "S5"}
+
+
 def test_verdict_never_passes_with_a_failure_and_counts_manual_steps():
     good = ("core", "a", True, "")
     bad = ("ml", "b", False, "")
@@ -64,7 +75,3 @@ def test_a_check_that_raises_is_a_failure():
         raise OSError("connection refused")
     ok, detail = vs.run_check_safely(boom)
     assert not ok and "connection refused" in detail
-
-
-def test_later_slices_have_no_checks_yet():
-    assert set(vs.CHECKS) == {"S1"}

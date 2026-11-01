@@ -26,13 +26,17 @@ ROOT = Path(__file__).resolve().parent.parent
 PY = sys.executable
 DRWT2 = "08158700"
 FLOOD = ("2019-05-01", "2019-06-01")                     # the May 2019 Onion Creek replay, S1's story
-SCENARIOS = ("faust", "broker", "sink", "postgres", "notifier", "producer")
+SCENARIOS = ("faust", "broker", "sink", "postgres", "notifier", "producer", "llm")
+S1_SCENARIOS = SCENARIOS[:-1]
 GROUPS = {config.GROUP_WINDOWING: 3, config.GROUP_SINK: 1, config.GROUP_FORECASTER: 1, config.GROUP_NOTIFIER: 1}
 TOPICS = {config.TOPIC_GAUGE, config.TOPIC_RAIN, config.TOPIC_REPLAY_GAUGE, config.TOPIC_REPLAY_RAIN, config.TOPIC_AGG,
           config.TOPIC_FORECASTS, config.TOPIC_ALERTS, config.TOPIC_APPROVED, config.TOPIC_DLQ}
 MANUAL = {"S1": ["Power BI page 1: a new replayed reading appears within one page refresh (runbook step 12)",
                  "the S1 scene in docs/DEMO.md runs twice in a row",
-                 "the approved email reached a person's inbox (delivered_at only says SMTP accepted it)"]}
+                 "the approved email reached a person's inbox (delivered_at only says SMTP accepted it)"],
+          "S3": ["Power BI page 3 built from dashboard/powerbi/README.md"],
+          "S4": ["the Agents tab followed a real run live (nodes change while it runs)", "Power BI page 4 built from dashboard/powerbi/README.md"],
+          "S5": ["two clean rehearsals of docs/DEMO.md on the presentation laptop", "Ollama fallback with Groq off, run by hand"]}
 
 
 # ---- pure logic (tests/test_verify_slice.py) ----------------------------------------------------------------------
@@ -204,7 +208,7 @@ def check_no_duplicate_windows():
 
 def check_drills():
     rows = _query("SELECT run_label, recovery_time_s, notes FROM evaluation_runs WHERE run_label LIKE 'fault_drill:%%' ORDER BY created_at, run_id")
-    return drills_verdict(latest_drills(rows))
+    return drills_verdict(latest_drills(rows), S1_SCENARIOS)
 
 
 def check_console():
@@ -249,6 +253,100 @@ def check_agent_v2():
     return n > 0, f"{n} v2+ advisories from the agents"
 
 
+def _api(path: str):
+    with urllib.request.urlopen("http://127.0.0.1:8765" + path, timeout=10) as r:
+        return json.load(r)
+
+
+def rain_leads(windows: list[tuple[str, float | None, float | None]], level: float) -> tuple[bool, str]:
+    """windows = (window_start, stage_last, rain_1h) ascending. True if rain shows in a window before the stage first reaches `level`."""
+    rain = next((w for w, _, r in windows if r is not None and r > 0), None)
+    cross = next((w for w, s, _ in windows if s is not None and s >= level), None)
+    if rain is None:
+        return False, "no window with rain"
+    if cross is None:
+        return True, f"first rain in window {rain}, stage never reached {level:g} ft"
+    return rain < cross, f"first rain in window {rain}, stage first at {level:g} ft in window {cross}"
+
+
+RAIN_SITE, RAIN_SPAN = "08151500", ("2023-10-25", "2023-10-28")   # LLAT2, the rain demo
+
+
+def check_rain_rows():
+    n, sim = _query("SELECT count(*), count(*) FILTER (WHERE mode = 'SIMULATION') FROM catchment_rain")[0]
+    return sim > 0, f"{n} rows in catchment_rain, {sim} SIMULATION"
+
+
+def check_rain_leads_stage():
+    from streams.forecaster import load_gauges
+    level = load_gauges()[RAIN_SITE]["levels"]["minor"]
+    rows = _query("SELECT window_start, stage_last, rain_1h FROM windowed_aggregates WHERE site_no = %s AND mode = 'SIMULATION' AND window_start >= %s AND window_start < %s ORDER BY 1", (RAIN_SITE, *RAIN_SPAN))
+    return rain_leads([(w.isoformat(), s, r) for w, s, r in rows], level)
+
+
+def check_rain_api():
+    d = _api("/api/rain?mode=replay")
+    return d.get("ok") and len(d["rain"]) > 0, f"Map rain layer has {len(d.get('rain', {}))} gauges in replay"
+
+
+def check_forecasts_carry_model():
+    used = _query("SELECT model, count(*) FROM risk_scores WHERE site_no = %s AND mode = 'SIMULATION' AND window_start >= %s AND window_start < %s GROUP BY 1", (DRWT2, *FLOOD))
+    active = json.loads((ROOT / "ml" / "models" / "active.json").read_text(encoding="utf-8"))["name"]
+    p = _one("SELECT count(p_minor) FROM risk_scores WHERE site_no = %s AND mode = 'SIMULATION' AND model = %s AND horizon_h = 3 AND window_start >= %s AND window_start < %s", (DRWT2, active, *FLOOD))
+    return any(m == active for m, _ in used) and p > 0, f"models on the May 2019 replay {dict(used)}, {p} with p_minor at 3 h; active {active}"
+
+
+def check_trained_alert_before_crossing():
+    from streams.forecaster import load_gauges
+    minor = load_gauges()[DRWT2]["levels"]["minor"]
+    active = json.loads((ROOT / "ml" / "models" / "active.json").read_text(encoding="utf-8"))["name"]
+    ids = [r[0] for r in _query("SELECT alert_id FROM alerts WHERE site_no = %s AND mode = 'SIMULATION' AND alert_id LIKE %s AND details->>'model' = %s", (DRWT2, f"{DRWT2}|%|2019-05-%", active))]
+    windows = [(w.isoformat(), s) for w, s in _query("SELECT window_start, stage_last FROM windowed_aggregates WHERE site_no = %s AND mode = 'SIMULATION' AND window_start >= %s AND window_start < %s ORDER BY 1", (DRWT2, *FLOOD))]
+    return alert_before_crossing(windows, min((_iso(i.split("|")[2]) for i in ids), default=None), minor)
+
+
+def check_detection_panel():
+    det = _api("/api/metrics").get("detection") or {}
+    n = len(det.get("rows", []))
+    return n > 0 and det.get("active") is not None, f"{n} pooled rows on the Metrics panel, active model {(det.get('active') or {}).get('name')}"
+
+
+def check_model_card():
+    return (ROOT / "ml" / "MODEL_CARD.md").exists(), "ml/MODEL_CARD.md"
+
+
+def check_llm_drill():
+    rows = _query("SELECT status, recovery_time_s FROM evaluation_runs WHERE run_label = 'fault_drill:llm' ORDER BY created_at DESC, run_id DESC LIMIT 1")
+    return bool(rows) and rows[0][0] == "passed", f"newest LLM down drill: {rows[0][0]}, {rows[0][1]:.1f} s" if rows else "no LLM down drill recorded"
+
+
+def check_agents_tab_and_panel():
+    a, m = _api("/api/agents"), _api("/api/metrics")
+    return a.get("ok") and bool(a.get("run")) and bool(m.get("agents")), f"Agents tab run {(a.get('run') or {}).get('run_id')}, {len(a.get('runs', []))} runs to step through; {len(m.get('agents', []))} mode(s) on the Metrics agent panel"
+
+
+def check_mcp_server():
+    return (ROOT / "agentic_ai" / "mcp_server.py").exists(), "agentic_ai/mcp_server.py"
+
+
+def check_all_drills():
+    rows = _query("SELECT run_label, recovery_time_s, notes FROM evaluation_runs WHERE run_label LIKE 'fault_drill:%%' ORDER BY created_at, run_id")
+    return drills_verdict(latest_drills(rows))
+
+
+def check_throughput():
+    rows = _query("SELECT status, throughput_msgs_s, notes FROM evaluation_runs WHERE run_label = 'throughput:replay' ORDER BY created_at DESC, run_id DESC LIMIT 1")
+    return bool(rows) and rows[0][0] == "passed", f"{rows[0][1]:g} msg/s, {rows[0][0]}" if rows else "no throughput run recorded"
+
+
+def check_demo_fallbacks():
+    demo = (ROOT / "docs" / "DEMO.md").read_text(encoding="utf-8")
+    have = {"demo checklist": "## Demo checklist" in demo, "bundled world image": (ROOT / "dashboard" / "static" / "world_bluemarble.jpg").exists(),
+            "reset tool": (ROOT / "tools" / "reset_replay.py").exists(), "Power BI project": (ROOT / "dashboard" / "powerbi" / "DEWS.pbip").exists()}
+    gone = [k for k, v in have.items() if not v]
+    return not gone, ("missing: " + ", ".join(gone)) if gone else ", ".join(have)
+
+
 CHECKS = {"S1": [
     ("core", "tests green", check_pytest),
     ("core", "3 brokers, nothing under-replicated", check_brokers),
@@ -269,6 +367,25 @@ CHECKS = {"S1": [
     ("ml", "baseline rows in evaluation_runs", check_baseline_rows),
     ("agents", "agent runs in agent_events", check_agent_events),
     ("agents", "agents' v2 advisory saved", check_agent_v2),
+], "S2": [
+    ("core", "rain rows in catchment_rain", check_rain_rows),
+    ("core", "rain rises before stage in the replay", check_rain_leads_stage),
+    ("core", "Map rain layer has data", check_rain_api),
+], "S3": [
+    ("core", "forecasts carry the active model, p_minor at 3 h", check_forecasts_carry_model),
+    ("core", "trained model alerts before the minor crossing", check_trained_alert_before_crossing),
+    ("core", "Metrics detection panel", check_detection_panel),
+    ("ml", "model card", check_model_card),
+], "S4": [
+    ("core", "LLM down drill passed", check_llm_drill),
+    ("core", "Agents tab and Metrics agent panel", check_agents_tab_and_panel),
+    ("agents", "agent runs recorded", check_agent_events),
+    ("agents", "MCP server", check_mcp_server),
+], "S5": [
+    ("core", "every fault drill passed, newest run", check_all_drills),
+    ("core", "throughput run recorded", check_throughput),
+    ("core", "demo checklist and offline fallbacks", check_demo_fallbacks),
+    ("core", "tests green", check_pytest),
 ]}
 
 

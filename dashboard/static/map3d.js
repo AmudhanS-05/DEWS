@@ -6,6 +6,7 @@
    Gauges  = pillars: height is the newest stage against THAT gauge's own official NWS major level, with ticks at the official
              action/minor/moderate/major stages. A radar sweep pings gauges, ground rings pulse at minor flood or above,
              a dashed red beam marks an open alert (only alerts of the mode on screen: live or SIMULATION replay).
+   Rain    = a disc of the real 10 km circle round each gauge, stronger with more rain in the last 3 h (MRMS mean depth, /api/rain).
    Data    = /api/regions, /api/gauges (stage, status, official levels), /api/advisories (alerts). No library: own perspective camera. */
 (function(){
 "use strict";
@@ -18,7 +19,7 @@ const FAR_KM=1400, DIST_MIN=12, DIST_MAX=36000;
 let TH=null;
 function readTheme(){
   const cs=getComputedStyle(document.documentElement), v=n=>cs.getPropertyValue(n).trim();
-  TH={dark:document.documentElement.dataset.theme!=="light",ink:v("--ink"),muted:v("--muted"),accent:v("--accent"),sky0:v("--sky0"),sky1:v("--sky1"),
+  TH={dark:document.documentElement.dataset.theme!=="light",ink:v("--ink"),muted:v("--muted"),accent:v("--accent"),rain:v("--rain"),sky0:v("--sky0"),sky1:v("--sky1"),
       sc:Object.fromEntries(["normal","action","minor","moderate","major","stale","nodata"].map(k=>[k,v("--s-"+k)]))};
 }
 readTheme();
@@ -31,7 +32,8 @@ let G=[],mode="live",selected=null,hover=null,alerts={},hits=[],geo=null,note=""
 let cacheKey="",texVer=0,camFly=null,lastFar=null;
 let scrub=null, bundledBase=false;
 let view="globe",regions=[],selRegion=null,initGlobe=false,fadeCv=null,fadeA=0,flying=false,lastHud=0,gInfo=null,land=0,landTo=0,landDur=1.9;
-const L={gauges:true,alerts:true,sweep:true,rings:true,grid:true,labels:true,regions:true};   // data layers (panel on the left)
+let rain={};
+const L={gauges:true,alerts:true,rain:true,sweep:true,rings:true,grid:true,labels:true,regions:true};   // data layers (panel on the left)
 const F=()=>Math.max(W,H)*.9, isFar=()=>cam.dist>FAR_KM;
 
 /* ---------------------------------------------------------------- geometry: one plane for the whole world (equirectangular, true scale near the first region) */
@@ -264,6 +266,14 @@ function drawGauge(g,t,sw){
   if(L.labels&&(g===selected||g===hover||sev>=3||cam.dist<160)){ ctx.font="11px Inter,system-ui,sans-serif"; ctx.textAlign="left"; ctx.lineWidth=3; ctx.strokeStyle=TH.dark?"rgba(4,8,18,.85)":"rgba(255,255,255,.9)"; ctx.strokeText(g.lid,top[0]+or*2.3,top[1]+4); ctx.fillStyle=TH.ink; ctx.fillText(g.lid,top[0]+or*2.3,top[1]+4); }
   hits.push({g,x:top[0],y:top[1],r:Math.max(12,or*2.2)});
 }
+function drawRain(){                                // the circle the mean depth was measured over, never a radar picture
+  const N=40;
+  for(const g of G){ const mm=g.rain_3h; if(mm==null||mm<=0) continue;
+    ctx.fillStyle=rgba(TH.rain,clamp(.14+mm/50*.6,.14,.74)); ctx.beginPath(); let pen=false;
+    for(let i=0;i<=N;i++){ const x=g.x+Math.cos(i/N*TAU)*10,z=g.z+Math.sin(i/N*TAU)*10,p=P(x,groundY(x,z),z); if(!p){ pen=false; continue; } pen?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]); pen=true; }
+    ctx.fill();
+    if(L.labels&&cam.dist<450){ const p=P(g.x,groundY(g.x,g.z),g.z-10); if(p) labelAt(ctx,mm.toFixed(mm<10?1:0)+" mm",p[0],p[1]-3); } }
+}
 function drawRegions(t){
   const far=isFar();
   for(const r of regions){ if(!far&&!r.planned) continue; const p=P((r.lon-geo.lon0)*geo.k,0,(geo.lat0-r.lat)*110.57); if(!p) continue;
@@ -300,6 +310,7 @@ function frame(now){
   if(key!==cacheKey){ sctx.setTransform(dpr,0,0,dpr,0,0); drawScene(sctx,lod); cacheKey=key; clearTimeout(patchT); patchT=setTimeout(()=>updatePatch(false),350); }
   ctx.setTransform(1,0,0,1,0,0); ctx.drawImage(scene,0,0); ctx.setTransform(dpr,0,0,dpr,0,0);
   hits=[]; const t=now/1000, sw=L.sweep&&!far?sweepAndPings(t):{ang:0,cx:0,cz:0,R:0};
+  if(L.rain&&!far) drawRain();
   if(L.gauges&&!far) for(const o of G.map(g=>({g,z:(P(g.x,0,g.z)||[0,0,1e9])[2]})).sort((a,b)=>b.z-a.z)) drawGauge(o.g,t,sw);
   drawRegions(t); drawHud(); updateHud(now); setViewButtons(); syncNeedle(); applyFade(dt);
 }
@@ -329,9 +340,14 @@ async function pollGauges(){
     const gs=[]; all.forEach((d,i)=>d.gauges.forEach(g=>{ if(g.lat!=null){ g.region_id=live[i].id; gs.push(g); } }));
     if(geo) gs.forEach(place);
     G=gs; if(selected) selected=G.find(g=>g.site_no===selected.site_no)||null;
+    applyRain();
     if(scrub) applyScrub();
     if(!showRegionList()){ drawList(); drawCard(); }
   }catch(e){ note="cannot reach the console server"; $("map-note").textContent=note; }
+}
+function applyRain(){ let n=0; for(const g of G){ const r=rain[g.site_no]; g.rain_3h=r?r.rain_3h:null; g.rain_end=r?r.hour_end:null; if(g.rain_3h>0) n++; } $("n-rain").textContent=n||""; }
+async function pollRain(){
+  try{ const d=await (await fetch("/api/rain?mode="+mode)).json(); if(!d.ok) return; rain=d.rain; if(!scrub) applyRain(); }catch(e){}
 }
 async function pollAlerts(){
   if(scrub) return;
@@ -377,10 +393,12 @@ function drawCard(){
   card.innerHTML=`<div class="sub">${g.lid} · ${g.site_no}${g.county?" · "+g.county+" Co.":""}</div><div class="nm">${g.name}</div>`+
     `<div class="val" style="color:${TH.sc[g.status]}">${g.stage==null?"—":g.stage.toFixed(2)}<small> ft</small></div>`+
     `<div class="sub" style="color:${TH.sc[g.status]}">${g.status.toUpperCase()}${g.provisional?" · provisional":""}${g.age_s!=null?" · "+ageTxt(g.age_s):""}</div>`+
+    (g.rain_3h!=null?`<div class="sub" style="margin-top:4px">Rain, 3 h to ${utcShort(g.rain_end)}: ${g.rain_3h.toFixed(1)} mm (10 km circle)</div>`:"")+
     `<div class="lvl">${g.stage!=null?`<i style="left:calc(${pct(g.stage)}% - 1px)"></i>`:""}${ticks}</div><div style="height:12px"></div>`+
     (alerts[g.site_no]?`<div class="pill" style="color:${TH.sc.moderate};border-color:${TH.sc.moderate}">open alert: ${alerts[g.site_no]}</div>${scrub?"":'<div style="margin-top:8px"><button class="btn" id="m-review">Review advisory</button></div>'}`:"");
   const rv=card.querySelector("#m-review"); if(rv) rv.onclick=()=>showTab("data");
 }
+const utcShort=t=>t?new Date(t*1000).toISOString().slice(11,16)+" UTC":"";
 function select(g){ selected=g; cacheKey=""; drawList(); drawCard(); }
 function selectRegion(r){ selRegion=r; $("m-region").value=r.id; if(view==="globe") Globe.fly(r.lon,r.lat*.8,Globe.st.zoom,1000); }
 
@@ -484,7 +502,7 @@ $("m-auto").onclick=()=>{ if(view==="globe") Globe.st.auto=!Globe.st.auto; else 
 $("v-globe").onclick=toGlobe;
 $("v-flat").onclick=globeToFlat;
 $("m-tilt").onclick=()=>{ const tilted=cam.pitch<=1.45; cam.pitch=tilted?FLAT:TILT; if(tilted){ cam.yaw=0; cam.auto=false; syncAuto(); } cacheKey=""; };
-const switchMode=m=>{ closeScrub(); mode=m; setSeg(m==="live"); G=[]; alerts={}; selected=null; return pollRegions().then(()=>Promise.all([pollGauges(),pollAlerts()])); };
+const switchMode=m=>{ closeScrub(); mode=m; setSeg(m==="live"); G=[]; alerts={}; rain={}; selected=null; return pollRegions().then(()=>Promise.all([pollRain(),pollAlerts()])).then(pollGauges); };
 $("m-live").onclick=()=>switchMode("live");
 $("m-replay").onclick=()=>switchMode("replay");
 $("m-terrain").onclick=()=>{ terrain=!terrain; $("m-terrain").setAttribute("aria-pressed",terrain); cacheKey=""; note=""; $("map-note").textContent=""; if(terrain){ if(baseTex) loadDem(); else updatePatch(true); noteTerrain(); if(cam.pitch>1.45){ cam.pitch=TILT; } } else updatePatch(true); };
@@ -498,7 +516,7 @@ const utc=t=>new Date(t*1000).toISOString().slice(0,16).replace("T"," ");
 function applyScrub(){
   const s=scrub; if(!s) return;
   for(const g of G){ const a=s.series[g.site_no]; let r=null; if(a) for(const x of a){ if(x[0]>s.t) break; r=x; }
-    g.stage=r?r[1]:null; g.status=r?catOf(r[1],g.cats):"nodata"; g.age_s=null; g.provisional=false; }
+    g.stage=r?r[1]:null; g.status=r?catOf(r[1],g.cats):"nodata"; g.age_s=null; g.provisional=false; g.rain_3h=r&&r[3]!=null?r[3]:null; g.rain_end=g.rain_3h!=null?r[0]+3600:null; }
   for(const r of regions){ if(r.planned) continue; const gs=G.filter(g=>g.region_id===r.id); r.n_reporting=gs.filter(g=>g.stage!=null).length; r.n_flooding=gs.filter(g=>SEV[g.status]>=3).length;
     r.worst=gs.reduce((w,g)=>SEV[g.status]>SEV[w]?g.status:w,"normal"); }
   const on={}; for(const a of s.alerts) if(a.t<=s.t&&a.status!=="retracted") on[a.site_no]=a.category; alerts=on;
@@ -515,7 +533,7 @@ async function loadScrub(start,end){
   applyScrub();
 }
 function openScrub(){ $("m-scrub").hidden=false; $("m-time").setAttribute("aria-pressed",true); loadScrub().then(()=>{ if(scrub&&selRegion&&selRegion.n_gauges) enterRegion(selRegion); }); }
-function closeScrub(){ if(!scrub&&$("m-scrub").hidden) return; stopPlay(); scrub=null; $("m-scrub").hidden=true; $("m-time").setAttribute("aria-pressed",false); selected=null; pollGauges(); pollAlerts(); }
+function closeScrub(){ if(!scrub&&$("m-scrub").hidden) return; stopPlay(); scrub=null; $("m-scrub").hidden=true; $("m-time").setAttribute("aria-pressed",false); selected=null; pollGauges(); pollAlerts(); pollRain(); }
 $("m-time").onclick=()=>{ scrub||!$("m-scrub").hidden?closeScrub():openScrub(); };
 $("sc-close").onclick=closeScrub;
 $("sc-range").oninput=e=>{ if(!scrub) return; stopPlay(); scrub.t=+e.target.value; applyScrub(); };
@@ -526,8 +544,8 @@ document.addEventListener("themechange",()=>{ readTheme(); cacheKey=""; if(geo){
 
 window.Map3D={
   show(){ if(running) return; running=true; resize(); lastT=performance.now(); raf=requestAnimationFrame(frame);
-    pollRegions().then(()=>{ pollGauges(); pollAlerts(); });
-    pollA=setInterval(()=>{ pollRegions(); pollGauges(); },4000); pollB=setInterval(pollAlerts,6000); },
+    pollRegions().then(()=>{ pollRain().then(pollGauges); pollAlerts(); });
+    pollA=setInterval(()=>{ pollRegions(); pollGauges(); },4000); pollB=setInterval(()=>{ pollAlerts(); pollRain(); },6000); },
   hide(){ running=false; cancelAnimationFrame(raf); clearInterval(pollA); clearInterval(pollB); },
   toLanding(instant){                                         // same canvas: the Earth grows and sinks behind the landing page, facing the terminator whatever the hour
     closeScrub(); selected=null; hover=null; tip.hidden=true; camFly=null; clearTimeout(patchT); flying=false; landTo=1;
