@@ -147,7 +147,8 @@ flood end to end: [Run a demo](docs/guide/03-run-a-demo.md).
 
 Team and design documents: `docs/SLICES.md` (plan), `docs/CONTRACTS.md` (interfaces between workstreams),
 `docs/BUILD_PHASES.md` (decisions), `docs/RUNBOOK.md` (open steps), `docs/DEMO.md` (demo script), `FAQ.md` (why things
-are the way they are). How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md).
+are the way they are). Paper draft: [`docs/paper/`](docs/paper/README.md); slide and demo outlines:
+[`docs/slides_outline.md`](docs/slides_outline.md). How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Data sources and credit
 
