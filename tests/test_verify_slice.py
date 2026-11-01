@@ -66,5 +66,28 @@ def test_a_check_that_raises_is_a_failure():
     assert not ok and "connection refused" in detail
 
 
-def test_later_slices_have_no_checks_yet():
-    assert set(vs.CHECKS) == {"S1"}
+def test_s2_added_and_s1_checks_unchanged():
+    assert set(vs.CHECKS) == {"S1", "S2"}
+    assert len(vs.CHECKS["S1"]) == 19 and vs.CHECKS["S1"][0][1] == "tests green"
+    assert vs.CHECKS["S1"][-1][2] is vs.check_agent_v2
+    assert all(part == "core" for part, _, _ in vs.CHECKS["S2"]) and len(vs.MANUAL["S2"]) == 2
+
+
+W = ["2023-10-26T%02d:00:00+00:00" % h for h in range(24)]
+
+
+def test_rain_peak_before_crossing_passes_and_reports_the_lead():
+    ws = [(W[h], 2.0 if h < 15 else 8.0, {12: 11.1, 14: 7.7, 18: 8.7}.get(h, 0.2)) for h in range(20)]
+    ok, txt = vs.rain_before_stage(ws, 7.0)
+    assert ok and "+3 h before" in txt and W[12] in txt and W[15] in txt
+
+
+def test_rain_peak_after_crossing_or_no_rain_fails():
+    ws = [(W[h], 2.0 if h < 10 else 8.0, {12: 11.1}.get(h, 0.2)) for h in range(20)]
+    assert not vs.rain_before_stage(ws, 7.0)[0]                       # wettest hour came after the rise
+    ws = [(W[h], 2.0 if h < 10 else 8.0, None) for h in range(20)]
+    ok, txt = vs.rain_before_stage(ws, 7.0)
+    assert not ok and "no window with rain_1h" in txt
+    assert vs.rain_before_stage([(W[0], 2.0, 5.0)], 7.0) == (False, "stage never reached 7 ft")
+    ws = [(W[h], 2.0 if h < 15 else 8.0, 0.0) for h in range(20)]
+    assert not vs.rain_before_stage(ws, 7.0)[0]                       # a dry event never passes

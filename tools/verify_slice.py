@@ -3,6 +3,7 @@
     python -m tools.verify_slice S1                  # all workstreams
     python -m tools.verify_slice S1 --part core      # only your part (core | ml | agents)
     python -m tools.verify_slice S1 --skip-tests     # without the pytest run
+    python -m tools.verify_slice S2 --part core      # rain: AHOT2 2023-10-26 replay with replay.rain (RUNBOOK S2 rows)
 
 Every check looks at the real thing: Kafka metadata, consumer groups, PostgreSQL rows, the console, the files. Each
 result is PASS or FAIL with what was measured. Steps only a person can confirm are listed as MANUAL: they never count
@@ -26,13 +27,17 @@ ROOT = Path(__file__).resolve().parent.parent
 PY = sys.executable
 DRWT2 = "08158700"
 FLOOD = ("2019-05-01", "2019-06-01")                     # the May 2019 Onion Creek replay, S1's story
+AHOT2 = "08156800"                                       # S2's story: Shoal Creek, minor crossing 2023-10-26 15:25Z
+RAIN_EVENT = ("2023-10-25T00:00:00+00:00", "2023-10-27T00:00:00+00:00")   # replay window (MRMS archive from 2020-10-14)
 SCENARIOS = ("faust", "broker", "sink", "postgres", "notifier", "producer")
 GROUPS = {config.GROUP_WINDOWING: 3, config.GROUP_SINK: 1, config.GROUP_FORECASTER: 1, config.GROUP_NOTIFIER: 1}
 TOPICS = {config.TOPIC_GAUGE, config.TOPIC_RAIN, config.TOPIC_REPLAY_GAUGE, config.TOPIC_REPLAY_RAIN, config.TOPIC_AGG,
           config.TOPIC_FORECASTS, config.TOPIC_ALERTS, config.TOPIC_APPROVED, config.TOPIC_DLQ}
 MANUAL = {"S1": ["Power BI page 1: a new replayed reading appears within one page refresh (runbook step 12)",
                  "the S1 scene in docs/DEMO.md runs twice in a row",
-                 "the approved email reached a person's inbox (delivered_at only says SMTP accepted it)"]}
+                 "the approved email reached a person's inbox (delivered_at only says SMTP accepted it)"],
+          "S2": ["Map: rain rings around AHOT2 grow before its stage rises (C2.3)",
+                 "Power BI page 2 shows rain next to stage for the AHOT2 replay (C2.4)"]}
 
 
 # ---- pure logic (tests/test_verify_slice.py) ----------------------------------------------------------------------
@@ -94,6 +99,27 @@ def alert_before_crossing(windows: list[tuple[str, float | None]], alert_window:
     if crossing is None:
         return True, f"alert {alert_window}, stage never reached {level:g} ft"
     return alert_window < crossing, f"alert window {alert_window}, first stage at {level:g} ft in window {crossing}"
+
+
+def rain_before_stage(windows: list[tuple[str, float | None, float | None]], level: float,
+                      before_h: float = 24.0, after_h: float = 6.0) -> tuple[bool, str]:
+    """S2: windows = (window_start ISO, stage_max, rain_1h) ascending. The first window whose stage reaches the official
+    `level` is the crossing; the wettest hour (largest rain_1h) between before_h before and after_h after it must lie in
+    an EARLIER window. No rain threshold is invented: only the order of the peak rain and the crossing is checked."""
+    from datetime import datetime
+    cross = next((w for w, st, _ in windows if st is not None and st >= level), None)
+    if cross is None:
+        return False, f"stage never reached {level:g} ft"
+    c = datetime.fromisoformat(cross)
+    near = [(w, r) for w, _, r in windows if r is not None
+            and -before_h <= (datetime.fromisoformat(w) - c).total_seconds() / 3600 <= after_h]
+    if not near:
+        return False, f"crossing window {cross}, but no window with rain_1h within -{before_h:g}/+{after_h:g} h"
+    peak_w, peak_r = max(near, key=lambda x: x[1])
+    lead = (c - datetime.fromisoformat(peak_w)).total_seconds() / 3600
+    ok = peak_r > 0 and lead > 0
+    return ok, (f"wettest hour {peak_r:.2f} mm in window {peak_w}, first stage at {level:g} ft in window {cross}: "
+                f"rain peak {lead:+.0f} h before the crossing ({len(near)} windows with rain)")
 
 
 def verdict(results: list[tuple[str, str, bool, str]], manual: int) -> tuple[bool, str]:
@@ -249,6 +275,55 @@ def check_agent_v2():
     return n > 0, f"{n} v2+ advisories from the agents"
 
 
+def _rain_windows(site=AHOT2, span=RAIN_EVENT):
+    return [(w.isoformat(), st, r) for w, st, r in _query(
+        "SELECT window_start, stage_max, rain_1h FROM windowed_aggregates WHERE site_no = %s AND mode = 'SIMULATION' "
+        "AND window_start >= %s AND window_start < %s ORDER BY 1", (site, *span))]
+
+
+def check_rain_topic_replay():
+    from tools.check_sink import read_topic
+    from common.timeutil import to_epoch
+    t0, t1 = to_epoch(RAIN_EVENT[0]), to_epoch(RAIN_EVENT[1])
+    recs = [m for m in read_topic(config.TOPIC_REPLAY_RAIN) if m.get("type") == "rain" and m.get("site_no") == AHOT2
+            and t0 < float(m["hour_end_ts"]) <= t1]
+    hours = {int(m["hour_end_ts"]) for m in recs}
+    live = sum(1 for m in recs if m.get("mode") != "SIMULATION")
+    return len(hours) > 0 and live == 0, (f"replay.rain: {len(recs)} AHOT2 records, {len(hours)} distinct hours of "
+                                          f"{int((t1 - t0) // 3600)} in the replay window, {live} not SIMULATION")
+
+
+def check_rain_rows():
+    n, nn, live = _query("SELECT count(*), count(rain_mm), count(*) FILTER (WHERE mode <> 'SIMULATION') FROM catchment_rain "
+                         "WHERE site_no = %s AND window_end > %s AND window_end <= %s AND mode = 'SIMULATION'", (AHOT2, *RAIN_EVENT))[0]
+    return n > 0 and live == 0, f"{n} AHOT2 rain hours in catchment_rain ({nn} with radar coverage)"
+
+
+def check_windows_carry_rain():
+    """Windows carry rain, and each window's rain_1h equals catchment_rain for the hour ending at the window end."""
+    n, with_rain, mismatch = _query(
+        """SELECT count(*), count(w.rain_1h), count(*) FILTER (WHERE w.rain_1h IS NOT NULL AND c.rain_mm IS NOT NULL
+                  AND abs(w.rain_1h - c.rain_mm) > 0.001)
+           FROM windowed_aggregates w LEFT JOIN catchment_rain c ON c.site_no = w.site_no AND c.mode = w.mode
+                AND c.window_end = w.window_end AND c.accum_hours = 1
+           WHERE w.site_no = %s AND w.mode = 'SIMULATION' AND w.window_start >= %s AND w.window_start < %s""",
+        (AHOT2, *RAIN_EVENT))[0]
+    return with_rain > 0 and mismatch == 0, f"{n} AHOT2 windows, {with_rain} with rain_1h, {mismatch} differ from catchment_rain"
+
+
+def check_rain_before_stage():
+    from streams.forecaster import load_gauges
+    minor = load_gauges()[AHOT2]["levels"]["minor"]
+    return rain_before_stage(_rain_windows(), minor)
+
+
+def check_no_duplicate_windows_ahot2():
+    r = subprocess.run([PY, "-m", "tools.check_windows", "--mode", "SIMULATION", "--site", AHOT2], cwd=ROOT,
+                       capture_output=True, text=True, errors="replace")
+    last = (r.stdout.strip().splitlines() or ["no output"])[-1]
+    return last.startswith("PASS"), last
+
+
 CHECKS = {"S1": [
     ("core", "tests green", check_pytest),
     ("core", "3 brokers, nothing under-replicated", check_brokers),
@@ -269,6 +344,14 @@ CHECKS = {"S1": [
     ("ml", "baseline rows in evaluation_runs", check_baseline_rows),
     ("agents", "agent runs in agent_events", check_agent_events),
     ("agents", "agents' v2 advisory saved", check_agent_v2),
+], "S2": [
+    ("core", "tests green", check_pytest),
+    ("core", "replay.rain has the AHOT2 replay hours", check_rain_topic_replay),
+    ("core", "rain hours in catchment_rain", check_rain_rows),
+    ("core", "windows carry rain (= catchment_rain)", check_windows_carry_rain),
+    ("core", "rain peaks before the stage crosses minor (AHOT2 2023-10-26)", check_rain_before_stage),
+    ("core", "topics match PostgreSQL (incl. catchment_rain)", check_sink_matches),
+    ("core", "no window emitted twice (AHOT2)", check_no_duplicate_windows_ahot2),
 ]}
 
 
