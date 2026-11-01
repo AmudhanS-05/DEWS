@@ -385,6 +385,10 @@ def _write_md(rows, sums, cr) -> None:
               f"| UNCERTAIN where the signals disagree | {a['uncertain_texts']} of {a['disagreements']} | "
               f"{b['uncertain_texts']} of {a['disagreements']} |",
               f"| checks failed (any text) | {', '.join(a['failed_checks']) or 'none'} | {', '.join(b['failed_checks']) or 'none'} |",
+              "", "Prompt correction (1 Nov): a first single-agent run told it to give the rise-rate lead time, "
+              "while the checks require 'within N h (model forecast)' when the rise rate is slower than the "
+              "forecast; it passed 1/14 (lead_time failed 12). That run is kept in runs_single_v1.jsonl and not "
+              "used here; the table above is the re-run with the same lead-time rule as the multi-agent writer.",
               "", "A single-agent text that fails a check would go to the officer only as an unchecked draft; in the "
               "multi-agent graph a failing draft is revised or template v1 stays.", ""]
         single_fail = {}
