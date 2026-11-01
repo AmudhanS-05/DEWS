@@ -49,6 +49,16 @@ table agent_run_summary
 		summarizeBy: none
 		sourceColumn: last_verdict
 
+	column tool_calls
+		dataType: int64
+		formatString: 0
+		sourceProviderType: bigint
+		lineageTag: 3732f902-a020-43ce-a4a6-289a17e0dc07
+		summarizeBy: sum
+		sourceColumn: tool_calls
+
+		annotation SummarizationSetBy = Automatic
+
 	partition agent_run_summary = m
 		mode: directQuery
 		source =
@@ -57,3 +67,4 @@ table agent_run_summary
 					Data = Source{[Schema="public",Item="agent_run_summary"]}[Data]
 				in
 					Data
+

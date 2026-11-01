@@ -38,22 +38,29 @@ One person narrates, one drives the console and terminals, one handles questions
 **Scene 0 (available now): live pipeline and map.** Console → Pipeline flow: USGS live green, `gauge.usgs`
 receiving. Map → 38 gauges, all below action stage (it is dry). Say: "Every dot is a real gauge in Texas, coloured
 by its official NWS level. Readings arrive every 5 to 15 minutes but the feed sends them about hourly." Stop the live
-producer: after the stale threshold the node turns red and the change is logged. Without internet the map falls back
+producer (Control → Processes): after the stale threshold the node turns red and the change is logged. Without internet the map falls back
 to the bundled world image by itself (gauges and alerts keep working; sharper tiles and terrain need the network).
 
-**Main scene: AHOT2 and LLAT2, 25 to 27 October 2023, with radar rain.** Control tab (or by hand):
-```powershell
-python -m tools.reset_replay --site AHOT2,LLAT2 --start 2023-10-25 --end 2023-10-27 --yes
-python -m producers.mrms_qpe_producer --replay --start 2023-10-25 --end 2023-10-27 --speed 1800
-python -m producers.replay_producer --site AHOT2 --start 2023-10-25 --end 2023-10-27 --speed 1800
-python -m producers.replay_producer --site LLAT2 --start 2023-10-25 --end 2023-10-27 --speed 1800
-```
-(each in its own window. Start rain first and the gauges 15 s later: a window takes only the rain already in when it closes, and at this speed one hour lasts 2 s. The Control tab does this.) About 2.5 minutes of replay. What appears, measured on two runs in a row: Pipeline flow goes green through
-replay, Faust, forecaster and sink; on the Map (Replay) the rain discs grow first (LLAT2's first rain is about 30 hours before its crossing); `s3_v0` raises a minor
+**The demo path is the Control tab.** After `scripts\start_demo.ps1`, every step has a button:
+
+| Step | Button |
+|---|---|
+| Clear a flood so it can run again (1.5 to 5 minutes, before the audience arrives) | Control → flood → Reset |
+| Replay a flood: rain first, gauges 15 s later | Control → flood → Replay. It refuses dates already replayed since the last reset |
+| Agents check and rewrite the drafts | Control → flood → Run agents |
+| Approve, edit or reject a draft (sends the email) | Readings & alerts → Approve, then click again |
+| Stop and restart a component | Control → Processes |
+| Fault drill | Control → Fault drills |
+| Check the slice | Control → Verify a slice |
+
+Never start the gauge replay by hand on dates already replayed: Faust's position is past them and the readings go to the dead-letter topic.
+
+**Main scene: AHOT2 and LLAT2, 25 to 27 October 2023, with radar rain.** Control → first flood → Replay; about 3 minutes.
+What appears, measured on two runs in a row: Pipeline flow goes green through replay, Faust, forecaster and sink; on the Map (Replay) the rain discs grow first (LLAT2's first rain is about 30 hours before its crossing); `s3_v0` raises a minor
 alert with rule `alert_by_model` for LLAT2 in the 07:00 UTC window of 26 Oct and for AHOT2 in the 12:00 UTC window, each with a template draft in Readings & alerts.
-The first reading at minor came at 10:20 UTC (LLAT2) and 15:25 UTC (AHOT2). Then the Agents tab, then approve a draft. Say: "a forecast of crossing an official
-category, in SIMULATION; about 2.3 to 2.4 hours gross and 1.3 to 1.4 hours net of the one-hour feed delay". LLAT2 also raises a second alert on 27 Oct that is withdrawn:
-show it, it is a real false alarm. Use the Map's clock to step back through the rise. Fallback: the scene's rows stay until the next reset.
+The first reading at minor came at 10:20 UTC (LLAT2) and 15:25 UTC (AHOT2). Then Run agents and the Agents tab, then approve a draft. Say: "a forecast of crossing an official
+category, in SIMULATION; about 2.3 to 2.4 hours gross and 1.3 to 1.4 hours net of the one-hour feed delay". Where the model's probability is above its threshold but its own stage forecast stays below minor, the draft and email say UNCERTAIN: read that out.
+LLAT2 also raises a second alert on 27 Oct that is withdrawn: show it, it is a real false alarm. Use the Map's clock to step back through the rise.
 
 **S1 check and the honest limit: DRWT2, 2 to 6 May 2019 (no radar rain, the archive starts in 2020).** Same pipeline, no alert: the river went from 3.05 ft to 8.16 ft
 between one hourly window and the next, and the model's probability in the last window below minor was 0.546, under its threshold of 0.827. Say: "this one was too fast to

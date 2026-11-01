@@ -1,0 +1,97 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "f151668bbe2181947db7",
+  "position": {
+    "x": 517.54712892741054,
+    "y": 0,
+    "z": 5000,
+    "height": 277.91115926327194,
+    "width": 718.907908992416,
+    "tabOrder": 5000
+  },
+  "visual": {
+    "visualType": "lineChart",
+    "query": {
+      "queryState": {
+        "Category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "feed_staleness"
+                    }
+                  },
+                  "Property": "reading_time"
+                }
+              },
+              "queryRef": "feed_staleness.reading_time",
+              "nativeQueryRef": "reading_time",
+              "active": true
+            }
+          ]
+        },
+        "Series": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "feed_staleness"
+                    }
+                  },
+                  "Property": "site_no"
+                }
+              },
+              "queryRef": "feed_staleness.site_no",
+              "nativeQueryRef": "site_no"
+            }
+          ]
+        },
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Aggregation": {
+                  "Expression": {
+                    "Column": {
+                      "Expression": {
+                        "SourceRef": {
+                          "Entity": "feed_staleness"
+                        }
+                      },
+                      "Property": "staleness_min"
+                    }
+                  },
+                  "Function": 5
+                }
+              },
+              "queryRef": "CountNonNull(feed_staleness.staleness_min)",
+              "nativeQueryRef": "Count of staleness_min"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Column": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "feed_staleness"
+                  }
+                },
+                "Property": "reading_time"
+              }
+            },
+            "direction": "Ascending"
+          }
+        ],
+        "isDefaultSort": true
+      }
+    }
+  }
+}

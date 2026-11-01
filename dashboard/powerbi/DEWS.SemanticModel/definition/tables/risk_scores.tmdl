@@ -81,3 +81,4 @@ table risk_scores
 					Data = Source{[Schema="public",Item="risk_scores"]}[Data]
 				in
 					Data
+

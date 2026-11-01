@@ -17,6 +17,7 @@ What it does, in order:
      rain, traces, alerts raised in the range and their advisories and agent records. Those alert, advisory and agent rows are first saved to
      gate_output/reset_replay_<time>.jsonl. evaluation_runs and LIVE rows are never touched;
   5. starts the workers and the forecaster again and waits for Faust to be ready.
+An email really sent stays on record: its advisory is copied to advisories_delivered before the delete.
 The Kafka topics keep their history. tools.check_windows and tools.check_sink read state/replay_resets.json and leave out replay
 records older than the reset.
 """
@@ -100,6 +101,8 @@ def delete_rows(conn, site: str, span: dict, backup=None) -> dict[str, int]:
                 cur.execute(f"SELECT row_to_json(t) FROM {table} t WHERE alert_id IN ({ALERTS_IN_RANGE})", args)
                 for (row,) in cur.fetchall():
                     backup.write(json.dumps({"table": table, "row": row}) + "\n")
+        cur.execute(f"INSERT INTO advisories_delivered SELECT * FROM advisories WHERE delivered_at IS NOT NULL AND alert_id IN ({ALERTS_IN_RANGE}) "
+                    "ON CONFLICT (advisory_id, delivered_at) DO NOTHING", args)
         for table, where in DELETES:
             cur.execute(f"DELETE FROM {table} WHERE {where}", args)
             out[table] = cur.rowcount

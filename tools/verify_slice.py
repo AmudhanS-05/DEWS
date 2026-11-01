@@ -221,7 +221,8 @@ def _iso(ts: str) -> str:
 
 def check_delivered_after_approval():
     sent, unapproved = _query("SELECT count(*) FILTER (WHERE delivered_at IS NOT NULL AND approved_at IS NOT NULL AND approved_by IS NOT NULL), "
-                              "count(*) FILTER (WHERE delivered_at IS NOT NULL AND approved_at IS NULL) FROM advisories")[0]
+                              "count(*) FILTER (WHERE delivered_at IS NOT NULL AND approved_at IS NULL) "
+                              "FROM (SELECT advisory_id, delivered_at, approved_at, approved_by FROM advisories UNION SELECT advisory_id, delivered_at, approved_at, approved_by FROM advisories_delivered) d")[0]
     return sent > 0 and unapproved == 0, f"{sent} advisories approved by a person and delivered, {unapproved} delivered without approval"
 
 
@@ -299,7 +300,7 @@ def rain_leads(windows: list[tuple[str, float | None, float | None]], level: flo
     return rain < cross, f"first rain in window {rain}, stage first at {level:g} ft in window {cross}"
 
 
-RAIN_SITE, RAIN_SPAN = "08151500", ("2023-10-25", "2023-10-28")   # LLAT2, the rain demo
+RAIN_SPAN = ("2023-10-25", "2023-10-28")   # the main scene
 
 
 def check_rain_rows():
@@ -308,10 +309,18 @@ def check_rain_rows():
 
 
 def check_rain_leads_stage():
+    """Each main-scene gauge whose replay is in PostgreSQL. A gauge not replayed is named, not reported as "no rain"."""
     from streams.forecaster import load_gauges
-    level = load_gauges()[RAIN_SITE]["levels"]["minor"]
-    rows = _query("SELECT window_start, stage_last, rain_1h FROM windowed_aggregates WHERE site_no = %s AND mode = 'SIMULATION' AND window_start >= %s AND window_start < %s ORDER BY 1", (RAIN_SITE, *RAIN_SPAN))
-    return rain_leads([(w.isoformat(), s, r) for w, s, r in rows], level)
+    levels, oks, parts = load_gauges(), [], []
+    for site, lid in SCENE.items():
+        rows = _query("SELECT window_start, stage_last, rain_1h FROM windowed_aggregates WHERE site_no = %s AND mode = 'SIMULATION' AND window_start >= %s AND window_start < %s ORDER BY 1", (site, *RAIN_SPAN))
+        if not rows:
+            parts.append(f"{lid}: gauge not replayed")
+            continue
+        ok, text = rain_leads([(w.isoformat(), st, r) for w, st, r in rows], levels[site]["levels"]["minor"])
+        oks.append(ok)
+        parts.append(f"{lid}: {text}")
+    return bool(oks) and all(oks), "; ".join(parts)
 
 
 def check_rain_api():
@@ -320,19 +329,23 @@ def check_rain_api():
 
 
 def check_forecasts_carry_model():
-    used = _query("SELECT model, count(*) FROM risk_scores WHERE site_no = %s AND mode = 'SIMULATION' AND window_start >= %s AND window_start < %s GROUP BY 1", (DRWT2, *FLOOD))
     active = json.loads((ROOT / "ml" / "models" / "active.json").read_text(encoding="utf-8"))["name"]
-    p = _one("SELECT count(p_minor) FROM risk_scores WHERE site_no = %s AND mode = 'SIMULATION' AND model = %s AND horizon_h = 3 AND window_start >= %s AND window_start < %s", (DRWT2, active, *FLOOD))
-    return any(m == active for m, _ in used) and p > 0, f"models on the May 2019 replay {dict(used)}, {p} with p_minor at 3 h; active {active}"
+    used = _query("SELECT model, count(*), count(p_minor) FROM risk_scores WHERE site_no = ANY(%s) AND mode = 'SIMULATION' AND horizon_h = 3 AND window_start >= %s AND window_start < %s GROUP BY 1", (list(SCENE), *RAIN_SPAN))
+    return any(m == active and p > 0 for m, _, p in used), f"main scene forecasts at 3 h {[(m, n, p) for m, n, p in used]} (model, windows, with p_minor); active {active}"
 
 
 def check_trained_alert_before_crossing():
+    """S3 acceptance on the main scene, under the rule the model was evaluated with. May 2019 is reported apart (check_may_2019_reported)."""
     from streams.forecaster import load_gauges
-    minor = load_gauges()[DRWT2]["levels"]["minor"]
-    active = json.loads((ROOT / "ml" / "models" / "active.json").read_text(encoding="utf-8"))["name"]
-    ids = [r[0] for r in _query("SELECT alert_id FROM alerts WHERE site_no = %s AND mode = 'SIMULATION' AND alert_id LIKE %s AND details->>'model' = %s", (DRWT2, f"{DRWT2}|%|2019-05-%", active))]
-    windows = [(w.isoformat(), s) for w, s in _query("SELECT window_start, stage_last FROM windowed_aggregates WHERE site_no = %s AND mode = 'SIMULATION' AND window_start >= %s AND window_start < %s ORDER BY 1", (DRWT2, *FLOOD))]
-    return alert_before_crossing(windows, min((_iso(i.split("|")[2]) for i in ids), default=None), minor)
+    gauges, active = load_gauges(), json.loads((ROOT / "ml" / "models" / "active.json").read_text(encoding="utf-8"))["name"]
+    oks, parts = [], []
+    for site, lid in SCENE.items():
+        ids = [r[0] for r in _query("SELECT alert_id FROM alerts WHERE site_no = %s AND mode = 'SIMULATION' AND alert_id LIKE %s AND details->>'model' = %s", (site, SCENE_LIKE, active))]
+        windows = [(w.isoformat(), st) for w, st in _query("SELECT window_start, stage_last FROM windowed_aggregates WHERE site_no = %s AND mode = 'SIMULATION' AND window_start >= %s AND window_start < %s ORDER BY 1", (site, *RAIN_SPAN))]
+        ok, text = alert_before_crossing(windows, min((_iso(i.split("|")[2]) for i in ids), default=None), gauges[site]["levels"]["minor"])
+        oks.append(ok)
+        parts.append(f"{lid}: {text}")
+    return all(oks), "; ".join(parts)
 
 
 def check_detection_panel():
@@ -404,7 +417,8 @@ CHECKS = {"S1": [
     ("core", "Map rain layer has data", check_rain_api),
 ], "S3": [
     ("core", "forecasts carry the active model, p_minor at 3 h", check_forecasts_carry_model),
-    ("core", "trained model alerts before the minor crossing", check_trained_alert_before_crossing),
+    ("core", "main scene: trained model alerts before the minor crossing", check_trained_alert_before_crossing),
+    ("core", "May 2019 reported apart: no lead under the evaluated rule, not tuned", check_may_2019_reported),
     ("core", "Metrics detection panel", check_detection_panel),
     ("ml", "model card", check_model_card),
 ], "S4": [

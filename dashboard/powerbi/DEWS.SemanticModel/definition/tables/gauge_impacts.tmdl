@@ -33,3 +33,4 @@ table gauge_impacts
 					Data = Source{[Schema="public",Item="gauge_impacts"]}[Data]
 				in
 					Data
+

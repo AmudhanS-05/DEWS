@@ -55,6 +55,34 @@ table agent_runs
 		summarizeBy: none
 		sourceColumn: verdict
 
+	column trace_run_id
+		dataType: string
+		lineageTag: 28050200-fe7e-5d85-95d2-bdbbfbeb9782
+		summarizeBy: none
+		sourceColumn: trace_run_id
+
+	column trace_url
+		dataType: string
+		lineageTag: 6167f8b1-92e4-5b0c-b915-a6c1fa0a807a
+		summarizeBy: none
+		sourceColumn: trace_url
+
+	column output
+		dataType: string
+		lineageTag: f672829b-a018-421e-a8ab-d164dab1da2d
+		summarizeBy: none
+		sourceColumn: output
+
+		annotation SummarizationSetBy = Automatic
+
+	column tool_calls
+		dataType: string
+		lineageTag: 856a87c2-73c2-4354-92a4-890173bc61ff
+		summarizeBy: none
+		sourceColumn: tool_calls
+
+		annotation SummarizationSetBy = Automatic
+
 	partition agent_runs = m
 		mode: directQuery
 		source =
@@ -63,3 +91,4 @@ table agent_runs
 					Data = Source{[Schema="public",Item="agent_runs"]}[Data]
 				in
 					Data
+

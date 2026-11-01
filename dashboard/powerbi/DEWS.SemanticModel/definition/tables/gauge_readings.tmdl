@@ -55,6 +55,15 @@ table gauge_readings
 		summarizeBy: none
 		sourceColumn: ingested_at
 
+	column qualifiers
+		dataType: string
+		sourceProviderType: nchar
+		lineageTag: 2eaa2557-d880-4105-a729-5e301ca529b8
+		summarizeBy: none
+		sourceColumn: qualifiers
+
+		annotation SummarizationSetBy = Automatic
+
 	partition gauge_readings = m
 		mode: directQuery
 		source =
@@ -63,3 +72,4 @@ table gauge_readings
 					Data = Source{[Schema="public",Item="gauge_readings"]}[Data]
 				in
 					Data
+

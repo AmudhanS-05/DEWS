@@ -36,6 +36,14 @@ def when(iso: str | None) -> str:
         return iso
 
 
+def model_wording(alert: dict) -> tuple[str, str | None]:
+    """Headline and UNCERTAIN sentence of a model-probability alert, in the agents' own words (agentic_ai/advisory.py), so draft,
+    advisory and email say the same thing. Never "forecast to reach": the probability raised this alert, not the stage forecast."""
+    from agentic_ai import advisory
+    lines = advisory.template_text({"raised_at": "", **alert}, {}, {}, "normal", 1, None).splitlines()
+    return next(ln for ln in lines if "probability of crossing" in ln), advisory.disagreement_sentence(alert)
+
+
 def facts(rec: dict, alert: dict | None, site_name: str | None) -> dict:
     """One flat dict from the approved record plus whatever the alert row knows (details JSON, columns)."""
     a = alert or {}
@@ -43,7 +51,17 @@ def facts(rec: dict, alert: dict | None, site_name: str | None) -> dict:
     levels = d.get("official_levels") or {}
     cur = d.get("current_stage")
     cat = a.get("category") or d.get("category") or "minor"
+    model_head, uncertain = None, None
+    if d.get("alert_rule") == "alert_by_model":
+        p, h, name = a.get("probability") if a.get("probability") is not None else d.get("probability"), a.get("horizon_h") or d.get("horizon_h"), d.get("site_name") or site_name or rec["alert_id"].split("|")[0]
+        try:
+            model_head, uncertain = model_wording({**d, "category": cat, "probability": p, "horizon_h": h, "site_name": name, "site_no": a.get("site_no") or rec["alert_id"].split("|")[0],
+                                                   "mode": rec.get("mode") or a.get("mode") or "LIVE", "official_levels": levels, "current_stage": cur})
+        except Exception:  # noqa: BLE001 - a wording problem never stops an approved email; the plain sentence still names the probability
+            tail = f" within {h:g} h" if isinstance(h, (int, float)) else ""
+            model_head = f"{name}: probability of crossing {cat.upper()}{tail}: {p * 100:.0f}%." if isinstance(p, (int, float)) else f"{name}: model alert for {cat.upper()}{tail}."
     return {
+        "model_headline": model_head, "uncertain": uncertain,
         "alert_id": rec["alert_id"], "mode": rec.get("mode") or a.get("mode") or "LIVE", "site_no": a.get("site_no") or rec["alert_id"].split("|")[0],
         "site_name": d.get("site_name") or site_name or rec["alert_id"].split("|")[0], "category": cat, "kind": d.get("kind", "new"),
         "probability": a.get("probability") if a.get("probability") is not None else d.get("probability"),
@@ -57,6 +75,8 @@ def facts(rec: dict, alert: dict | None, site_name: str | None) -> dict:
 
 
 def headline(f: dict) -> str:
+    if f.get("model_headline"):
+        return f["model_headline"]
     cat = f["category"].upper()
     lvl = f["levels"].get(f["category"])
     h = f["horizon_h"]
@@ -101,6 +121,8 @@ def render_text(f: dict) -> str:
     if f["mode"] == "SIMULATION":
         out += ["SIMULATION: replayed historical data, not a real event.", ""]
     out += [f"Flood forecast for {f['site_name']} (USGS {f['site_no']})", "", headline(f), ""]
+    if f.get("uncertain"):
+        out += [f["uncertain"], ""]
     rows = _rows(f) + ([("Official stages", ", ".join(f"{c} {v:.1f} ft" for c, v in _stages(f)) + " (NWS)")] if f["levels"] else [])
     out += [f"{k + ':':<18}{v}" for k, v in rows]
     if f["advisory_text"]:
@@ -144,6 +166,7 @@ def render_html(f: dict) -> str:
 {sim}<h1 class="b-ink" style="margin:0 0 2px;font-size:19px;line-height:1.3;font-weight:600;color:#1a2a3a">Flood forecast for {e(f['site_name'])}</h1>
 <p class="b-muted" style="margin:0 0 14px;font-size:13px;color:#5d6e7f">USGS gauge {e(f['site_no'])}</p>
 <p class="b-ink" style="margin:0 0 16px;font-size:15px;color:#1a2a3a">{e(headline(f))}</p>
+{f'<p class="b-ink" style="margin:0 0 16px;font-size:14px;color:#1a2a3a"><b>{e(f["uncertain"])}</b></p>' if f.get("uncertain") else ""}
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="font-size:14px;border-collapse:collapse">{table}</table>
 {adv}
 <p class="b-ink" style="margin:22px 0 4px;font-weight:600;color:#1a2a3a">Notes</p>

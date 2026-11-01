@@ -124,6 +124,9 @@ def read_schema() -> dict[str, list[tuple[str, str]]]:
 
 
 def main() -> int:
+    if (OUT / f"{NAME}.Report" / "definition").exists():         # saved by Power BI Desktop: that version is the project now
+        print("make_pbip: refused: dashboard/powerbi holds the project saved by Power BI Desktop; this tool would overwrite it")
+        return 1
     schema = read_schema()
     for sub in (f"{NAME}.SemanticModel", f"{NAME}.Report"):
         shutil.rmtree(OUT / sub, ignore_errors=True)

@@ -9,7 +9,7 @@
 # Stop with scripts\stop_demo.ps1.
 param(
     [switch]$NoLiveProducer,
-    [int]$TimeoutS = 240,
+    [int]$TimeoutS = 600,
     [string]$Venv = $env:DEWS_VENV     # folder of the virtual environment; default .venv in the repo, else ..\spaenv
 )
 

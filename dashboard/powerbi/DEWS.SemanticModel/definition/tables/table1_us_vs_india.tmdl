@@ -1,0 +1,62 @@
+table table1_us_vs_india
+	lineageTag: 09e5d299-add0-4c79-aa54-0be577c0a2ad
+
+	column Column1
+		dataType: string
+		lineageTag: 08a27cc9-54d7-46d5-857b-f01a4e1249f0
+		summarizeBy: none
+		sourceColumn: Column1
+
+		annotation SummarizationSetBy = Automatic
+
+	column Column2
+		dataType: string
+		lineageTag: 8239d456-0468-417d-9b36-bc9aabd96eec
+		summarizeBy: none
+		sourceColumn: Column2
+
+		annotation SummarizationSetBy = Automatic
+
+	column Column3
+		dataType: string
+		lineageTag: 89929cca-43d5-45d9-b67d-a4aae22b4e58
+		summarizeBy: none
+		sourceColumn: Column3
+
+		annotation SummarizationSetBy = Automatic
+
+	column Column4
+		dataType: string
+		lineageTag: c40198c0-254a-42ec-a607-1639f3dc5a78
+		summarizeBy: none
+		sourceColumn: Column4
+
+		annotation SummarizationSetBy = Automatic
+
+	column Column5
+		dataType: string
+		lineageTag: ec1bff8c-53b7-4bba-9ab5-7b6cc9d02944
+		summarizeBy: none
+		sourceColumn: Column5
+
+		annotation SummarizationSetBy = Automatic
+
+	column Column6
+		dataType: string
+		lineageTag: 2fb5efc2-7638-4b8e-9e17-55cd53127aee
+		summarizeBy: none
+		sourceColumn: Column6
+
+		annotation SummarizationSetBy = Automatic
+
+	partition table1_us_vs_india = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents("C:\Users\MY PC\Documents\RVCE\SPA_AAI\disaster-warn-kafka\india\figures\table1_us_vs_india.csv"),[Delimiter=",", Columns=6, Encoding=1252, QuoteStyle=QuoteStyle.None]),
+				    #"Changed Type" = Table.TransformColumnTypes(Source,{{"Column1", type text}, {"Column2", type text}, {"Column3", type text}, {"Column4", type text}, {"Column5", type text}, {"Column6", type text}})
+				in
+				    #"Changed Type"
+
+	annotation PBI_ResultType = Table
+

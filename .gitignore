@@ -23,3 +23,7 @@ PROJECT_LOG.md
 # ML outputs: large, regenerable (small summary CSVs are force-added: ml/figures/baselines.csv)
 ml/figures/*.csv
 ml/figures/*.parquet
+# Power BI: only the project (.pbip) is kept; these hold data or per-machine settings
+*.pbix
+**/.pbi/cache.abf
+**/.pbi/localSettings.json

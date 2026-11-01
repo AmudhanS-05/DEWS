@@ -17,7 +17,8 @@ One *episode* per gauge and mode groups the alerts of one rise:
   retract  the forecast fell back below the lowest raised level for RETRACT_AFTER windows before the stage ever
            reached it (a withdrawn warning, never silently dropped). Under alert_by_model the forecast stands for its horizon,
            so it is withdrawn only after max(RETRACT_AFTER, horizon) windows without the model alerting
-The episode closes after END_AFTER calm windows (under alert_by_model this is the 6 h cooldown; no new alert before then). Alerts are drafts: nothing is sent without approval.
+The episode closes after END_AFTER calm windows. Under alert_by_model it closes COOLDOWN_H after the alert fired, in data time,
+as the evaluated protocol (ml/harness.py): no new alert before then, a new one possible from then on. Alerts are drafts: nothing is sent without approval.
 Episode state is saved to state/forecaster_state.json before the offsets are committed, so a restart continues the
 same episodes.
 """
@@ -45,6 +46,7 @@ log = logging.getLogger("forecaster")
 HORIZON_H = float(os.getenv("FORECAST_HORIZON_H", "3"))
 RETRACT_AFTER = int(os.getenv("FORECAST_RETRACT_AFTER", "2"))
 END_AFTER = int(os.getenv("FORECAST_END_AFTER", "6"))
+COOLDOWN_H = float(os.getenv("FORECAST_COOLDOWN_H", "6"))
 HISTORY_WINDOWS = 24
 GROUP = config.GROUP_FORECASTER
 STATE_FILE = Path(config.STATE_DIR) / "forecaster_state.json"
@@ -113,7 +115,12 @@ def step(state: dict, agg: dict, gauge: dict, predict, horizon_h: float = HORIZO
                 if not a["reached"] and not a.get("retracted"):
                     a["retracted"] = True
                     alerts.append(_alert(agg, gauge, pred, a["category"], a["alert_id"], "retract", ep["start"], cur, fc, rule))
-        if ep["calm"] >= END_AFTER or (by_model is None and all(a.get("retracted") for a in ep["raised"].values())):
+        if by_model is None:
+            done = ep["calm"] >= END_AFTER or all(a.get("retracted") for a in ep["raised"].values())
+        else:
+            fired = ep.get("fired_ts", to_epoch(ep["start"]))
+            done = float(agg["window_start_ts"]) - fired >= COOLDOWN_H * 3600
+        if done:
             state["episode"] = ep = None
 
     # a forecast of a higher category than the gauge is in now (and than any alert still standing) raises an alert
@@ -123,7 +130,7 @@ def step(state: dict, agg: dict, gauge: dict, predict, horizon_h: float = HORIZO
         if rank(fc_cat) > max(standing, default=-1) and not cooling:
             kind = "upgrade" if ep and standing else "new"
             if ep is None:
-                ep = state["episode"] = {"start": agg["window_start"], "raised": {}, "calm": 0}
+                ep = state["episode"] = {"start": agg["window_start"], "raised": {}, "calm": 0, "fired_ts": float(agg["window_start_ts"])}
             alert_id = f"{agg['site_no']}|{fc_cat}|{ep['start']}"
             ep["raised"][fc_cat] = {"alert_id": alert_id, "category": fc_cat, "reached": cur >= levels[fc_cat]}
             alerts.append(_alert(agg, gauge, pred, fc_cat, alert_id, kind, ep["start"], cur, fc, rule))

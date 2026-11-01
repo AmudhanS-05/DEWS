@@ -22,13 +22,13 @@ class ApprovalError(Exception):
 
 
 def list_advisories(conn, limit: int = 30) -> list[dict]:
-    """Newest advisory per alert (alert_overview + current_advisory), pending ones first."""
+    """Newest advisory per alert (alert_overview + current_advisory), pending ones first, the latest to arrive at the top."""
     with conn.cursor() as cur:
         cur.execute("""SELECT o.alert_id, o.site_no, o.mode, o.category, o.alert_status, o.raised_at,
                               c.advisory_id, c.version, c.source, c.confidence, c.status, c.text, c.edited_text,
-                              c.reviewer_verdict, c.approved_by, c.approved_at, c.delivered_at
+                              c.reviewer_verdict, c.created_at, c.approved_by, c.approved_at, c.delivered_at
                        FROM alert_overview o JOIN current_advisory c USING (alert_id)
-                       ORDER BY (c.status = 'draft') DESC, o.raised_at DESC LIMIT %s""", (limit,))
+                       ORDER BY (c.status = 'draft') DESC, c.created_at DESC LIMIT %s""", (limit,))
         cols = [d[0] for d in cur.description]
         return [{k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in zip(cols, r)} for r in cur.fetchall()]
 

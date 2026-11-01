@@ -1,0 +1,107 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "8e9157d257d8bdc60c73",
+  "position": {
+    "x": 508.64669953638975,
+    "y": 449.30458459047765,
+    "z": 4000,
+    "height": 210.24063580837444,
+    "width": 605.28957244830383,
+    "tabOrder": 4000
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "alert_overview"
+                    }
+                  },
+                  "Property": "category"
+                }
+              },
+              "queryRef": "alert_overview.category",
+              "nativeQueryRef": "category"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "alert_overview"
+                    }
+                  },
+                  "Property": "alert_status"
+                }
+              },
+              "queryRef": "alert_overview.alert_status",
+              "nativeQueryRef": "alert_status"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "alert_overview"
+                    }
+                  },
+                  "Property": "approval_to_delivery_s"
+                }
+              },
+              "queryRef": "alert_overview.approval_to_delivery_s",
+              "nativeQueryRef": "approval_to_delivery_s"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "alert_overview"
+                    }
+                  },
+                  "Property": "advisory_version"
+                }
+              },
+              "queryRef": "alert_overview.advisory_version",
+              "nativeQueryRef": "advisory_version"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "alert_overview"
+                    }
+                  },
+                  "Property": "raise_to_approval_s"
+                }
+              },
+              "queryRef": "alert_overview.raise_to_approval_s",
+              "nativeQueryRef": "raise_to_approval_s"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "alert_overview"
+                    }
+                  },
+                  "Property": "raised_at"
+                }
+              },
+              "queryRef": "alert_overview.raised_at",
+              "nativeQueryRef": "raised_at"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

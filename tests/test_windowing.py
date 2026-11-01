@@ -51,6 +51,16 @@ def test_state_saved_before_the_trace_fields_still_closes_and_zero_fill_has_no_t
     assert out[1]["n_readings"] == 0 and out[1]["ingest_ts"] is None
 
 
+def test_rain_sent_well_before_the_gauge_readings_is_held_by_event_time():
+    st = {}
+    for k in range(1, 7):
+        st, _ = wd.on_rain(st, {"hour_end_ts": T0 + k * W, "rain_mm_10km": 2.0, "product": "p"}, W, "SIMULATION")
+    rec = {"type": "reading", "site_no": "S1", "series": "1", "value": 1.0, "qualifiers": [], "mode": "SIMULATION"}
+    for k in range(0, 3):
+        st, out, _ = wd.on_record(st, {**rec, "reading_ts": T0 + k * W + 60}, "SIMULATION", T0, W, 5400)
+    assert out and out[-1]["rain_1h"] == 2.0 and st["_rain"]["late"] == 0
+
+
 def test_late_reading_reemits_closed_window_as_revision():
     st, out, _ = feed({}, [rd(T0, 1.0), rd(T0 + W, 2.0), rd(T0 + 1200, 1.4)])
     assert out[-1]["revision"] is True and out[-1]["n_readings"] == 2 and out[-1]["stage_last"] == 1.4

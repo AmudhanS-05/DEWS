@@ -40,6 +40,26 @@ def load_readings(site: str, start: str, end: str) -> list[dict]:
     return out
 
 
+def already_replayed(site: str, start: str, end: str) -> int:
+    """Windows of this gauge at or after --start, written since its last reset. Faust's position is then past those dates, so the
+    readings would go to deadletter.flood as too_late. 0 when PostgreSQL cannot be reached: Kafka is the source of truth, not this check."""
+    from datetime import datetime, timezone
+
+    import psycopg2
+    try:
+        with open(os.path.join(config.STATE_DIR, "replay_resets.json"), encoding="utf-8") as f:
+            since = float(json.load(f).get(site, 0))
+    except (OSError, ValueError):
+        since = 0.0
+    try:
+        with psycopg2.connect(config.PG_DSN, connect_timeout=3) as conn, conn.cursor() as cur:
+            cur.execute("SELECT count(*) FROM windowed_aggregates WHERE site_no = %s AND mode = 'SIMULATION' AND n_readings > 0 "
+                        "AND window_end > %s AND created_at > %s", (site, start, datetime.fromtimestamp(since, timezone.utc)))
+            return cur.fetchone()[0]
+    except psycopg2.OperationalError:
+        return 0
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--site", required=True)
@@ -47,7 +67,13 @@ def main(argv=None):
     p.add_argument("--end", required=True, help="YYYY-MM-DD (UTC)")
     p.add_argument("--speed", type=float, default=3600.0, help="simulated seconds per real second")
     p.add_argument("--no-sleep", action="store_true", help="publish as fast as possible (throughput test)")
+    p.add_argument("--force", action="store_true", help="send even if these dates were already replayed since the last reset")
     a = p.parse_args(argv)
+    done = 0 if a.force else already_replayed(a.site, a.start, a.end)
+    if done:
+        print(f"refused: {a.site} has {done} replayed windows at or after {a.start} since its last reset, so these readings would be dead-lettered. "
+              f"Run: python -m tools.reset_replay --site {a.site} --start {a.start} --end {a.end} --yes (or Reset on the console's Control tab)")
+        return 1
 
     rs = load_readings(a.site, a.start, a.end)
     print(f"replaying {len(rs)} readings for {a.site} ({a.start}..{a.end}) -> {config.TOPIC_REPLAY_GAUGE}")
@@ -64,4 +90,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
