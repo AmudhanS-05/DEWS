@@ -127,6 +127,24 @@ def lead_time_h(evidence: dict, alert: dict) -> float | None:
     return round((level - stage) / rate, 1)
 
 
+def lead_time(evidence: dict, alert: dict):
+    """Lead time to the alert's category, consistent with the forecast (replay eval 1 Nov: with s3_v0 the rise-rate
+    estimate said 20.4 h while the model forecast the crossing within 3 h, and the LLM judge rejected it):
+    - the rise-rate estimate (hours, float) when it is within the forecast horizon;
+    - "within N h (model forecast)" when the gauge is below the category, the forecast reaches it within the horizon
+      and the current rise rate alone would be slower (or is not rising);
+    - None ("not available") otherwise (e.g. the gauge is already above the category)."""
+    lt = lead_time_h(evidence, alert)
+    h = alert.get("horizon_h")
+    if lt is not None and (h is None or lt <= h):
+        return lt
+    level = (alert.get("official_levels") or {}).get(alert["category"])
+    cur, fc = alert.get("current_stage"), alert.get("forecast_stage")
+    if None not in (h, level, cur, fc) and cur < level <= fc:
+        return f"within {h:g} h (model forecast)"
+    return lt
+
+
 def forecast_category(alert: dict) -> str | None:
     """Highest official category the forecast stage reaches (may be above the alert's own category)."""
     return rules.category_of(alert.get("forecast_stage"), alert.get("official_levels"))
@@ -142,7 +160,7 @@ def build_facts(alert: dict, evidence: dict, context: dict, update_n: int, episo
                 data_quality: dict | None = None) -> dict:
     """The only facts the writer sees, already in report precision (0.1 ft, whole %), missing values spelled out."""
     lv = alert.get("official_levels") or {}
-    lt = lead_time_h(evidence, alert)
+    lt = lead_time(evidence, alert)
     fc_cat, cur_cat = forecast_category(alert), rules.category_of(alert.get("current_stage"), lv)
     probs = {c: pct(evidence.get(f"p_{c}")) for c in rules.CATEGORIES}
     rain = (context or {}).get("rain") or {}
@@ -238,9 +256,10 @@ def template_text(alert: dict, evidence: dict, context: dict, confidence: str, u
     op = other_probability(alert, evidence)
     if op:
         lines.append(op[0].upper() + op[1:] + ".")
-    lt = lead_time_h(evidence, alert)
+    lt = lead_time(evidence, alert)
     lines.append(f"Lead time to {cat.upper()}: about {lt:.1f} h at the current rise rate (an estimate)."
-                 if lt is not None else f"Lead time to {cat.upper()}: {NA}.")
+                 if isinstance(lt, float) else f"Lead time to {cat.upper()}: {lt}." if isinstance(lt, str)
+                 else f"Lead time to {cat.upper()}: {NA}.")
     rain = context.get("rain") or {}
     if rain.get("available"):
         lines.append(f"Radar rain over the catchment: {_num(ft(rain['rain_3h']))} mm in 3 h, "
@@ -348,6 +367,8 @@ def requirements(facts: dict, confidence: str) -> list[tuple[str, str]]:
         req.append(("horizon", f"State the forecast horizon in hours: within {a['horizon_h']:g} h."))
     lt = facts.get("lead_time_h")
     req.append(("lead_time", f"Write 'Lead time to {cat.upper()}: about {lt:.1f} h' (an estimate)." if isinstance(lt, float)
+                else f"Write 'Lead time to {cat.upper()}: {lt}' (the current rise rate alone is slower; do not "
+                     f"give a rise-rate number)." if isinstance(lt, str) and lt.startswith("within")
                 else f"Write 'Lead time to {cat.upper()}: not available'."))
     if facts["context"].get("rain") == RAIN_NA:
         req.append(("rain", f"Write 'rain data not available' for the radar rain (reason you may add: "

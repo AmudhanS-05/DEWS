@@ -117,6 +117,7 @@ def allowed_numbers(facts: dict) -> tuple[list[float], list[float]]:
                 walk(x, key, is_pct)
 
     walk(facts)
+    plain.extend([abs(x) for x in plain if x < 0])   # "-0.5 ft/h": the draft's number token is 0.5 (sign is text)
     plain.extend([1, 2, 3, 4, 5, 6])   # list numbering / "Update n" are checked separately by wording
     return plain, pct
 
@@ -205,6 +206,10 @@ def review_detailed(draft: str, alert: dict, facts: dict, confidence: str = "nor
     if isinstance(lt, (int, float)):
         if not _near(draft, r"lead[\s-]*time", re.compile(rf"(?<![\d.]){lt:.1f}(?![\d])")):
             out.append(("lead_time", f"lead time not stated (write: Lead time to {cat.upper()}: about {lt:.1f} h)"))
+    elif isinstance(lt, str) and lt.startswith("within"):
+        h = re.escape(lt.split()[1])
+        if not _near(draft, r"lead[\s-]*time", re.compile(rf"within\s+{h}\s*(?:h|hours?)\b")):
+            out.append(("lead_time", f"lead time must follow the forecast (write: Lead time to {cat.upper()}: {lt})"))
     elif not _near(draft, r"lead[\s-]*time", _NA):
         out.append(("lead_time", f"lead time must say 'not available' (write: Lead time to {cat.upper()}: not available)"))
     if (facts.get("context") or {}).get("rain") == "rain data not available" and "rain data not available" not in low:

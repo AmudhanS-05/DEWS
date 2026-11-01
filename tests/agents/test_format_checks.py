@@ -75,7 +75,11 @@ def test_lead_time_number_or_not_available_never_null():
         assert {"lead_time", "missing_value"} <= _ids(d, REAL, REAL_EV, NO_RAIN), bad
     flat = {"stage_last": 8.16, "rise_rate_ft_per_h": 0.0}
     t2 = advisory.template_text(REAL, flat, NO_RAIN, "normal", 1, None)
-    assert "Lead time to MAJOR: not available." in t2 and _review(t2, REAL, flat, NO_RAIN) == []
+    # not rising, but the forecast crosses MAJOR within the horizon: the lead time follows the forecast (1 Nov)
+    assert "Lead time to MAJOR: within 3 h (model forecast)." in t2 and _review(t2, REAL, flat, NO_RAIN) == []
+    above = {**REAL, "current_stage": 14.0}                 # already above MAJOR: not available
+    t3 = advisory.template_text(above, {**flat, "stage_last": 14.0}, NO_RAIN, "normal", 1, None)
+    assert "Lead time to MAJOR: not available." in t3
 
 
 def test_markdown_bold_is_rejected():

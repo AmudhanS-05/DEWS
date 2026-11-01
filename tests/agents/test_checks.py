@@ -91,3 +91,12 @@ def test_utc_time_digits_from_raised_at_are_allowed():
 def test_lowercase_simulation_is_still_rejected_with_actionable_reason():
     r = checks.review(LIVE_LIKE.replace("SIMULATION", "Simulation"), ALERT, FACTS)
     assert r == ["SIMULATION label missing for replayed data (write the word SIMULATION in capitals)"]
+
+
+def test_negative_rate_is_allowed_with_its_sign_written_as_text():
+    """Replay eval 1 Nov (AHOT2 2025-05-27): 'changing -0.5 ft/h' failed 'numbers' on every attempt because the
+    number token is 0.5 and the facts held -0.5; the template's v2 was lost (v1 kept)."""
+    falling = {**EV, "rise_rate_ft_per_h": -0.5}
+    facts = advisory.build_facts(ALERT, falling, CX, 1)
+    assert checks.check_numbers("changing -0.5 ft/h", facts) == []
+    assert checks.check_numbers("changing -0.9 ft/h", facts) == ["0.9"]

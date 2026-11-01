@@ -164,3 +164,19 @@ def test_worst_case_template_still_fits_and_passes():
     facts = advisory.build_facts(MAJOR, MAJOR_EV, cx, 2, {"update_n": 2}, dq)
     assert len(t) <= 900 and checks.review(t, MAJOR, facts, "uncertain") == []
     assert "(upgraded from MODERATE)" in t and "MINOR: 97%" in t and "sensor fault" in t
+
+
+def test_lead_time_follows_the_model_when_the_rise_rate_is_slower():
+    """Replay eval 1 Nov, DRWT2 2019 with s3_v0: 3.0 ft rising 0.1 ft/h gave 'about 20.4 h' while the model forecast
+    MINOR (5.5 ft) within 3 h; the LLM judge rejected it three times. Now: 'within 3 h (model forecast)'."""
+    a = {**ALERT, "horizon_h": 3.0, "current_stage": 3.0, "forecast_stage": 5.6, "probability": 0.55, "model": "s3_v0"}
+    ev = {**EV, "stage_last": 3.0, "rise_rate_ft_per_h": 0.12, "forecast_stage": 5.6, "p_minor": 0.55}
+    assert advisory.lead_time_h(ev, a) == 20.8 and advisory.lead_time(ev, a) == "within 3 h (model forecast)"
+    facts = advisory.build_facts(a, ev, CX, 1)
+    t = advisory.template_text(a, ev, CX, "normal", 1, None)
+    assert "Lead time to MINOR: within 3 h (model forecast)." in t and checks.review(t, a, facts) == []
+    bad = t.replace("within 3 h (model forecast)", "about 20.8 h")
+    ids = {i for i, _ in checks.review_detailed(bad, a, facts)}
+    assert "lead_time" in ids and "numbers" in ids
+    fast = {**ev, "rise_rate_ft_per_h": 1.0}
+    assert advisory.lead_time(fast, a) == 2.5                         # rise-rate estimate inside the horizon: kept

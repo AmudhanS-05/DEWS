@@ -47,6 +47,7 @@ class State(TypedDict, total=False):
     tokens: int
     llm_error: str | None
     llm_down: str | None
+    facts: dict
 
 
 class Run:
@@ -250,7 +251,7 @@ def build_graph(tools, run: Run):
                                     "fallback_from": reply.fallback_from})
         run.row("writer", t0, f"attempt {attempt}, confidence {s['confidence']}", {"text": text, "llm": bool(reply.text)}, reply.tokens)
         return {"draft": text, "attempt": attempt, "tokens": s["tokens"] + reply.tokens, "llm_error": err or s.get("llm_error"),
-                "llm_down": (reply.error or "LLM unavailable") if down else None}
+                "llm_down": (reply.error or "LLM unavailable") if down else None, "facts": facts}
 
     def route_after_writer(s: State):
         return "keep_v1" if s.get("llm_down") else "reviewer"
@@ -343,5 +344,5 @@ def run_alert(tools, alert_id: str, force: bool = False, on_event=None) -> dict:
             "verdict": final.get("verdict"), "reasons": final.get("reasons", []), "drop_reason": final.get("drop_reason"),
             "attempts": final.get("attempt"), "tokens": final.get("tokens", 0), "draft": final.get("draft"),
             "llm_down": final.get("llm_down"), "disagreement": final.get("disagreement"),
-            "update_n": final.get("update_n"),
+            "update_n": final.get("update_n"), "facts": final.get("facts"),
             "events": run.events}
