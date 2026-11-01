@@ -73,7 +73,7 @@ def episode_lead_times(alerts: list[tuple[str, str]], windows: list[tuple[str, f
     new: dict[str, int] = {}
     for alert_id, kind in alerts:
         ep = alert_id.split("|")[2]
-        new[ep] = new.get(ep, 0) + (kind == "new")
+        new[ep] = new.get(ep, 0) + (kind in ("new", "retract"))     # a withdrawn alert's row holds its retract record: still that episode's one alert
     if not new:
         return False, "no alert"
     bad = sorted(ep for ep, n in new.items() if n != 1)
@@ -160,9 +160,9 @@ def check_one_forecast_per_window():
     n, without, extra = _query(
         """SELECT count(*), count(*) FILTER (WHERE r.n = 0), count(*) FILTER (WHERE r.n > 1) FROM windowed_aggregates w,
            LATERAL (SELECT count(*) AS n FROM risk_scores f WHERE f.site_no = w.site_no AND f.window_start = w.window_start
-                    AND f.mode = w.mode AND f.model = 'rise_rate') r
+                    AND f.mode = w.mode) r
            WHERE w.site_no = %s AND w.mode = 'SIMULATION' AND w.window_start >= %s AND w.window_start < %s""", (DRWT2, *FLOOD))[0]
-    return n > 0 and without == 0 and extra == 0, f"{n} windows: {without} without a rise_rate forecast, {extra} with more than one"
+    return n > 0 and without == 0 and extra == 0, f"{n} windows: {without} without a forecast, {extra} with more than one"
 
 
 def check_alert_and_v1():

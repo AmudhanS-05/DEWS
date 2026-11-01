@@ -127,7 +127,33 @@ async function loadAgents(){
     $("ag-events").innerHTML=d.events.slice().reverse().map(e=>{ const dt=e.detail||{}, txt=dt.name||dt.tool||(dt.reasons&&dt.reasons.length?dt.reasons.join("; "):"")||dt.verdict||""; return `<tr><td class="t">${new Date(e.ts).toLocaleTimeString([], {hour12:false})}</td><td>${esc(e.agent)}</td><td>${esc(e.kind)}</td><td>${esc(String(txt).slice(0,140))}</td></tr>`; }).join("");
   }catch(e){ $("ag-note").textContent="cannot reach the console server"; }
 }
-window.onTabShown=t=>{ if(t==="metrics"){ loadMetrics(); if(window.lastView) window.onMetrics(window.lastView.metrics); } if(t==="agents") loadAgents(); };
+/* demo control: fixed buttons; reset and drills need a second click, like Approve */
+const CT_ARMED={};
+async function ctAct(action,target,btn,confirm){
+  const key=action+"|"+target;
+  if(confirm&&!CT_ARMED[key]){ CT_ARMED[key]=true; const was=btn.textContent; btn.textContent="Click again to confirm"; setTimeout(()=>{ CT_ARMED[key]=false; btn.textContent=was; },5000); return; }
+  CT_ARMED[key]=false; btn.disabled=true;
+  try{
+    const r=await fetch("/api/control",{method:"POST",headers:{"Content-Type":"application/json","X-DEWS-Control":"1"},body:JSON.stringify({action,target})}), d=await r.json();
+    $("ct-note").textContent=r.ok?`${action} ${target}: ${d.label||(d.changed?"done":"no change")}`:`${action} ${target}: ${d.error}`;
+  }catch(e){ $("ct-note").textContent="cannot reach the console server"; }
+  loadControl();
+}
+async function loadControl(){
+  try{
+    const d=await (await fetch("/api/control")).json();
+    if(!d.ok){ $("ct-note").textContent=d.error||"not available"; return; }
+    const busy=d.job&&d.job.running, j=$("ct-job"); j.hidden=!d.job;
+    if(d.job) j.innerHTML=`<b>${esc(d.job.label)}</b> · ${d.job.running?"running":(d.job.ok?"finished":"failed")} · ${d.job.elapsed_s} s · <span class="note">${esc(d.job.log)}</span>`;
+    const b=(a,t,txt,conf,dis)=>`<button class="btn ct-btn" data-a="${a}" data-t="${esc(t)}" data-c="${conf?1:""}"${dis?" disabled":""}>${esc(txt)}</button>`;
+    setHtml("ct-procs",d.processes.map(p=>`<tr><td>${esc(p.label)}</td><td class="${p.running?"tag-ok":"note"}">${p.running?"running":"stopped"}</td><td class="r">${p.running?b("stop",p.id,"Stop",false):b("start",p.id,"Start",false)}</td></tr>`).join(""));
+    setHtml("ct-floods",d.floods.map(f=>`<tr><td>${esc(f.label)}</td><td class="r">${b("replay",f.id,"Replay",false,busy)}${b("reset",f.id,"Reset",true,busy)}</td></tr>`).join(""));
+    setHtml("ct-drills",d.drills.map(x=>`<tr><td>${esc(x.label)}</td><td class="r">${b("drill",x.id,"Run drill",true,busy)}</td></tr>`).join(""));
+  }catch(e){ $("ct-note").textContent="cannot reach the console server"; }
+}
+$("tab-control").addEventListener("click",e=>{ const x=e.target.closest("button[data-a]"); if(x) ctAct(x.dataset.a,x.dataset.t,x,!!x.dataset.c); });
+window.onTabShown=t=>{ if(t==="control") loadControl(); if(t==="metrics"){ loadMetrics(); if(window.lastView) window.onMetrics(window.lastView.metrics); } if(t==="agents") loadAgents(); };
 setInterval(()=>{ if(!$("tab-metrics").hidden) loadMetrics(); },8000);
 setInterval(()=>{ if(!$("tab-agents").hidden) loadAgents(); },2500);
+setInterval(()=>{ if(!$("tab-control").hidden) loadControl(); },5000);
 })();

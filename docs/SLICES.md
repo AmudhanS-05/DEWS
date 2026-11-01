@@ -55,7 +55,7 @@ recall, F1, false alarms and lead time on held-out years; the reviewer catches a
 | Workstream | Tasks | Done when |
 |---|---|---|
 | **Core** | C3.1 forecaster loads the model through `ml/predict.py` (hot-swap, falls back to baseline). C3.2 Metrics tab detection panel; Power BI page 3 guide. | `verify_slice S3` PASS: forecasts carry the model name; on the May 2019 replay the trained model alerts before the minor crossing (moved here from S1: the rise-rate baseline measurably alerts too late, pooled lead time net of feed delay −0.17 h) |
-| **ML + India** | M3.1 final split and evaluation (per gauge, slow-only, distinct storms, PR curves). M3.2 model v2 + `ml/MODEL_CARD.md`. M3.3 radius sensitivity 5 / 10 / 25 km. I3.1 Indian data through the pipeline (replay via loader) → failure log (Table 2). | results table; Table 2 |
+| **ML + India** | M3.1 final split and evaluation (per gauge, slow-only, distinct storms, PR curves). M3.2 model v2 + `ml/MODEL_CARD.md`. M3.3 radius sensitivity 5 / 10 / 25 km. ~~I3.1 Indian data through the pipeline~~ not run (1 Nov: the India study stops at pain points). | results table; Table 2 |
 | **Agents** | A3.1 reviewer: deterministic number/category/wording checks + LLM judgement; corrupted-draft fixtures. A3.2 Ollama fallback path tested (Groq off). A3.3 episodic memory: episode history, "Update n" wording, edits as examples; guard: numbers only from current evidence. | reviewer catches all seeded errors; update wording on a repeat alert |
 | **YOU** | review the results table; ask faculty nothing new unless numbers look odd | |
 | **Paper / slides** | results section (detection, lead time); AAI: memory and reflection slides | |
@@ -69,7 +69,7 @@ workers in parallel, the writer streaming, the reviewer sending it back once, th
 | **Core** | C4.1 Agents tab v3: full animation + timeline scrubber + LangSmith link per run. C4.2 Metrics tab agent panel (time per agent, tokens, pass rate, disagreements, v1 → v2 time). C4.3 fault drill "LLM down" (v1 stays, nothing blocked). | `verify_slice S4` PASS |
 | **ML + India** | I4.1 step C: degradation experiment on real US data (resolution, delay, gaps, missing thresholds) → curves. | degradation figure |
 | **Agents** | A4.1 `agentic_ai/mcp_server.py` (stdio) wrapping the tools; graph uses the MCP client. A4.2 agent evaluation: faithfulness, reviewer catch rate, disagreement outcomes, v1/v2 timing, tokens → `evaluation_runs` notes or `agent_runs` summary. | evaluation table |
-| **YOU** | record the AAI video (the core session writes the shot list) | |
+| **YOU** | ~~record the AAI video~~ dropped 1 Nov (team decision) | |
 | **Paper / slides** | AAI deck complete; India section draft | |
 
 ## S5 (due 18 Nov): hardened demo
@@ -78,7 +78,7 @@ workers in parallel, the writer streaming, the reviewer sending it back once, th
 | Workstream | Tasks | Done when |
 |---|---|---|
 | **Core** | C5.1 all fault drills with recovery times; throughput run (38 gauges, 10 years, `--no-sleep`); latency report. C5.2 Story mode: dropped 1 Nov (team decision; demo by replay plus narration across Map, Pipeline flow and Agents). C5.3 Power BI page 4; demo checklist and offline fallback (cached data, offline map, Ollama). | `verify_slice S5` PASS; two clean rehearsals |
-| **ML + India** | I5.1 step D: synthetic "ideal India" dataset + replay through the pipeline; final numbers frozen. | synthetic India figure |
+| **ML + India** | I5.1 step D: not run through the pipeline (1 Nov: the India study stops at pain points); final numbers frozen. | final numbers |
 | **Agents** | A5.1 ablation: single agent vs multi-agent on the same replayed alerts; final numbers. | ablation table |
 | **YOU** | rehearse with the team (who speaks, who clicks) | |
 | **Paper / slides** | paper complete; SPA deck | |

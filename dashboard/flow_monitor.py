@@ -219,6 +219,11 @@ class EventLog:
     def __init__(self, keep=60):
         self.last, self.events, self.keep = {}, [], keep
 
+    def note(self, node: str, what: str, result: str):
+        """An action from the control panel, in the same log as the status changes."""
+        self.events.insert(0, {"ts": time.time(), "node": node, "from": what, "to": result})
+        del self.events[self.keep:]
+
     def update(self, view: dict):
         for nid, n in view["nodes"].items():
             old = self.last.get(nid)
@@ -892,6 +897,16 @@ def make_handler():
 
         def do_POST(self):
             path = urlparse(self.path).path
+            if path == "/api/control":
+                from dashboard import control
+                if CTX["demo"] or not control.origin_ok(self.headers, self.server.server_address[1]):
+                    return self._send(403, "application/json", b'{"error":"not allowed"}')
+                try:
+                    body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+                except (ValueError, json.JSONDecodeError):
+                    return self._send(400, "application/json", b'{"error":"bad json"}')
+                code, out = CTX["control"].act(body.get("action"), body.get("target"))
+                return self._send(code, "application/json", json.dumps(out).encode())
             if not path.startswith("/api/advisory/"):
                 return self._send(404, "text/plain", b"not found")
             try:
@@ -939,6 +954,8 @@ def make_handler():
                            "regions": regions_summary(load_regions(), latest, live, time.time(), CTX["stale_s"])}).encode())
             elif self.path == "/api/metrics":
                 self._send(200, "application/json", json.dumps(metrics_api()).encode())
+            elif self.path == "/api/control":
+                self._send(200, "application/json", json.dumps(CTX["control"].status() if CTX.get("control") else {"ok": False, "error": "not available with demo data"}).encode())
             elif self.path.startswith("/api/rain"):
                 self._send(200, "application/json", json.dumps(rain_api(parse_qs(urlparse(self.path).query).get("mode", ["live"])[0])).encode())
             elif self.path.startswith("/api/timeline"):
@@ -984,6 +1001,9 @@ def main(argv=None):
 
     probe = None if a.demo else KafkaProbe()
     log, t0 = EventLog(), time.time()
+    if not a.demo:
+        from dashboard.control import Control
+        CTX["control"] = Control(log.note)
     CTX.update(demo=a.demo, t0=t0)
     if not a.demo:
         CTX["latest"] = LatestReadings()

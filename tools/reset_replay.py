@@ -14,7 +14,7 @@ What it does, in order:
   3. writes a tombstone for the gauge to Faust's replay changelogs and removes the gauge's replay entry from the forecaster's
      state file. Live state is never touched;
   4. deletes SIMULATION rows of that gauge and date range (--end included), in one transaction: readings, windows, forecasts,
-     rain, traces, alerts raised in the range and their advisories and agent records. Alerts and advisories are first saved to
+     rain, traces, alerts raised in the range and their advisories and agent records. Those alert, advisory and agent rows are first saved to
      gate_output/reset_replay_<time>.jsonl. evaluation_runs and LIVE rows are never touched;
   5. starts the workers and the forecaster again and waits for Faust to be ready.
 The Kafka topics keep their history. tools.check_windows and tools.check_sink read state/replay_resets.json and leave out replay
@@ -91,12 +91,12 @@ def count_rows(conn, site: str, span: dict) -> dict[str, int]:
 
 
 def delete_rows(conn, site: str, span: dict, backup=None) -> dict[str, int]:
-    """One transaction. `backup` (a text file) receives the alerts and advisories first, one JSON object per line."""
+    """One transaction. `backup` (a text file) receives the alert, advisory and agent rows first, one JSON object per line."""
     args = {"site": site, **span}
     out = {}
     with conn, conn.cursor() as cur:
         if backup is not None:
-            for table in ("alerts", "advisories"):
+            for table in ("alerts", "advisories", "agent_events", "agent_runs"):
                 cur.execute(f"SELECT row_to_json(t) FROM {table} t WHERE alert_id IN ({ALERTS_IN_RANGE})", args)
                 for (row,) in cur.fetchall():
                     backup.write(json.dumps({"table": table, "row": row}) + "\n")

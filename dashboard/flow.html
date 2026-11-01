@@ -16,6 +16,7 @@
     <button class="tab" role="tab" id="tb-data" aria-selected="false" data-tab="data">Readings &amp; alerts</button>
     <button class="tab" role="tab" id="tb-metrics" aria-selected="false" data-tab="metrics">Metrics</button>
     <button class="tab" role="tab" id="tb-agents" aria-selected="false" data-tab="agents">Agents</button>
+    <button class="tab" role="tab" id="tb-control" aria-selected="false" data-tab="control">Control</button>
   </div>
   <span class="chips">
   <span class="chip" title="Kafka connection"><span class="dot" id="d-kafka"></span><span id="c-kafka">Kafka</span></span>
@@ -34,8 +35,7 @@
 <div class="alertbar glass" id="alert-bar" role="status" hidden><span class="pulse" id="alert-dot" aria-hidden="true"></span><button class="linkish" id="alert-text" type="button" title="Show this gauge on the map"></button><button class="btn" id="alert-go" type="button">Review</button></div>
 <section id="landing" class="l-page" aria-label="Welcome">
   <div class="l-hero">
-    <div class="l-kicker">Flood early warning</div>
-    <h2 class="l-title">DEWS</h2>
+    <h2 class="l-title">Disaster Early Warning System</h2>
     <p class="l-lead">Live river gauges, streamed through Kafka, forecast against official NWS flood categories. An alert goes out only after a person approves it.</p>
     <div class="l-stats glass">
       <div><b id="ls-areas">–</b><span>monitored area(s)</span></div>
@@ -180,6 +180,18 @@
     <h2>Events, last run (newest first, token stream left out)</h2>
     <table><thead><tr><th>Time</th><th>Agent</th><th>Kind</th><th>Detail</th></tr></thead><tbody id="ag-events"></tbody></table>
   </section>
+  <section id="tab-control" hidden>
+    <h2 style="margin-top:4px">Demo control</h2>
+    <div class="note" id="ct-note" style="margin-bottom:8px">Fixed actions only, each one an existing script. Every action shows in the status log on Pipeline flow.</div>
+    <div class="ct-job adv glass" id="ct-job" hidden></div>
+    <h2>Processes</h2>
+    <table><thead><tr><th>Process</th><th>State</th><th></th></tr></thead><tbody id="ct-procs"></tbody></table>
+    <h2>Replay a flood</h2>
+    <table><tbody id="ct-floods"></tbody></table>
+    <div class="note" style="margin-top:6px">A date range already replayed goes to the dead-letter topic: reset it first. Reset stops Faust and the forecaster for about a minute and deletes that flood's SIMULATION rows, a sent alert's record included (saved to gate_output).</div>
+    <h2>Fault drills</h2>
+    <table><tbody id="ct-drills"></tbody></table>
+  </section>
   <div class="fineprint">Prototype, not an official warning</div>
 </main>
 <script>
@@ -271,7 +283,7 @@ connect();
 setInterval(()=>{ if (lastMsg && Date.now()-lastMsg > 8000) document.getElementById("c-clock").textContent = "no update for " + Math.round((Date.now()-lastMsg)/1000) + " s"; }, 2000);
 
 // ---------------------------------------------------------------- tabs
-const TABS = window.CONSOLE_TABS = ["flow","map","data","metrics","agents"];
+const TABS = window.CONSOLE_TABS = ["flow","map","data","metrics","agents","control"];
 function showTab(t){
   for (const n of TABS){
     document.getElementById("tab-"+n).hidden = n!==t;

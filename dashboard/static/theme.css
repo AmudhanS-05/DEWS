@@ -207,6 +207,8 @@ body.landing .alertbar{display:none}
 /* metrics and agents */
 .ag-scrub{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
 .ag-scrub input[type=range]{flex:1;min-width:180px;padding:0;border:0;background:none;accent-color:var(--accent)}
+.ct-job{font-size:13px}
+.ct-btn{margin-right:6px}
 .spark{display:block}
 .mx-two{display:grid;grid-template-columns:minmax(260px,1fr) minmax(320px,1.4fr);gap:12px;align-items:start}
 @media(max-width:760px){.mx-two{grid-template-columns:1fr}}
@@ -220,14 +222,16 @@ body.landing .alertbar{display:none}
 .l-page{position:fixed;inset:0;z-index:10;display:none;flex-direction:column;justify-content:center;padding:6vh 6vw;color:var(--ink)}
 body.landing .l-page{display:flex;animation:lfade .7s ease .12s both}
 body.landing header{background:none;border-color:transparent;backdrop-filter:none;pointer-events:none}
-body.landing header>*:not(#theme-toggle){visibility:hidden}
+body.landing header>*:not(#theme-toggle):not(#brand){display:none}
+body.landing #theme-toggle{margin-left:auto}
 body.landing #theme-toggle{pointer-events:auto}
+body.landing #brand{cursor:default}
 .map3d>*:not(canvas){transition:opacity .7s ease .55s}
 body.landing .map3d>*:not(canvas){opacity:0;pointer-events:none;transition:opacity .16s ease}   /* leaving the map: gone at once, so they never sit over the landing text */
 .l-hero{max-width:560px;position:relative}
 .l-kicker{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted)}
 :root[data-theme=light] .l-kicker{color:var(--ink)}
-.l-title{font-size:clamp(56px,9vw,104px);line-height:1;font-weight:650;letter-spacing:.01em;text-transform:none;color:var(--ink);margin:12px 0 14px}
+.l-title{font-size:clamp(38px,5.4vw,70px);line-height:1.06;font-weight:650;letter-spacing:-.01em;text-transform:none;color:var(--ink);margin:12px 0 14px}
 .l-lead{font-size:16px;line-height:1.55;margin:0 0 22px;max-width:480px}
 .l-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:0;padding:12px 4px;margin:0 0 24px}
 .l-stats div{padding:0 12px;border-left:1px solid var(--line)}

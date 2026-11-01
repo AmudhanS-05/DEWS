@@ -521,7 +521,7 @@ function applyScrub(){
     r.worst=gs.reduce((w,g)=>SEV[g.status]>SEV[w]?g.status:w,"normal"); }
   const on={}; for(const a of s.alerts) if(a.t<=s.t&&a.status!=="retracted") on[a.site_no]=a.category; alerts=on;
   $("sc-t").textContent=`${utc(s.t)} UTC · ${s.mode==="SIMULATION"?"SIMULATION":"live history"}`+(s.alerts.some(a=>a.t>s.t-3600&&a.t<=s.t)?" · alert raised here":"");
-  $("sc-range").value=s.t; lastHud=0; drawList(); drawCard();
+  $("sc-range").value=s.t; $("n-rain").textContent=G.filter(g=>g.rain_3h>0).length||""; lastHud=0; drawList(); drawCard();
 }
 function stopPlay(){ if(scrub&&scrub.timer){ clearInterval(scrub.timer); scrub.timer=0; } $("sc-play").textContent="▶"; $("sc-play").setAttribute("aria-label","Play"); }
 async function loadScrub(start,end){

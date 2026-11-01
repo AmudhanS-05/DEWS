@@ -1,0 +1,143 @@
+"""Demo control panel: fixed actions only, each one an existing script. No free-text command reaches a process.
+
+    POST /api/control  {"action": "start" | "stop" | "replay" | "reset" | "drill", "target": <an id from the lists below>}
+
+The console binds to 127.0.0.1. A request must also carry the X-DEWS-Control header and, if it has an Origin, come from this
+console: a web page elsewhere cannot send that, so it cannot press these buttons. Nothing here runs docker compose; the broker and
+PostgreSQL drills stop one container and start it again. The console logs every action in its status log.
+"""
+from __future__ import annotations
+
+import re
+import subprocess
+import threading
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+LOGS = ROOT / "gate_output"
+PROCESSES = {
+    "faust_6066": {"label": "Faust worker 6066", "port": 6066},
+    "faust_6067": {"label": "Faust worker 6067", "port": 6067},
+    "faust_6068": {"label": "Faust worker 6068", "port": 6068},
+    "sink": {"label": "Postgres sink", "module": "storage.sink"},
+    "forecaster": {"label": "Forecaster", "module": "streams.forecaster"},
+    "notifier": {"label": "Notifier", "module": "alerting.notifier"},
+    "agents": {"label": "Agents (calls the LLM on each alert)", "module": "agentic_ai.run"},
+    "usgs": {"label": "USGS live producer", "module": "producers.usgs_iv_producer"},
+    "mrms": {"label": "MRMS live rain producer", "module": "producers.mrms_qpe_producer"},
+}
+FLOODS = {
+    "drwt2_2019": {"label": "Onion Creek (DRWT2), 2 to 6 May 2019, no radar rain", "sites": ["08158700"], "start": "2019-05-02", "end": "2019-05-06", "speed": 3600, "rain": False},
+    "oct_2023": {"label": "Shoal Creek (AHOT2) and Llano (LLAT2), 25 to 27 Oct 2023, with radar rain", "sites": ["08156800", "08151500"], "start": "2023-10-25", "end": "2023-10-27", "speed": 1800, "rain": True},
+}
+DRILLS = {"faust": "Kill a Faust worker", "broker": "Stop a Kafka broker", "sink": "Kill the sink", "postgres": "Stop PostgreSQL",
+          "notifier": "Kill the notifier", "producer": "Kill the live producer", "llm": "LLM down"}
+ACTIONS = {"start": PROCESSES, "stop": PROCESSES, "replay": FLOODS, "reset": FLOODS, "drill": DRILLS}
+
+
+def allowed(action, target) -> str | None:
+    """None if this is one of the fixed actions, else why not."""
+    if not isinstance(action, str) or action not in ACTIONS:
+        return "unknown action"
+    if not isinstance(target, str) or target not in ACTIONS[action]:
+        return "unknown target"
+    return None
+
+
+def origin_ok(headers, port: int) -> bool:
+    """Our own page only: the custom header cannot be sent cross-site without a preflight, which this server never answers."""
+    if headers.get("X-DEWS-Control") != "1":
+        return False
+    origin = headers.get("Origin")
+    return origin is None or origin in (f"http://127.0.0.1:{port}", f"http://localhost:{port}")
+
+
+def job_commands(action: str, target: str, py: str) -> list[list[str]]:
+    """The argument lists for a replay, reset or drill. Every value comes from the tables above."""
+    if action == "drill":
+        return [[py, "-m", "tools.fault_drill", "--scenario", target]]
+    f = FLOODS[target]
+    if action == "reset":
+        return [[py, "-m", "tools.reset_replay", "--site", ",".join(f["sites"]), "--start", f["start"], "--end", f["end"], "--yes"]]
+    cmds = [[py, "-m", "producers.replay_producer", "--site", s, "--start", f["start"], "--end", f["end"], "--speed", str(f["speed"])] for s in f["sites"]]
+    if f["rain"]:
+        cmds.append([py, "-m", "producers.mrms_qpe_producer", "--replay", "--start", f["start"], "--end", f["end"], "--speed", str(f["speed"])])
+    return cmds
+
+
+def _running_lines() -> list[str]:
+    cmd = "Get-CimInstance Win32_Process | Where-Object { $_.Name -match '^(python|faust)' } | ForEach-Object { $_.CommandLine }"
+    return subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, text=True, timeout=20).stdout.splitlines()
+
+
+def is_running(spec: dict, lines: list[str]) -> bool:
+    if "port" in spec:
+        return any("faust_app" in ln and f"web-port {spec['port']}" in ln for ln in lines)
+    return any(re.search(rf"-m {re.escape(spec['module'])}(\s|$)", ln) for ln in lines)
+
+
+class Control:
+    """One job (replay, reset or drill) at a time; starting and stopping a process is immediate."""
+
+    def __init__(self, note=None):
+        self.note, self.job, self.lock = note or (lambda *a: None), None, threading.Lock()
+
+    def status(self) -> dict:
+        try:
+            lines = _running_lines()
+        except (OSError, subprocess.SubprocessError):
+            lines = []
+        return {"ok": True, "processes": [{"id": k, "label": v["label"], "running": is_running(v, lines)} for k, v in PROCESSES.items()],
+                "floods": [{"id": k, "label": v["label"]} for k, v in FLOODS.items()], "drills": [{"id": k, "label": v} for k, v in DRILLS.items()], "job": self._job_view()}
+
+    def _job_view(self):
+        j = self.job
+        if not j:
+            return None
+        codes = [p.poll() for p in j["procs"]]
+        return {"label": j["label"], "running": any(c is None for c in codes), "ok": all(c == 0 for c in codes), "started": j["started"], "elapsed_s": round((j.get("ended") or time.time()) - j["started"], 1), "log": j["log"]}
+
+    def act(self, action, target) -> tuple[int, dict]:
+        why = allowed(action, target)
+        if why:
+            return 400, {"error": why}
+        if action in ("start", "stop"):
+            return self._process(action, target)
+        return self._start_job(action, target)
+
+    def _process(self, action: str, target: str) -> tuple[int, dict]:
+        from tools.fault_drill import find_pids, kill, module_pids, start_module, start_worker
+        spec = PROCESSES[target]
+        running = is_running(spec, _running_lines())
+        if action == "stop":
+            if running:
+                kill(find_pids(spec["port"]) if "port" in spec else module_pids(spec["module"]))
+        elif not running:
+            log = LOGS / f"{target}.log"
+            start_worker(spec["port"], log) if "port" in spec else start_module(spec["module"], log)
+        changed = running == (action == "stop")
+        self.note(spec["label"], f"{action} requested", "done" if changed else f"already {'stopped' if action == 'stop' else 'running'}")
+        return 200, {"ok": True, "changed": changed}
+
+    def _start_job(self, action: str, target: str) -> tuple[int, dict]:
+        import sys
+
+        from tools.fault_drill import spawn
+        with self.lock:
+            v = self._job_view()
+            if v and v["running"]:
+                return 409, {"error": f"still running: {v['label']}"}
+            name = f"{action}_{target}"
+            label = f"{action} {ACTIONS[action][target]['label'] if action != 'drill' else DRILLS[target]}"
+            self.job = {"label": label, "started": time.time(), "log": f"gate_output/control_{name}.log",
+                        "procs": [spawn(c, LOGS / f"control_{name}_{i}.log") for i, c in enumerate(job_commands(action, target, sys.executable))]}
+            self.note("Control panel", label, "started")
+            threading.Thread(target=self._watch, args=(self.job,), daemon=True).start()
+        return 200, {"ok": True, "label": label}
+
+    def _watch(self, job: dict) -> None:
+        for p in job["procs"]:
+            p.wait()
+        job["ended"] = time.time()
+        self.note("Control panel", job["label"], "ok finished" if all(p.returncode == 0 for p in job["procs"]) else "down failed, see the log")
