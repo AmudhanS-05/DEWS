@@ -69,7 +69,7 @@ if (-not $NoLiveProducer) {
 Write-Host ("[start {0:HH:mm:ss}] start_demo: Docker stack and {1} background processes" -f $t0, $services.Count)
 if (-not (Test-Path $python)) { Write-Host "[done] start_demo: FAIL: no virtual environment at $python"; exit 1 }
 New-Item -ItemType Directory -Force $logs | Out-Null
-$total = $services.Count + 3
+$total = $services.Count + 4
 $step = 0
 
 # Native commands write progress to stderr; with 'Stop' that would abort the script, so judge them by exit code.
@@ -96,6 +96,17 @@ while (-not (Test-Healthy $containers)) {
 }
 $step++
 Show-Step $step $total 'brokers and PostgreSQL healthy'
+
+Push-Location $root
+& $python -m tools.seed_gauges *> (Join-Path $logs 'seed_gauges.log')
+$seedExit = $LASTEXITCODE
+Pop-Location
+$step++
+Show-Step $step $total "gauges table from config\gauge_locations.csv (exit $seedExit)"
+if ($seedExit -ne 0) {
+    Write-Host ("[done {0:HH:mm:ss}] start_demo: FAIL: seed_gauges exit {1}, see {2}\seed_gauges.log (elapsed {3})" -f (Get-Date), $seedExit, $logs, (Elapsed))
+    exit 1
+}
 
 $notes = @{}
 foreach ($s in $services) {
