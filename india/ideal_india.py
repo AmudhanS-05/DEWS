@@ -7,7 +7,8 @@ shows the pipeline handles data with those properties.
 2. Synthetic replay: one real US flood with radar rain (default BDAT2, 2025-07-04 21:30 UTC, from
    ml/figures/demo_flood_candidates.csv) rebuilt two ways and written as replay.gauge envelopes with mode SIMULATION,
    source SYNTHETIC and site_no "SYN-IND-<lid>-<variant>" (so it can never be mistaken for real Indian or US data):
-     india_today   one reading per day at 08:00 IST (02:30 UTC), as the India-WRIS manual staff gauges
+     cwc_hourly    one reading per hour, what most CWC river stations reported in July 2022 (user's --list-stations)
+     daily_dams    one reading per day at 08:00 IST (02:30 UTC): the dams / off-season case (3 to 24 h at dams)
      ideal_india   the requirement levels: 15-minute readings, official thresholds
    Each file is run through the stream windowing (streams/windowing.py via ml.backtest) and the 3 h rise-rate rule and
    s3_v0, and the alert lead for that flood is reported. Stage stays in feet with the gauge's NWPS levels: this is a
@@ -25,7 +26,7 @@ import os
 
 import numpy as np
 
-LEVEL_ORDER = {"interval": ["US native", "1 h", "3 h", "daily 08:00 IST"], "delay": ["0 h", "1 h", "6 h", "24 h"],
+LEVEL_ORDER = {"interval": ["US native", "1 h", "3 h", "daily (dams/off-season case)"], "delay": ["0 h", "1 h", "6 h", "24 h"],
                "gaps": ["0 %", "10 %", "30 %"], "thresholds": ["official", "p99.9", "p99.5", "p99"]}
 BASE_LEVEL = {"interval": "US native", "delay": "0 h", "gaps": "0 %", "thresholds": "official"}
 
@@ -54,8 +55,10 @@ def requirements(rows: list[dict], model: str = "rise_rate", recall_frac: float 
 
 def variant(readings: list[dict], name: str) -> list[dict]:
     from india.degrade import subsample
-    if name == "india_today":
+    if name == "daily_dams":
         return subsample(readings, 24.0, offset_s=2.5 * 3600)
+    if name == "cwc_hourly":
+        return subsample(readings, 1.0)
     if name == "ideal_india":
         return subsample(readings, 0.25)
     raise ValueError(name)
@@ -124,7 +127,7 @@ def main(argv=None):
     rs = primary_series(load_readings(g["site_no"], d0, d1))
     os.makedirs(a.replay_dir, exist_ok=True)
     out = []
-    for name in ("ideal_india", "india_today"):
+    for name in ("ideal_india", "cwc_hourly", "daily_dams"):
         vr = variant(rs, name)
         sid = f"SYN-IND-{a.lid}-{name}"
         syn = [{**r, "site_no": sid, "site_name": f"SYNTHETIC from {a.lid} ({name})", "series": "SYNTHETIC"} for r in vr]

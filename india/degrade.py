@@ -8,8 +8,9 @@ official NWPS minor stage in the UNdegraded readings, so a degraded feed that mi
 
 Scenarios (each changes one property; everything else at the baseline: native interval, no feed delay (alerts at
 window end, as ml/harness.py, so the baseline equals the S3 test numbers), no gaps, official thresholds):
-  interval   1 h, 3 h, daily (one reading per day, the one nearest 08:00 IST = 02:30 UTC, like the India-WRIS
-             manual staff-gauge readings seen on 31 Oct 2026)
+  interval   1 h (what most CWC river stations reported in July 2022: the user's --list-stations scan, 1 Nov 2026),
+             3 h, and daily (one reading per day nearest 08:00 IST = 02:30 UTC): the dams/off-season case (dams and
+             reservoirs reported every 3 to 24 h in that scan; off-season intervals unverified)
   delay      feed delay 1 h (about the US live feed), 6 h, 24 h: an alert computed at window end t is available only at
              t + delay, and counts only if it still arrives before the crossing (within the 3 h horizon)
   gaps       10 % and 30 % of readings removed in random blocks of 6 to 48 h (seeded)
@@ -37,7 +38,7 @@ START, END = "2024-01-01", "2026-10-31"
 H = 3
 BASE_DELAY_H = 0.0
 SCENARIOS = ([("baseline", "US native", {})]
-             + [("interval", lab, {"interval_h": x}) for lab, x in (("1 h", 1.0), ("3 h", 3.0), ("daily 08:00 IST", 24.0))]
+             + [("interval", lab, {"interval_h": x}) for lab, x in (("1 h", 1.0), ("3 h", 3.0), ("daily (dams/off-season case)", 24.0))]
              + [("delay", f"{d:g} h", {"delay_h": d}) for d in (1.0, 6.0, 24.0)]
              + [("gaps", f"{int(g * 100)} %", {"gap_frac": g}) for g in (0.10, 0.30)]
              + [("thresholds", f"p{p:g}", {"thr_pct": p}) for p in (99.0, 99.5, 99.9)])
@@ -227,7 +228,7 @@ def cmd_plot(a):
     # reference palette slots 1 and 3 (validated with the dataviz validator); line style + direct labels as relief
     col = {"rise_rate": ("#1baf7a", "--", "rise-rate rule"), "s3_v0": ("#2a78d6", "-", "s3_v0 (active, 3 h)")}
     INK, MUTED, GRID, SURF = "#1f1f1e", "#6b6a64", "#e4e3de", "#fcfcfb"
-    panels = [("interval", ["US native", "1 h", "3 h", "daily 08:00 IST"], "reading interval"),
+    panels = [("interval", ["US native", "1 h", "3 h", "daily (dams/off-season case)"], "reading interval"),
               ("delay", ["0 h", "1 h", "6 h", "24 h"], "feed delay"),
               ("gaps", ["0 %", "10 %", "30 %"], "readings missing"),
               ("thresholds", ["official", "p99.9", "p99.5", "p99"], "minor stage used")]

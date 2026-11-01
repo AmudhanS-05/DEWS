@@ -29,8 +29,8 @@ STAGES = ["data access", "replay producer", "hourly windows", "official threshol
 
 
 def station_report(code: str, readings: list[dict], th: dict | None, h: float = 3.0, delay_h: float = 24.0) -> dict:
-    """Measured facts for one station. delay_h: assumed publication delay of the source (daily manual readings are
-    published after the day; 24 h is the assumption used for the 'net' lead, stated in the table)."""
+    """Measured facts for one station. delay_h: ASSUMED publication delay of the archive (no live India-WRIS feed was
+    found and the delay was not measured; 24 h is the default assumption for the 'net' lead, stated in the table)."""
     from common import hydro
     from india.indiawris_loader import categories
     from ml import evaluate
@@ -104,7 +104,7 @@ def failure_log(reports: list[dict], delay_h: float = 24.0) -> list[dict]:
          "(s3_v0) is not applied (trained on US gauges in feet)", "measured": f"{agg('alerts')} alerts, "
          f"{agg('false_alarms')} false" if with_th else "not run without thresholds"},
         {"stage": "alerts and lead time", "what_happened": f"lead time gross and net of an assumed {delay_h:g} h "
-         "publication delay (daily manual readings)", "measured": (f"{agg('detected')} of {agg('crossings')} "
+         "publication delay (archive data; delay not measured)", "measured": (f"{agg('detected')} of {agg('crossings')} "
          f"detected; median lead {median(leads)} h gross, {median(leads) - delay_h:.2f} h net" if leads else
          (f"{agg('detected')} of {agg('crossings')} detected" if with_th else "not measurable"))},
     ]

@@ -58,6 +58,20 @@ none on test); it is never above rise-rate. Rain did not help.
 Row-level precision-recall at 3 h: `ml/figures/s3_pr_3h.png` (`python -m ml.plot_s3`), points in
 `ml/figures/s3_eval_pr_curve.csv`.
 
+### Fix of 1 Nov 2026: stage regressor and alert rule
+- **Bug:** `forecast_stage` collapsed towards the minor stage during floods (DRWT2, May 2019 replay: 25.67 ft now ->
+  4.21 ft forecast on the user's laptop; 22.69 ft -> about 5.4 ft reproduced here). Cause: the regressor predicted the
+  stage relative to minor and was fitted on the classifier's event-weighted rows, which are almost all below minor.
+  Fixed by refitting only the regressors (`python -m ml.s3_model refit-reg`): target = change from the current
+  stage, uniform 15 % sample of all 2015-2020 windows, no event weights. Test 2024-2026 stage MAE at 3 h: 0.056 ft
+  (persistence 0.062, rise-rate 0.077); above minor stage 4.7 ft (persistence 8.6, rise-rate 10.4)
+  (`ml/figures/s3_stage_mae.csv`). The same replay now gives 25.67 -> 25.39 ft.
+- **Unaffected:** every detection number above (they use p_minor and tau, which did not change). The `mae_ft` /
+  `rmse_ft` columns of `ml/figures/s3_eval.csv` came from the old regressor; use `s3_stage_mae.csv` instead.
+- **Alert rule:** the detection results assume an alert when p_minor >= tau (3 h: tau 0.827) while below minor.
+  `predict()` now returns `tau` and `alert_by_model`; the stream should alert on `alert_by_model` (docs/CONTRACTS.md).
+  Alerts raised from `forecast_stage` crossing minor are not what was evaluated.
+
 ### Radius sensitivity (M3.3, ml/figures/s3_radius.csv)
 Same v1 design and protocol at 5, 10 and 25 km, identical rows. Row-level AP at 3 h: 0.065 / 0.063 / 0.058; event F1
 at 3 h 0.25 / 0.24 / no alert. No consistent effect of the radius; 10 km stays.

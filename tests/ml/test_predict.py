@@ -12,7 +12,8 @@ def baseline_only(monkeypatch, tmp_path):
     monkeypatch.setattr(P, "MODELS_DIR", str(tmp_path))
     monkeypatch.setattr(P, "_CACHE", {})
 
-KEYS = {"forecast_stage", "p_action", "p_minor", "p_moderate", "p_major", "horizon_h", "model"}
+KEYS = {"forecast_stage", "p_action", "p_minor", "p_moderate", "p_major", "horizon_h", "model", "tau",
+        "alert_by_model"}
 LEVELS = {"action": 8.0, "minor": 10.0, "moderate": 12.0, "major": 14.0}
 
 
@@ -27,7 +28,7 @@ def test_contract_keys_and_baseline_value():
     assert set(out) == KEYS
     assert out["model"] == "rise_rate" and out["horizon_h"] == 3.0
     assert abs(out["forecast_stage"] - 11.4) < 1e-9
-    assert all(out[k] is None for k in ("p_action", "p_minor", "p_moderate", "p_major"))
+    assert all(out[k] is None for k in ("p_action", "p_minor", "p_moderate", "p_major", "tau", "alert_by_model"))
 
 
 def test_horizon_override_and_falling_stage():

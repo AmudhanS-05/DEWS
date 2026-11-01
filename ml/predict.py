@@ -8,7 +8,9 @@ and `official_levels` ({action, minor, moderate, major}). Optional `horizon_h` (
 Default: the rise-rate extrapolation, no probabilities (None = the model gives none). A trained S3 model
 (ml/s3_model.py) is used ONLY when `ml/models/active.json` names one, e.g. {"name": "s3_v0", "horizons": [3]}
 (omit "horizons" for every horizon that has a file); it then loads `ml/models/<name>_h<h>.joblib` once per horizon and returns p_minor (the only category it was trained for; p_action,
-p_moderate, p_major stay None), forecast_stage from its stage regressor, horizon_h and model = <name>. Live features
+p_moderate, p_major stay None), forecast_stage from its stage regressor (feet; current stage + predicted change), horizon_h,
+model = <name>, the model's alert threshold `tau` and `alert_by_model` = p_minor >= tau while the stage is below
+minor (the rule the model was evaluated with). The rise-rate record has tau = alert_by_model = None. Live features
 are built by `model_features` exactly as the training frame (ml.dataset.build_site_columns + 12/24 h changes;
 rain_1h/3h/6h from the window for v1). It never raises: any failure (no file, missing horizon, missing stage,
 a stack v1 without rain) returns the rise-rate record.
@@ -22,7 +24,8 @@ from ml import baselines
 
 DEFAULT_HORIZON_H = 3.0
 BASELINE_NAME = "rise_rate"
-_EMPTY = {"forecast_stage": None, "p_action": None, "p_minor": None, "p_moderate": None, "p_major": None}
+_EMPTY = {"forecast_stage": None, "p_action": None, "p_minor": None, "p_moderate": None, "p_major": None,
+          "tau": None, "alert_by_model": None}
 
 
 def _baseline(features: dict, horizon_h: float) -> dict:
@@ -59,8 +62,16 @@ def _score(m: dict, features: dict, horizon_h: float) -> dict | None:
     else:
         p = float(m["clf"].predict_proba([[X[f] for f in m["features"]]])[0, 1])
         reg, feats = m["reg"], m["features"]
-    stage = float(reg.predict([[X[f] for f in feats]])[0]) + float(features["official_levels"]["minor"])
-    return {**_EMPTY, "p_minor": p, "forecast_stage": stage, "horizon_h": horizon_h, "model": m["name"]}
+    base_m = m["base_model"] if m["kind"] == "v1" else m
+    out = float(reg.predict([[X[f] for f in feats]])[0])
+    cur = float(features["stage_last"])
+    minor = float(features["official_levels"]["minor"])
+    # delta regressors (refit 1 Nov 2026) predict the change from the current stage; the first version predicted the
+    # stage relative to minor and pulled every forecast towards minor (fixed, see ml/MODEL_CARD.md)
+    stage = cur + out if base_m.get("reg_target") == "delta" else out + minor
+    tau = float(m["tau"])
+    return {**_EMPTY, "p_minor": p, "forecast_stage": stage, "horizon_h": horizon_h, "model": m["name"],
+            "tau": tau, "alert_by_model": bool(p >= tau and cur < minor)}
 
 
 MODELS_DIR = os.getenv("ML_MODELS_DIR", os.path.join(os.path.dirname(__file__), "models"))
