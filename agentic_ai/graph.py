@@ -46,6 +46,7 @@ class State(TypedDict, total=False):
     version: int
     tokens: int
     llm_error: str | None
+    llm_down: str | None
 
 
 class Run:
@@ -236,8 +237,9 @@ def build_graph(tools, run: Run):
         if reply.fallback_from:
             run.event("writer", "revision", {"llm_fallback": reply.provider, "primary": reply.fallback_from,
                                              "primary_error": reply.primary_error, "ok": bool(reply.text)})
-        if reply.provider != "none" and not reply.text:
-            run.event("writer", "revision", {"llm_failed": reply.error, "using": "deterministic template text"})
+        down = reply.provider != "none" and not reply.text
+        if down:   # C4.3: LLM down (no key, provider error, timeout, forced): template v1 stays, no v2 duplicate
+            run.event("writer", "revision", {"llm_failed": reply.error, "using": "template v1 stays (no agents draft)"})
         for line in text.splitlines():
             run.event("writer", "token_chunk", {"text": line, "llm": bool(reply.text)})
         run.event("writer", "end", {"attempt": attempt, "max_attempts": rules.MAX_REVISIONS + 1, "chars": len(text),
@@ -247,7 +249,11 @@ def build_graph(tools, run: Run):
                                     "waited_s": reply.waited_s, "latency_s": reply.latency_s,
                                     "fallback_from": reply.fallback_from})
         run.row("writer", t0, f"attempt {attempt}, confidence {s['confidence']}", {"text": text, "llm": bool(reply.text)}, reply.tokens)
-        return {"draft": text, "attempt": attempt, "tokens": s["tokens"] + reply.tokens, "llm_error": err or s.get("llm_error")}
+        return {"draft": text, "attempt": attempt, "tokens": s["tokens"] + reply.tokens, "llm_error": err or s.get("llm_error"),
+                "llm_down": (reply.error or "LLM unavailable") if down else None}
+
+    def route_after_writer(s: State):
+        return "keep_v1" if s.get("llm_down") else "reviewer"
 
     def reviewer(s: State) -> dict:
         t0, a = _now(), s["alert"]
@@ -289,6 +295,11 @@ def build_graph(tools, run: Run):
         return {"outcome": "saved", "advisory_id": res["advisory_id"], "version": res.get("version")}
 
     def keep_v1(s: State) -> dict:
+        if s.get("llm_down"):
+            reasons = [f"LLM unavailable: {s['llm_down']}"]
+            run.event("coordinator", "end", {"kept": "template v1", "reasons": reasons, "llm_down": True})
+            run.row("coordinator", _now(), "LLM unavailable: template v1 stays", {"reasons": reasons}, verdict="llm_down")
+            return {"outcome": "v1_kept", "reasons": reasons}
         run.event("coordinator", "end", {"kept": "template v1", "reasons": s["reasons"]})
         run.row("coordinator", _now(), "reviewer failed after max revisions", {"reasons": s["reasons"]}, verdict="fail")
         return {"outcome": "v1_kept"}
@@ -301,7 +312,7 @@ def build_graph(tools, run: Run):
     g.add_conditional_edges("coordinator", route_after_coordinator, ["evidence", "context", END])
     g.add_edge(["evidence", "context"], "reconcile")
     g.add_edge("reconcile", "writer")
-    g.add_edge("writer", "reviewer")
+    g.add_conditional_edges("writer", route_after_writer, ["reviewer", "keep_v1"])
     g.add_conditional_edges("reviewer", route_after_reviewer, ["save_advisory", "writer", "keep_v1"])
     g.add_edge("save_advisory", END)
     g.add_edge("keep_v1", END)
@@ -331,4 +342,6 @@ def run_alert(tools, alert_id: str, force: bool = False, on_event=None) -> dict:
             "advisory_id": final.get("advisory_id"), "confidence": final.get("confidence"),
             "verdict": final.get("verdict"), "reasons": final.get("reasons", []), "drop_reason": final.get("drop_reason"),
             "attempts": final.get("attempt"), "tokens": final.get("tokens", 0), "draft": final.get("draft"),
+            "llm_down": final.get("llm_down"), "disagreement": final.get("disagreement"),
+            "update_n": final.get("update_n"),
             "events": run.events}

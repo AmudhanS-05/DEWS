@@ -95,6 +95,7 @@ category's stage), `threshold` (danger/warning levels or made-up categories inst
 | `tools.py` | read tools, `anchor_window`, writes (`save_advisory`, `log_agent_run`, `log_agent_event`) |
 | `mcp_server.py` | stdio MCP server (`python -m agentic_ai.mcp_server`) wrapping the 12 read tools + `save_advisory` |
 | `mcp_client.py` | the graph's MCP client (`AGENT_TOOLS=mcp`, default) with a direct-call fallback per call |
+| `drill.py` | C4.3 fault drill "LLM down" for core's tools/fault_drill.py: `python -m agentic_ai.drill [--alert-id ID] [--no-key]` or `llm_down(tools, alert_id)` |
 | `eval/` | A3.1 seeded-error catch rate, A4.2 evaluation on replayed alerts, A5.1 ablation (tables in `eval/`) |
 | `advisory.py` | facts in report precision, the template writer, writer prompt + requirements |
 | `checks.py` | deterministic reviewer checks (`CHECKS`), Unicode -> ASCII normalisation |
@@ -126,6 +127,7 @@ python -m pytest -q tests/agents             # always LLM_PROVIDER=none, no netw
 | `LLM_PROVIDER` | `groq` (default model `GROQ_MODEL=openai/gpt-oss-120b`, key `GROQ_API_KEY`), `gemini` (`GEMINI_API_KEY` from Google AI Studio, starts with `AIza`; `GEMINI_MODEL` default gemini-3.5-flash-lite; gemini-2.5-flash is closed to new keys, gemini-3.5-flash timed out at 30 s once), `ollama` (local `qwen2.5:7b`, `OLLAMA_HOST`), `none` (template only) |
 | `GROQ_REASONING_EFFORT` | `low` (default) / `medium` / `high`, sent only for `openai/gpt-oss-*`. Measured 31 Oct, 5 runs each: low 2.0-3.1 s, 3.0-3.3k tokens, 5/5 on attempt 1; not set (Groq default, round 4) 4.2-11.0 s, 4.0-8.4k tokens, 4/5 on attempt 1 |
 | Groq 429 | waits once for the reset hint (`retry-after`, else `x-ratelimit-reset-*`) when it is at most 20 s, shown as a progress line, then retries Groq; a longer hint goes straight to `LLM_FALLBACK` |
+| `LLM_FORCE_DOWN=1` | every LLM call fails at once (fault drill). Any LLM failure (no key, provider error, timeout, forced) keeps template v1: no agents draft, no judge call, outcome `v1_kept` with reason "LLM unavailable: ..." (since 1 Nov; before, the template text was saved again as v2) |
 | `LLM_FALLBACK` | `gemini` / `groq` / `none`: a failed call is retried once there, then the template text is used |
 | `LANGSMITH_TRACING=true` + `LANGSMITH_API_KEY` | optional tracing; the CLI prints the trace link |
 | `PG_DSN` | PostgreSQL (default the docker one) |

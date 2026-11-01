@@ -53,6 +53,27 @@ class LlmReply:
     error_obj: Exception | None = None  # internal: the exception, for the rate-limit hint
 
 
+def forced_down() -> bool:
+    """LLM_FORCE_DOWN=1: every call fails immediately (the "LLM down" fault drill; also `with forced_down_ctx():`)."""
+    return os.getenv("LLM_FORCE_DOWN", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+class forced_down_ctx:
+    """Context manager for the fault drill: LLM down inside the block, previous setting restored after."""
+
+    def __enter__(self):
+        self._old = os.environ.get("LLM_FORCE_DOWN")
+        os.environ["LLM_FORCE_DOWN"] = "1"
+        return self
+
+    def __exit__(self, *exc):
+        if self._old is None:
+            os.environ.pop("LLM_FORCE_DOWN", None)
+        else:
+            os.environ["LLM_FORCE_DOWN"] = self._old
+        return False
+
+
 def _pick(var: str, default: str) -> str:
     load_env()
     p = os.getenv(var, default).strip().lower()
@@ -195,6 +216,9 @@ def complete(system: str, user: str, timeout_s: float = DEFAULT_TIMEOUT_S, on_wa
     """One chat completion under the configured provider (one wait on a short 429 hint), retried once on
     LLM_FALLBACK on failure. Never raises."""
     prov = provider()
+    if forced_down():      # fault drill "LLM down" (C4.3): fail at once, as a provider outage would
+        return LlmReply(text=None, provider=prov if prov != "none" else "forced_down", model=model_name(prov),
+                        error="LLM forced down (LLM_FORCE_DOWN=1, fault drill)")
     if prov == "none":
         return LlmReply(text=None, provider="none")
     reply = _call_waiting(prov, system, user, timeout_s, on_wait)

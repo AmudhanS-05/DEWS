@@ -99,11 +99,19 @@ def test_still_failing_after_two_revisions_keeps_v1(monkeypatch):
     assert res["outcome"] == "v1_kept" and res["attempts"] == 3 and t.advisories == []
 
 
-def test_llm_failure_falls_back_to_deterministic_text(monkeypatch):
+def test_llm_failure_keeps_template_v1_and_blocks_nothing(monkeypatch):
+    """C4.3 (1 Nov): an LLM failure keeps template v1 (no duplicate v2 draft) and stops at once (no judge call)."""
+    calls = []
     monkeypatch.setattr(llm, "provider", lambda: "groq")
-    monkeypatch.setattr(llm, "complete", lambda s, u, timeout_s=20, **k: llm.LlmReply(text=None, provider="groq", error="Timeout"))
-    res = graph.run_alert(FakeTools(), ALERT)
-    assert res["outcome"] == "saved" and res["attempts"] == 1
+
+    def fail(s, u, timeout_s=20, **k):
+        calls.append(s)
+        return llm.LlmReply(text=None, provider="groq", error="Timeout")
+    monkeypatch.setattr(llm, "complete", fail)
+    t = FakeTools()
+    res = graph.run_alert(t, ALERT)
+    assert res["outcome"] == "v1_kept" and res["attempts"] == 1 and t.advisories == [] and len(calls) == 1
+    assert res["llm_down"] == "Timeout" and res["reasons"] == ["LLM unavailable: Timeout"]
 
 
 def test_tool_crash_leaves_v1(monkeypatch):
