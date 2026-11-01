@@ -36,3 +36,26 @@ Before: 8 floods, 14 alerts (7 ACTION, 7 MINOR), all raised by the stage forecas
 | time median s | 2.38 | 2.7 | 1.67 | 1.86 |
 | UNCERTAIN where needed | 2 of 2 | 8 of 8 | 0 of 2 | 8 of 8 |
 
+## Independent judge
+
+User decision 1 Nov ("make Gemini the judge"): the reviewer's LLM judgement runs on JUDGE_PROVIDER instead of the writer's model. Same replayed alerts, same writer (Groq) and deterministic checks; only the judge differs. In the multi-agent table above the judge was the writer's own model (Groq judged its own draft; measured before this change). A judge call that fails is recorded as "judge unavailable" and the deterministic checks decide (no fallback to the writer's model). Measured; replay only.
+
+Judge: gemini gemini-3.5-flash-lite.
+
+| metric | multi, judge = writer (Groq) | multi, independent judge |
+|---|---|---|
+| alerts | 9 | 9 |
+| draft saved (v2) | 9/9 (100 %) | 9/9 (100 %) |
+| text passes all deterministic checks | 9/9 (100 %) | 9/9 (100 %) |
+| saved on attempt 1 | 8/9 (89 %) | 9/9 (100 %) |
+| mean attempts | 1.22 | 1 |
+| judge PASS / FAIL (final verdicts) | 8 / 0 | 9 / 0 |
+| judge calls / FAIL on any attempt / unavailable | not recorded | 9 / 0 / 0 |
+| numbers found in the evidence | 142/142 (100 %) | 147/147 (100 %) |
+| UNCERTAIN where needed | 8 of 8 | 8 of 8 |
+| tokens per alert, median (total) | 3376 (35258) | 3346 (30435) |
+| time per alert, median s (max) | 2.7 (17.71) | 2.7 (3.37) |
+| same-model judge warnings | - | 0 |
+
+Independent judge FAIL reasons (any attempt): none
+

@@ -153,6 +153,12 @@ rule, 8 floods, 14 alerts) are kept in `eval/before_alert_by_model/` with run la
 | UNCERTAIN where needed | 8 of 8 | 8 of 8 | 2 of 2 | 0 of 2 |
 | tokens median / time median | 3376 / 2.7 s | 2731 / 1.86 s | 3056 / 2.38 s | 2514 / 1.67 s |
 
+**Independent judge (1 Nov, `--configs multi_ij`, live, replay only):** same 9 alerts, writer Groq
+openai/gpt-oss-120b, judge Gemini gemini-3.5-flash-lite (no judge fallback): 9/9 saved, 9/9 pass all checks, 9/9 on
+attempt 1, judge 9 calls / 0 FAIL / 0 unavailable, 147/147 numbers in the evidence, UNCERTAIN 8 of 8, tokens median
+3346 (total 30435, of which 11568 judge tokens on Gemini), time median 2.7 s (max 3.37 s), 0 same-model warnings. Table:
+`eval/ablation.md` "Independent judge"; the "multi" column above had the judge on the writer's own model.
+
 What changed between the two: the alert rule (model probability instead of stage forecast; alerts MINOR only, 8 of 9
 with the stage forecast below MINOR, so UNCERTAIN), 4 more floods, and the single agent's rules gained the
 model-probability rule.
