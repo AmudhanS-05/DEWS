@@ -108,6 +108,20 @@ category's stage), `threshold` (danger/warning levels or made-up categories inst
 | `fixtures/drwt2_2019-05_replay.json` | measured USGS record for 08158700 + 2 neighbours, run through core's windowing and forecaster |
 | `fixtures/agent_events_DRWT2.json` | recorded agent_events for the console (regenerate: `python -m tests.agents.record_fixture --write`) |
 
+## Evaluation (A3.1, A4.2, A5.1) and the LLM-down drill (C4.3)
+
+```
+python -m agentic_ai.eval.catch_rate                     # seeded errors on template drafts -> eval/reviewer_catch_rate.md
+python -m agentic_ai.eval.build_replays --write          # (network) re-fetch the 8 measured USGS floods -> eval/replay_events.json
+python -m agentic_ai.eval.evaluate --dsn <scratch db>    # multi / single / template / llm_down on the 14 replayed alerts
+python -m agentic_ai.eval.evaluate --report-only         # rebuild eval/agent_eval.md, ablation.md, agent_eval_runs.csv
+python -m ml.import_runs agentic_ai/eval/agent_eval_runs.csv   # rows into evaluation_runs (run_label agent_eval:*)
+python -m agentic_ai.drill [--alert-id ID] [--no-key]   # LLM down: PASS/FAIL line, exit 0/1
+```
+Use a scratch database for `evaluate` (it loads 8 replayed floods, mode SIMULATION, and writes agent rows). Live runs
+are spaced 65 s (`--gap`) for the Groq free tier; 28 live runs take about 30 min. Results: `eval/agent_eval.md`,
+`eval/ablation.md`; raw per-run records `eval/runs.jsonl`.
+
 ## Set up and run (Windows laptop, PowerShell, repo folder)
 
 ```

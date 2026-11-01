@@ -3,7 +3,7 @@
 ## Run locally (Windows laptop, PowerShell, from the repo folder)
 ```
 ..\spaenv\Scripts\Activate.ps1
-pip install -r requirements-dev.txt -r requirements-agents.txt   # no new packages in round 3
+pip install -r requirements-dev.txt -r requirements-agents.txt   # 1 Nov: adds mcp==2.3.0 (MCP server/client)
 # .env: LLM_PROVIDER=groq, GROQ_API_KEY=..., GROQ_MODEL=openai/gpt-oss-120b,
 #       LLM_FALLBACK=gemini + GEMINI_API_KEY=AIza... (or LLM_FALLBACK=none), LANGSMITH_TRACING=true + LANGSMITH_API_KEY=...
 cd docker; docker compose up -d; cd ..
@@ -13,7 +13,9 @@ python -m pytest -q tests/agents                                                
 ```
 Packages the agents add on top of requirements-dev.txt (all pinned in requirements-agents.txt): langgraph 1.2.19,
 langchain-core 1.7.3, langchain-groq 1.1.3, langchain-google-genai 4.4.2, langchain-ollama 1.1.0, langsmith 0.14.16,
-psycopg2-binary 2.9.9 (same pin as requirements.txt). The old seeded id `08158700|minor|2019-05-04T03:00:00Z` no longer
+mcp 2.3.0 (1 Nov, MCP tools), psycopg2-binary 2.9.9 (same pin as requirements.txt). With AGENT_TOOLS=mcp (default) the
+CLI's last line reads `tools via MCP (agentic_ai.mcp_server, stdio): 14 call(s), direct fallback 0`. Evaluation and
+the LLM-down drill: see agentic_ai/README.md "Evaluation". The old seeded id `08158700|minor|2019-05-04T03:00:00Z` no longer
 exists after re-seeding: it was an illustrative shape whose windows core's real replay overwrote (cause of the
 22.69 ft / 42.26 ft evidence). Expected output with LLM_PROVIDER=none (measured in the cloud session, PostgreSQL 16):
 ```
