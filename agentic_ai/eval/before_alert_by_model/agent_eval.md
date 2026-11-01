@@ -1,3 +1,5 @@
+> **Before alert_by_model** (archived 1 Nov): measured on the replay set built before core 6b105c1, when every alert was raised by the stage forecast crossing a category (s3_v0 stage regressor before ml's refit). Superseded by ../agent_eval.md.
+
 # Agent evaluation on replayed alerts (A4.2)
 
 Data: 8 floods from the measured USGS record (AHOT2 2023-10-26, AHOT2 2025-05-29, DRWT2 2019-05-04, HNTT2 2025-07-04, JNCT2 2024-07-23, KRRT2 2025-07-04, LCPT2 2024-01-23, LLAT2 2023-10-26), replayed through core's windowing and forecaster (s3_v0 at 3 h, MRMS rain from ml's cache), mode SIMULATION; every non-retracted alert. All numbers below are measured in this run (agentic_ai/eval/runs.jsonl); replay only, no live alerts.

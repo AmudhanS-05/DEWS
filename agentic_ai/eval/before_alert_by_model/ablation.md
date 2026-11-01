@@ -1,3 +1,5 @@
+> **Before alert_by_model** (archived 1 Nov): measured on the replay set built before core 6b105c1, when every alert was raised by the stage forecast crossing a category (s3_v0 stage regressor before ml's refit). Superseded by ../ablation.md.
+
 # Ablation: single agent vs multi-agent graph (A5.1)
 
 Same replayed alerts, same LLM, same deterministic checks. Single agent = one LLM call with the raw tool outputs and the same rules in prose; it has no evidence/context workers, no precomputed facts, no reviewer and no revision. Multi-agent = the LangGraph graph (writer + deterministic reviewer + LLM judge, up to 2 revisions). Measured in this run; replay only.

@@ -32,7 +32,12 @@ EVENTS = [("DRWT2", "08158700", "2019-05-04 03:00"),
           ("JNCT2", "08150000", "2024-07-23 19:25"),
           ("AHOT2", "08156800", "2025-05-29 00:35"),
           ("KRRT2", "08166200", "2025-07-04 10:45"),
-          ("HNTT2", "08165500", "2025-07-04 08:00")]
+          ("HNTT2", "08165500", "2025-07-04 08:00"),
+          # added 1 Nov for the alert_by_model re-run (more alerts; the 8 above stay for the before/after comparison)
+          ("GBCT2", "08169500", "2021-10-14 07:45"),
+          ("AHOT2", "08156800", "2024-05-02 02:20"),
+          ("LLAT2", "08151500", "2024-07-24 04:25"),
+          ("SIOT2", "08177700", "2025-06-12 08:45")]
 URL = ("https://nwis.waterservices.usgs.gov/nwis/iv/?format=json&sites={site}&startDT={a}&endDT={b}"
        "&parameterCd=00065&siteStatus=all")
 

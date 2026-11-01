@@ -34,6 +34,7 @@ from agentic_ai import advisory, checks, llm
 HERE = Path(__file__).resolve().parent
 REPLAYS = HERE / "replay_events.json"
 RUNS = HERE / "runs.jsonl"
+BEFORE = HERE / "before_alert_by_model"   # A4.2/A5.1 measured before core's alert_by_model rule (kept)
 SINGLE_COMPLETE = None      # tests: a scripted completion for the single agent only
 
 SINGLE_SYSTEM = (
@@ -54,7 +55,8 @@ SINGLE_RULES = """RULES:
 11. If a leading signal (rain >= 10 mm in 3 h or an upstream gauge rising) disagrees with the gauge (rising vs not rising), write UNCERTAIN and state both the evidence (gauge) and the context signal, and ask for a re-check at the next window.
 12. If earlier alerts of the same episode exist (episode alerts raised before this one), start with 'Update n:' where n = 1 + number of earlier alerts; otherwise no 'Update' wording.
 13. Capitalised abbreviations only: NWS, USGS, NOAA, MRMS, NWPS, UTC, the category names, SIMULATION, UNCERTAIN, and names exactly as in DATA.
-14. At most 800 characters."""
+14. Alert rule (alert.alert_rule): if it is alert_by_model, the alert was raised by the model's probability of crossing the category within the horizon being at or above its threshold (alert.tau): lead with that probability ('probability of crossing MINOR flood stage (10.0 ft) within 3 h: 89%'), never write 'forecast to reach'. If the stage forecast stays below the category stage, write UNCERTAIN, say the two forecasts disagree (the probability, and the stage forecast in ft below the category stage), and write 'Lead time to MINOR: not available (the two forecasts disagree)'.
+15. At most 800 characters."""
 
 
 # ---------------------------------------------------------------------------------------------- data loading
@@ -272,6 +274,8 @@ def summarise(rows: list[dict], cfg: str) -> dict:
             "time_max_s": max((r["elapsed_s"] or 0 for r in rs), default=None),
             "attempts_mean": round(statistics.mean([r["attempts"] or 0 for r in rs]), 2) if rs else None,
             "disagreements": sum(1 for r in rs if r["disagreement"]),
+            "model_rule": sum(1 for r in rs if (r.get("ref_alert") or {}).get("alert_rule") == "alert_by_model"),
+            "forecasts_disagree": sum(1 for r in rs if (r.get("facts") or {}).get("forecasts_disagree")),
             "uncertain_texts": sum(1 for r in rs if r["uncertain_in_text"]),
             "judge_pass": sum(1 for r in rs if (r.get("judge") or "").upper().startswith("PASS")),
             "judge_fail": sum(1 for r in rs if (r.get("judge") or "").upper().startswith("FAIL")),
@@ -330,8 +334,9 @@ def _write_md(rows, sums, cr) -> None:
     m = sums.get("multi")
     lines = ["# Agent evaluation on replayed alerts (A4.2)", "",
              f"Data: {len(events)} floods from the measured USGS record ({', '.join(events)}), replayed through core's "
-             "windowing and forecaster (s3_v0 at 3 h, MRMS rain from ml's cache), mode SIMULATION; every non-retracted "
-             "alert. All numbers below are measured in this run (agentic_ai/eval/runs.jsonl); replay only, no live "
+             "windowing and forecaster (s3_v0 at 3 h, MRMS rain from ml's cache; since core 6b105c1 an alert is raised "
+             "by the model's probability, alert_by_model: p_minor >= tau), mode SIMULATION; every alert raised. "
+             "Earlier tables (stage-forecast rule): before_alert_by_model/agent_eval.md. All numbers below are measured in this run (agentic_ai/eval/runs.jsonl); replay only, no live "
              "alerts.", "",
              "| metric | " + " | ".join(sums) + " |", "|---|" + "---|" * len(sums)]
 
@@ -347,6 +352,8 @@ def _write_md(rows, sums, cr) -> None:
     row("faithfulness: texts with every number in the evidence", lambda s: _pct(s["faithful_texts"], s["texts"]))
     row("faithfulness: numbers found in the evidence", lambda s: _pct(s["numbers_ok"], s["numbers"]))
     row("LLM judge PASS / FAIL (final verdicts)", lambda s: f"{s['judge_pass']} / {s['judge_fail']}")
+    row("alerts raised by the model's probability (alert_by_model)", lambda s: str(s["model_rule"]))
+    row("of these, stage forecast below the category (forecasts disagree)", lambda s: str(s["forecasts_disagree"]))
     row("disagreements (evidence vs leading context)", lambda s: str(s["disagreements"]))
     row("UNCERTAIN in the text", lambda s: str(s["uncertain_texts"]))
     row("tokens per alert (median)", lambda s: str(s["tokens_median"]))
@@ -416,7 +423,41 @@ def _write_md(rows, sums, cr) -> None:
         if single_fail:
             ab += ["Single-agent check failures by check: " + ", ".join(f"{k} {v}" for k, v in
                                                                       sorted(single_fail.items(), key=lambda x: -x[1])), ""]
+        ab += _before_section(a, b)
         (HERE / "ablation.md").write_text("\n".join(ab) + "\n", encoding="utf-8")
+
+
+def _before_section(a: dict, b: dict) -> list[str]:
+    """The same comparison measured before core's alert_by_model rule (archived runs), next to the current one."""
+    f = BEFORE / "runs.jsonl"
+    if not f.exists():
+        return []
+    last: dict[tuple, dict] = {}
+    for x in f.read_text(encoding="utf-8").splitlines():
+        if x.strip():
+            r = json.loads(x)
+            last[(r["config"], r["alert_id"])] = r
+    old = list(last.values())
+    if not any(r["config"] == "single" for r in old):
+        return []
+    oa, ob = summarise(old, "multi"), summarise(old, "single")
+    return ["## Before and after core's alert_by_model rule", "",
+            "Before: 8 floods, 14 alerts (7 ACTION, 7 MINOR), all raised by the stage forecast crossing a category "
+            "(before_alert_by_model/). After (tables above): an alert is raised when the model's p_minor >= tau at "
+            "3 h; the replay set was rebuilt through core 6b105c1 with 4 more floods (12 floods); alerts are MINOR "
+            "only. The single agent's rules gained the model-probability rule so both systems get the same "
+            "instructions. Same LLM and checks.", "",
+            "| | multi before | multi now | single before | single now |", "|---|---|---|---|---|",
+            f"| alerts | {oa['alerts']} | {a['alerts']} | {ob['alerts']} | {b['alerts']} |",
+            f"| pass all checks | {_pct(oa['checks_pass'], oa['texts'])} | {_pct(a['checks_pass'], a['texts'])} | "
+            f"{_pct(ob['checks_pass'], ob['texts'])} | {_pct(b['checks_pass'], b['texts'])} |",
+            f"| saved / passing on attempt 1 | {_pct(oa['attempt1'], oa['alerts'])} | {_pct(a['attempt1'], a['alerts'])} | "
+            f"{_pct(ob['checks_pass'], ob['alerts'])} | {_pct(b['checks_pass'], b['alerts'])} |",
+            f"| numbers in the evidence | {_pct(oa['numbers_ok'], oa['numbers'])} | {_pct(a['numbers_ok'], a['numbers'])} | "
+            f"{_pct(ob['numbers_ok'], ob['numbers'])} | {_pct(b['numbers_ok'], b['numbers'])} |",
+            f"| tokens median | {oa['tokens_median']} | {a['tokens_median']} | {ob['tokens_median']} | {b['tokens_median']} |",
+            f"| time median s | {oa['time_median_s']} | {a['time_median_s']} | {ob['time_median_s']} | {b['time_median_s']} |",
+            ""]
 
 
 def main(argv=None) -> None:
