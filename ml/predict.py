@@ -6,8 +6,8 @@
 and `official_levels` ({action, minor, moderate, major}). Optional `horizon_h` (default 3).
 
 Default: the rise-rate extrapolation, no probabilities (None = the model gives none). A trained S3 model
-(ml/s3_model.py) is used ONLY when `ml/models/active.json` names one, e.g. {"name": "s3_v0"}; it then loads
-`ml/models/<name>_h<h>.joblib` once per horizon and returns p_minor (the only category it was trained for; p_action,
+(ml/s3_model.py) is used ONLY when `ml/models/active.json` names one, e.g. {"name": "s3_v0", "horizons": [3]}
+(omit "horizons" for every horizon that has a file); it then loads `ml/models/<name>_h<h>.joblib` once per horizon and returns p_minor (the only category it was trained for; p_action,
 p_moderate, p_major stay None), forecast_stage from its stage regressor, horizon_h and model = <name>. Live features
 are built by `model_features` exactly as the training frame (ml.dataset.build_site_columns + 12/24 h changes;
 rain_1h/3h/6h from the window for v1). It never raises: any failure (no file, missing horizon, missing stage,
@@ -67,19 +67,24 @@ MODELS_DIR = os.getenv("ML_MODELS_DIR", os.path.join(os.path.dirname(__file__), 
 _CACHE: dict = {}
 
 
-def _active() -> str | None:
+def _active() -> tuple[str | None, set | None]:
+    """(model name, allowed horizons or None = every horizon with a file) from ml/models/active.json."""
     if "active" not in _CACHE:
         try:
             with open(os.path.join(MODELS_DIR, "active.json"), encoding="utf-8") as f:
-                _CACHE["active"] = json.load(f).get("name")
+                cfg = json.load(f)
+            hs = cfg.get("horizons")
+            _CACHE["active"] = (cfg.get("name"), {int(h) for h in hs} if hs is not None else None)
         except Exception:  # noqa: BLE001 - no active model: baseline
-            _CACHE["active"] = None
+            _CACHE["active"] = (None, None)
     return _CACHE["active"]
 
 
 def _load_model(horizon_h: float):
-    name = _active()
+    name, horizons = _active()
     if not name or float(horizon_h) != int(horizon_h):
+        return None
+    if horizons is not None and int(horizon_h) not in horizons:
         return None
     key = (name, int(horizon_h))
     if key not in _CACHE:

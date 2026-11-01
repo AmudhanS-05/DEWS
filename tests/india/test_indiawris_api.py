@@ -2,6 +2,7 @@
 cloud); these tests pin the request shape from the OpenAPI spec and the tolerant parsing, not the real body."""
 import json
 
+import pytest
 import requests
 
 from india import indiawris_api as A
@@ -137,3 +138,58 @@ def test_discover_counts_and_first_record(tmp_path):
     assert "/Dataset/River%20Water%20Level" in s.calls[1][0]
     text = "\n".join(out)
     assert "No data found" in text and '"stationCode": "K1"' in text and "1 of 2 combinations" in text
+
+
+def real_rec(code="CW1PRA000084", day=8, hour=0, v=101.5):
+    """Field names as returned to the user's laptop on 31 Oct 2026 (values here are made up)."""
+    return {"stationCode": code, "stationName": "Aheri (Gudem Bridge)", "dataValue": v,
+            "dataTime": f"2022-07-{day:02d} {hour:02d}:00:00", "unit": "m", "datatypeCode": "WL",
+            "description": "MANUAL-Water Level by Staff Gauge", "agencyName": "CWC", "latitude": 19.4,
+            "longitude": 80.0}
+
+
+def test_real_field_names_parse_with_metadata():
+    rs = A.to_readings([real_rec(day=8), real_rec(day=9)])
+    assert [r["site_no"] for r in rs] == ["CW1PRA000084"] * 2
+    assert rs[0]["reading_time"] == "2022-07-07T18:30:00Z"                 # 00:00 IST
+    assert rs[0]["method"] == "MANUAL-Water Level by Staff Gauge" and rs[0]["meta"]["agencyName"] == "CWC"
+    assert rs[0]["meta"]["latitude"] == 19.4 and rs[1]["reading_ts"] - rs[0]["reading_ts"] == 86400
+
+
+def test_api_time_formats():
+    for t in ("2022-07-08 00:00:00", "2022-07-08T00:00:00", "2022-07-08T00:00:00+05:30", "08-07-2022 00:00"):
+        assert A.parse_api_time(t).strftime("%Y-%m-%dT%H:%M") == "2022-07-07T18:30", t
+    assert A.parse_api_time("2022-07-07T18:30:00Z").hour == 18
+
+
+def test_fetch_resume_reads_saved_pages(tmp_path):
+    s = Sess(lambda u, p: Resp(200, {"statusCode": 200, "data": [real_rec(day=d) for d in (8, 9)]}))
+    A.fetch("water_level", "basin", "2022-07-08", "2022-07-10", "CWC", str(tmp_path), session=s,
+            basin="Godavari", tributary="Pranhita")
+    assert len(s.calls) == 1
+    s2 = Sess(lambda u, p: (_ for _ in ()).throw(AssertionError("network used")))
+    res = A.fetch("water_level", "basin", "2022-07-08", "2022-07-10", "CWC", str(tmp_path), session=s2,
+                  basin="Godavari", tributary="Pranhita")
+    assert res["reused"] == 1 and len(res["records"]) == 2 and not s2.calls
+
+
+def test_list_stations_and_fetch_by_code(tmp_path):
+    def fn(url, p):
+        if p.get("tributaryName") == "Pranhita":
+            return Resp(200, {"statusCode": 200, "data": [real_rec(day=d, hour=h) for d in (1, 2) for h in (0, 8)]
+                              + [real_rec("OTHER1", 1)]})
+        return Resp(200, {"statusCode": 500, "message": "No data found for the given criteria.", "data": []})
+    s, waits, out = Sess(fn), [], []
+    cat = A.list_stations(("2022-07-01", "2022-07-31"), "CWC", str(tmp_path), session=s, sleep_s=2,
+                          sleep=waits.append, printer=out.append, basins={"Godavari": ["Pranhita", "Indravati"]},
+                          states={})
+    row = next(r for r in cat if r["station_code"] == "CW1PRA000084")
+    assert row["records"] == 4 and row["median_interval_h"] == 8.0 and row["tributary"] == "Pranhita"
+    assert (tmp_path / "raw" / "indiawris" / "api" / "stations.csv").exists() and waits
+    r = A.fetch_stations(["CW1PRA000084"], "2022-07-01", "2022-07-31", str(tmp_path), session=s, sleep=lambda _: None,
+                         printer=out.append)
+    got = L.load_folder(str(tmp_path / "raw" / "indiawris"))
+    assert list(got) == ["CW1PRA000084"] and len(got["CW1PRA000084"]) == 4 and r["readings"] == 4
+    assert got["CW1PRA000084"][0]["method"] == "MANUAL-Water Level by Staff Gauge"       # API -> CSV -> loader
+    with pytest.raises(SystemExit):
+        A.fetch_stations(["NOPE"], "2022-07-01", "2022-07-31", str(tmp_path), session=s, printer=out.append)

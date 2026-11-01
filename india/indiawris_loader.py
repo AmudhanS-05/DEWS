@@ -37,7 +37,7 @@ HEADER_TIME = ("date time", "datetime", "data time", "date", "time", "observatio
 HEADER_LEVEL = ("water level", "level", "data value", "value", "wl")
 META_KEYS = {"station code": "station_code", "station name": "station_name", "river": "river", "basin": "basin",
              "sub basin": "sub_basin", "state": "state", "district": "district", "agency": "agency",
-             "latitude": "lat", "longitude": "lon", "unit": "unit"}
+             "latitude": "lat", "longitude": "lon", "unit": "unit", "method": "method"}
 THRESHOLD_COLUMNS = ["station_code", "station_name", "river", "basin", "state", "lat", "lon", "warning_level_m",
                      "danger_level_m", "hfl_m", "hfl_date", "source", "source_date", "notes"]
 
@@ -144,7 +144,7 @@ def load_file(path: str, assume_time: time = time(8, 0)) -> list[dict]:
             continue
         seen.add(ts)
         out.append({"site_no": code, "site_name": meta.get("station_name"), "parameter": "water_level",
-                    "unit": unit, "series": SOURCE, "method": "India-WRIS export", "value": v, "qualifiers": [],
+                    "unit": unit, "series": SOURCE, "method": meta.get("method") or "India-WRIS export", "value": v, "qualifiers": [],
                     "reading_time": dt.strftime("%Y-%m-%dT%H:%M:%SZ"), "reading_ts": ts, "source": SOURCE,
                     "meta": meta})
     out.sort(key=lambda r: r["reading_ts"])
@@ -161,12 +161,20 @@ def load_station(paths: list[str], assume_time: time = time(8, 0)) -> list[dict]
 
 
 def load_folder(folder: str, assume_time: time = time(8, 0)) -> dict[str, list[dict]]:
-    """All exports under a folder, grouped by station code."""
+    """All exports under a folder, grouped by station code. The `api/` subfolder (raw API pages and the station
+    catalogue of india/indiawris_api.py) is skipped; its readings arrive as loader CSVs in `api_csv/`. A file
+    without a recognisable header is reported and skipped, not fatal."""
     files = [p for ext in ("xlsx", "xls", "csv") for p in glob.glob(os.path.join(folder, "**", f"*.{ext}"),
                                                                     recursive=True)]
+    files = [p for p in files if "api" not in os.path.relpath(p, folder).split(os.sep)[:-1]]
     groups: dict[str, list[dict]] = {}
     for p in sorted(files):
-        for r in load_file(p, assume_time):
+        try:
+            rows = load_file(p, assume_time)
+        except ValueError as e:
+            print(f"  skip {p}: {e}")
+            continue
+        for r in rows:
             groups.setdefault(r["site_no"], {}).setdefault(r["reading_ts"], r)
     return {s: [d[t] for t in sorted(d)] for s, d in groups.items()}
 
