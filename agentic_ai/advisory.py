@@ -236,6 +236,10 @@ def requirements(facts: dict, confidence: str) -> list[tuple[str, str]]:
            ("category", f"Name the alert's official category in capital letters: {cat.upper()}.")]
     if level is not None:
         req.append(("official_stage", f"State the official {cat.upper()} flood stage: {level:.1f} ft."))
+    req.append(("category_stage", "When you give a category's stage, use its official stage exactly: "
+                + ", ".join(f"{c.upper()} {v:.1f} ft" for c, v in lv.items() if v is not None) + "."))
+    req.append(("threshold", "Use no threshold other than these official NWS categories (no 'danger level', "
+                             "'warning level', 'flood threshold' or made-up categories such as 'severe')."))
     fc = facts.get("highest_category_forecast", "")
     if fc.lower() in rules.CATEGORIES and rules.rank(fc.lower()) > rules.rank(cat):
         req.append(("forecast_category",
@@ -245,6 +249,8 @@ def requirements(facts: dict, confidence: str) -> list[tuple[str, str]]:
                     f"forecast reaches {cat.upper()}."))
     req.append(("certainty", "No certainty language (never: " + ", ".join(f"'{p}'" for p in rules.FORBIDDEN_PHRASES)
                 + "); say 'forecast to reach'."))
+    req.append(("cause", "Do not say why the water rises (no 'caused by', 'due to', 'because of', dam release): "
+                         "the facts give signals, not causes."))
     if a.get("probability_pct") == "not available":
         req.append(("probability", "Write 'probability: not available' (the model gives none); write no percentage."))
     else:
@@ -265,9 +271,9 @@ def requirements(facts: dict, confidence: str) -> list[tuple[str, str]]:
     req.append(("abbreviation", "Capitalised abbreviations only from: " + ", ".join(sorted(ABBREVIATIONS))
                 + " (and gauge names exactly as in FACTS); no other all-caps words."))
     kind = facts["context"].get("signal_kind")
-    if kind == "supporting":
-        req.append(("context_kind", "Context: say the downstream/nearby gauges are a SUPPORTING signal (also rising in "
-                                    "the same window); never say they cause, lead or predict the rise at this gauge."))
+    req.append(("context_kind", ("Context: say the downstream/nearby gauges are a SUPPORTING signal (also rising in "
+                                 "the same window); n" if kind == "supporting" else "N")
+                + "ever say a downstream or nearby gauge causes, leads or predicts the rise at this gauge."))
     req.append(("markdown", "Plain text only: no Markdown (no ** or __, no # headings)."))
     if a.get("mode") == "SIMULATION":
         req.append(("simulation", "Start with the word SIMULATION in capital letters and say it is a replay of a "
@@ -279,6 +285,13 @@ def requirements(facts: dict, confidence: str) -> list[tuple[str, str]]:
     if confidence == "uncertain":
         req.append(("uncertain", "Write UNCERTAIN, then state the gauge evidence signal and the context signal using the "
                                  "words 'evidence' and 'context', and ask for a re-check at the next window."))
+    if facts.get("data_quality"):
+        req.append(("suspect_data", "The gauge readings are flagged as a possible sensor fault ("
+                    + str(facts["data_quality"]) + "): say the data are questionable."))
+    n = facts.get("update_n") or 1
+    req.append(("update", f"Start with 'Update {n}:' (after the SIMULATION label if there is one); this is update {n} "
+                          "of the same flood episode." if n > 1 else "This is the first alert of the episode: no "
+                          "'Update n' wording."))
     req.append(("length", f"At most {rules.MAX_ADVISORY_CHARS - 100} characters in total."))
     return req
 
