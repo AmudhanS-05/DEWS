@@ -65,13 +65,16 @@ def build_table(us_rows: list[dict], india_rows: list[dict], n_us_gauges_with_ca
             if n_us_gauges_with_cats is not None else "yes: NWPS API (JSON)")
     return [
         {"property": "Reporting interval (median per station)", "us_usgs": u("interval"), "us_provenance": us_src,
-         "india_measured": m("interval"), "india_literature": "daily",
-         "india_provenance": "INDIA_STUDY.md (India-WRIS), to confirm with the downloads"},
+         "india_measured": m("interval"),
+         "india_literature": "about 1 h at most CWC river stations in July 2022 (744 records in 31 days); dams and "
+                             "reservoirs every 3 to 24 h; some stations 12 to 32 records a month; off-season unverified",
+         "india_provenance": "user's --list-stations scan, July 2022, agency CWC, 83 stations (1 Nov 2026; stations.csv not in git)"},
         {"property": "Publication delay", "us_usgs": "24 to 69 min (one live sample)",
          "us_provenance": "measured once, FAQ.md (EDA, 3 Oct 2026)",
          "india_measured": "not measurable from archive files",
-         "india_literature": "daily values published after the day; no live feed documented",
-         "india_provenance": "INDIA_STUDY.md"},
+         "india_literature": "India-WRIS serves an archive (no live feed found); CWC real-time flood forecasts are "
+                             "web pages and bulletins; delay not measured",
+         "india_provenance": "INDIA_STUDY.md; India-WRIS API probes (31 Oct - 1 Nov 2026)"},
         {"property": "Archive length", "us_usgs": u("archive"), "us_provenance": us_src,
          "india_measured": m("archive"), "india_literature": "multi-year; one year per download request",
          "india_provenance": "INDIA_STUDY.md"},
@@ -89,10 +92,9 @@ def build_table(us_rows: list[dict], india_rows: list[dict], n_us_gauges_with_ca
          "india_measured": (f"{sum('MANUAL' in str(r.get('method', '')).upper() for r in india_rows)} of "
                             f"{len(india_rows)} stations: manual staff-gauge readings"
                             if india_rows else PENDING),
-         "india_literature": "manual staff-gauge readings, about daily (00:00 / 08:00): description 'MANUAL-Water "
-                             "Level by Staff Gauge' at Aheri (Gudem Bridge, Pranhita) and NEELEESWARAM (Periyar)",
-         "india_provenance": "observed in two India-WRIS API responses (--discover, 31 Oct 2026); measured per "
-                             "station once fetched"},
+         "india_literature": "a mix: 'MANUAL-Water Level by Staff Gauge (0)' (local gauge zero), 'MANUAL-WL by Staff "
+                             "Gauge (MSL)' (mean sea level) and 'INSAT-WL by Telemetry'",
+         "india_provenance": "user's --list-stations scan, July 2022, agency CWC, 83 stations (1 Nov 2026; stations.csv not in git)"},
         {"property": "Access method", "us_usgs": "REST API (JSON), no key", "us_provenance": "source",
          "india_measured": "manual browser download (Excel) or the India-WRIS POST API from an Indian connection "
                            "(no key; unreachable from the cloud session)" if ind else PENDING,
@@ -106,8 +108,9 @@ def build_table(us_rows: list[dict], india_rows: list[dict], n_us_gauges_with_ca
          "us_provenance": us_src, "india_measured": m("events"), "india_literature": "",
          "india_provenance": "" if ind else "needs downloads + india/thresholds.csv"},
         {"property": "Rise time resolvable (interval < median rise)", "us_usgs": u("rise"), "us_provenance": us_src,
-         "india_measured": m("rise"), "india_literature": "expected no with daily data (to be confirmed)",
-         "india_provenance": "INDIA_STUDY.md step B"},
+         "india_measured": m("rise"), "india_literature": "hourly monsoon data resolves rises longer than ~1 h; dams (3 to 24 h) do not; "
+                             "not measured per event",
+         "india_provenance": "user's --list-stations scan, July 2022, agency CWC, 83 stations (1 Nov 2026; stations.csv not in git)"},
     ]
 
 
