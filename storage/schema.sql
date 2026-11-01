@@ -32,13 +32,34 @@ CREATE TABLE IF NOT EXISTS gauge_readings (
 
 CREATE TABLE IF NOT EXISTS catchment_rain (
     site_no         TEXT NOT NULL,
-    product         TEXT NOT NULL,      -- e.g. MRMS MultiSensor_QPE_01H_Pass2
-    window_end      TIMESTAMPTZ NOT NULL,
+    product         TEXT NOT NULL,      -- MRMS bucket folder, e.g. MultiSensor_QPE_01H_Pass2_00.00
+    window_end      TIMESTAMPTZ NOT NULL,   -- end of the accumulation hour (the file's valid time)
     accum_hours     INTEGER NOT NULL,
-    rain_mm         DOUBLE PRECISION,
+    rain_mm         DOUBLE PRECISION,   -- mean depth over the 10 km circle (null = no radar coverage)
     computed_at     TIMESTAMPTZ DEFAULT now(),
-    PRIMARY KEY (site_no, product, window_end, accum_hours)
+    mode            TEXT NOT NULL DEFAULT 'LIVE',   -- LIVE | SIMULATION
+    PRIMARY KEY (site_no, product, window_end, accum_hours, mode)
 );
+-- C2.2 (rain.mrms / replay.rain, producers/mrms_qpe_producer.py): radius sensitivity, coverage and trace times.
+-- Databases created before 1 Nov gain the columns and the mode in the primary key (live and replay never collide).
+ALTER TABLE catchment_rain ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'LIVE';
+ALTER TABLE catchment_rain ADD COLUMN IF NOT EXISTS rain_mm_5km DOUBLE PRECISION;
+ALTER TABLE catchment_rain ADD COLUMN IF NOT EXISTS rain_mm_25km DOUBLE PRECISION;
+ALTER TABLE catchment_rain ADD COLUMN IF NOT EXISTS coverage_10km DOUBLE PRECISION;
+ALTER TABLE catchment_rain ADD COLUMN IF NOT EXISTS n_cells_10km INTEGER;
+ALTER TABLE catchment_rain ADD COLUMN IF NOT EXISTS file_time TIMESTAMPTZ;    -- when NOAA published the file
+ALTER TABLE catchment_rain ADD COLUMN IF NOT EXISTS fetched_at TIMESTAMPTZ;   -- when our producer had it
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.key_column_usage k
+                   JOIN information_schema.table_constraints c ON c.constraint_name = k.constraint_name
+                    AND c.table_schema = k.table_schema
+                   WHERE c.table_schema = current_schema() AND c.table_name = 'catchment_rain'
+                     AND c.constraint_type = 'PRIMARY KEY' AND k.column_name = 'mode') THEN
+        ALTER TABLE catchment_rain DROP CONSTRAINT IF EXISTS catchment_rain_pkey;
+        ALTER TABLE catchment_rain ADD PRIMARY KEY (site_no, product, window_end, accum_hours, mode);
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS windowed_aggregates (
     site_no             TEXT NOT NULL,
@@ -53,6 +74,7 @@ CREATE TABLE IF NOT EXISTS windowed_aggregates (
     rain_1h             DOUBLE PRECISION,
     rain_3h             DOUBLE PRECISION,
     rain_6h             DOUBLE PRECISION,
+    rain_24h            DOUBLE PRECISION,
     provisional         BOOLEAN,
     emitted_at          TIMESTAMPTZ DEFAULT now(),
     PRIMARY KEY (site_no, window_start, mode)
@@ -206,3 +228,6 @@ CREATE INDEX IF NOT EXISTS agent_events_run ON agent_events (run_id, event_id);
 
 -- databases created before C1.5 gain the column
 ALTER TABLE alerts ADD COLUMN IF NOT EXISTS details JSONB;
+
+-- databases created before C2.2 gain the 24 h rain sum on the windows
+ALTER TABLE windowed_aggregates ADD COLUMN IF NOT EXISTS rain_24h DOUBLE PRECISION;

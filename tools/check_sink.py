@@ -68,6 +68,11 @@ CHECKS = {
         lambda m: (m["site_no"], m["parameter"], m["series"], epoch(m["reading_ts"]), m.get("mode", "LIVE"))
         if m.get("type", "reading") == "reading" else None,
         "SELECT site_no, parameter, series, EXTRACT(EPOCH FROM reading_time)::bigint, mode FROM gauge_readings", 4),
+    "catchment_rain": (
+        [config.TOPIC_RAIN, config.TOPIC_REPLAY_RAIN],
+        lambda m: (m["site_no"], m["product"], epoch(m["hour_end_ts"]), int(m.get("accum_hours", 1)), m.get("mode", "LIVE"))
+        if m.get("type") == "rain" else None,
+        "SELECT site_no, product, EXTRACT(EPOCH FROM window_end)::bigint, accum_hours, mode FROM catchment_rain", 4),
     "windowed_aggregates": (
         [config.TOPIC_AGG],
         lambda m: (m["site_no"], epoch(m["window_start_ts"]), m.get("mode", "LIVE")),
