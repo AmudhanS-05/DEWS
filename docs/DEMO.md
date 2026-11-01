@@ -51,7 +51,7 @@ to the bundled world image by itself (gauges and alerts keep working; sharper ti
 
 **Before the audience arrives:**
 - [ ] `scripts\start_demo.ps1`; console at http://127.0.0.1:8765, all chips green.
-- [ ] Clear the flood to be shown: `python -m tools.reset_replay --site 08158700 --start 2019-05-02 --end 2019-05-06 --yes` (about a minute).
+- [ ] Clear the flood to be shown: `python -m tools.reset_replay --site 08158700 --start 2019-05-02 --end 2019-05-06 --yes` (1.5 to 3 minutes: do it before the audience arrives).
 - [ ] Laptop on mains, sleep off, notifications off, clock synced.
 
 **During the demo:** replay plus narration across Map, Pipeline flow and Agents. Run the replay, watch Pipeline flow, click the alert line to fly to the
