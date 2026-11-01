@@ -30,6 +30,9 @@ class State(TypedDict, total=False):
     urgent: bool
     plan: list[str]
     update_n: int
+    episode: dict
+    examples: list[dict]
+    data_quality: dict
     evidence: dict
     context: dict
     disagreement: dict | None
@@ -99,6 +102,11 @@ def _now():
     return datetime.now(timezone.utc)
 
 
+def _facts(s: State) -> dict:
+    return advisory.build_facts(s["alert"], s["evidence"], s["context"], s["update_n"], s.get("episode"),
+                                s["evidence"].get("data_quality"))
+
+
 def build_graph(tools, run: Run):
     """Compile the graph. `tools` is a Tools-like object; `run` carries the event log for this alert."""
 
@@ -122,15 +130,22 @@ def build_graph(tools, run: Run):
         if existing and not s.get("force"):
             adv = existing[-1]["advisory_id"]
             return _drop(s, t0, f"duplicate: v{adv.rsplit('|', 1)[-1]} exists ({adv}), use --force to re-run")
-        hist = run.call("coordinator", "get_episode_history", s["alert_id"])["alerts"]
+        history = run.call("coordinator", "get_episode_history", s["alert_id"])
+        hist = history["alerts"]
         update_n = 1 + sum(1 for h in hist if h["raised_at"] < alert["raised_at"])
+        episode = advisory.episode_summary(history, s["alert_id"], alert["raised_at"], update_n)
+        try:   # episodic memory: officer edits as wording examples (numbers masked in the prompt)
+            examples = run.call("coordinator", "get_edit_examples", alert["site_no"], alert["mode"], 2)
+        except Exception:  # noqa: BLE001 - memory is optional
+            examples = []
         urgent = alert["category"] == "major"
         plan = ["evidence", "context", "writer", "reviewer"]
-        run.event("coordinator", "end", {"plan": plan, "urgent": urgent, "update_n": update_n, "mode": alert["mode"]})
+        run.event("coordinator", "end", {"plan": plan, "urgent": urgent, "update_n": update_n, "mode": alert["mode"],
+                                         "earlier": episode["earlier_alert_categories"], "edit_examples": len(examples)})
         run.row("coordinator", t0, f"alert {s['alert_id']} ({alert['category']}, {alert['mode']})",
-                {"plan": plan, "urgent": urgent, "update_n": update_n})
-        return {"alert": alert, "urgent": urgent, "plan": plan, "update_n": update_n, "attempt": 0, "feedback": [],
-                "tokens": 0, "outcome": "pending"}
+                {"plan": plan, "urgent": urgent, "update_n": update_n, "episode": episode, "edit_examples": len(examples)})
+        return {"alert": alert, "urgent": urgent, "plan": plan, "update_n": update_n, "episode": episode,
+                "examples": examples, "attempt": 0, "feedback": [], "tokens": 0, "outcome": "pending"}
 
     def _drop(s: State, t0, reason: str) -> dict:
         run.event("coordinator", "end", {"dropped": reason})
@@ -148,6 +163,10 @@ def build_graph(tools, run: Run):
         fc = run.call("evidence", "get_forecast", site, until=until, mode=mode, horizon_h=a.get("horizon_h"))
         lv = run.call("evidence", "get_official_levels", site)
         pf = run.call("evidence", "get_past_floods", site)
+        dq = a.get("data_quality")            # core may put the sensor-fault flag on the alert; else check here
+        if not isinstance(dq, dict):
+            dq = run.call("evidence", "get_data_quality", site, until=until, mode=mode) \
+                if hasattr(tools, "get_data_quality") else {"suspect": None, "reasons": []}
         stages = [x["stage_last"] for x in w if x.get("stage_last") is not None]
         last = w[-1] if w else {}
         rate = last.get("rise_rate_ft_per_h")
@@ -158,9 +177,10 @@ def build_graph(tools, run: Run):
               "p_action": fc and fc["p_action"], "p_minor": fc and fc["p_minor"], "p_moderate": fc and fc["p_moderate"],
               "p_major": fc and fc["p_major"], "model": fc["model"] if fc else a.get("model"),
               "official_levels": lv, "past_floods_n": pf["n"], "median_rise_h": pf["median_rise_h"],
-              "direction": rules.evidence_direction(rate, fstage, level)}
+              "direction": rules.evidence_direction(rate, fstage, level), "data_quality": dq}
         run.event("evidence", "end", {"direction": ev["direction"], "stage_last": ev["stage_last"], "rise_rate_ft_per_h": rate,
-                                      "forecast_stage": fstage})
+                                      "forecast_stage": fstage, "p_minor": ev["p_minor"], "model": ev["model"],
+                                      "suspect": dq.get("suspect"), "suspect_reasons": dq.get("reasons")})
         run.row("evidence", t0, f"gauge {site} up to {until}", ev)
         return {"evidence": ev}
 
@@ -205,9 +225,11 @@ def build_graph(tools, run: Run):
         run.event("writer", "start", {"attempt": attempt})
         if s["feedback"]:
             run.event("writer", "revision", {"attempt": attempt, "feedback": s["feedback"]})
-        facts = advisory.build_facts(a, s["evidence"], s["context"], s["update_n"])
-        fallback = advisory.template_text(a, s["evidence"], s["context"], s["confidence"], s["update_n"], s["disagreement"])
-        reply = llm.complete(advisory.SYSTEM_PROMPT, advisory.llm_user_prompt(facts, s["confidence"], s["disagreement"], s["feedback"]),
+        facts = _facts(s)
+        fallback = advisory.template_text(a, s["evidence"], s["context"], s["confidence"], s["update_n"], s["disagreement"],
+                                          s.get("episode"), s["evidence"].get("data_quality"))
+        reply = llm.complete(advisory.SYSTEM_PROMPT, advisory.llm_user_prompt(facts, s["confidence"], s["disagreement"],
+                                                                              s["feedback"], s.get("examples")),
                              on_wait=waiter("writer"))
         text, err = (reply.text, None) if reply.text else (fallback, reply.error)
         text = checks.normalize(text)   # plain ASCII dashes/spaces in what is reviewed, saved and shown
@@ -230,7 +252,7 @@ def build_graph(tools, run: Run):
     def reviewer(s: State) -> dict:
         t0, a = _now(), s["alert"]
         run.event("reviewer", "start", {"attempt": s["attempt"]})
-        facts = advisory.build_facts(a, s["evidence"], s["context"], s["update_n"])
+        facts = _facts(s)
         reasons = checks.review(s["draft"], a, facts, s["confidence"])
         tokens, judge = 0, None
         if not reasons and llm.provider() != "none":   # LLM judgement second, only on a draft that passed the rules

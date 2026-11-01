@@ -27,7 +27,8 @@ def test_seeded_alert_saves_v2_draft_with_events():
 def test_workers_use_only_their_own_tools():
     res = graph.run_alert(FakeTools(), ALERT)
     names = {a: {e["detail"]["tool"] for e in kinds(res, a, "tool_call")} for a in ("evidence", "context")}
-    assert names["evidence"] == {"get_recent_windows", "get_forecast", "get_official_levels", "get_past_floods"}
+    assert names["evidence"] == {"get_recent_windows", "get_forecast", "get_official_levels", "get_past_floods",
+                                 "get_data_quality"}
     assert names["context"] == {"get_rain", "get_neighbours", "get_gauge_info", "get_impacts"}
 
 

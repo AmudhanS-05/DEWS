@@ -84,5 +84,8 @@ default `dews-agents`). All in `.env`.
 
 Read-only: `get_alert(alert_id)`, `get_recent_windows(site, hours)`, `get_forecast(site)`, `get_official_levels(site)`,
 `get_past_floods(site)`, `get_rain(site, hours)`, `get_neighbours(site)`, `get_gauge_info(site)`,
-`get_impacts(site, level)`, `get_episode_history(alert_id)`. Write (agents only): `save_advisory(...)`,
+`get_impacts(site, level)`, `get_episode_history(alert_id)`, `get_edit_examples(site, mode, limit)` (officer edits
+as wording examples, agents 1 Nov), `get_data_quality(site, until, mode)` (agents call ml's `check_gauge` on
+`gauge_readings`; an alert field `data_quality` = {suspect, reasons} from core would take precedence, optional).
+Write (agents only): `save_advisory(...)`,
 `log_agent_run(...)`. Agents never publish to Kafka and never send email.

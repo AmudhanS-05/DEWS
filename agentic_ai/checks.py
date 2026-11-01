@@ -109,6 +109,8 @@ def allowed_numbers(facts: dict) -> tuple[list[float], list[float]]:
             plain.extend(float(x) for x in _ANY_NUM.findall(normalize(v)))
         elif isinstance(v, dict):
             for k, x in v.items():
+                if k == "episode":     # A3.3 guard: earlier alerts are wording only, never a source of numbers
+                    continue
                 walk(x, k, is_pct or key.endswith("_pct"))
         elif isinstance(v, (list, tuple)):
             for x in v:
