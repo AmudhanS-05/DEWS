@@ -60,8 +60,34 @@ def drills_verdict(latest: dict[str, tuple[float | None, str]], scenarios=SCENAR
     return not bad, text + (f"; not passed: {', '.join(bad)}" if bad else "")
 
 
+def episode_lead_times(alerts: list[tuple[str, str]], windows: list[tuple[str, float | None]], level: float,
+                       feed_delay_h: float = 1.0) -> tuple[bool, str]:
+    """alerts = (alert_id, kind); windows = (window_start, stage_last) ascending, ISO in one format. S1 asks for one `new`
+    alert per episode and a measured lead time, negative allowed. Lead = first window with stage at `level` minus the window
+    that raised the alert, at window resolution; net subtracts the feed delay. Alerting before the crossing is S3's bar."""
+    from datetime import datetime
+    new: dict[str, int] = {}
+    for alert_id, kind in alerts:
+        ep = alert_id.split("|")[2]
+        new[ep] = new.get(ep, 0) + (kind == "new")
+    if not new:
+        return False, "no alert"
+    bad = sorted(ep for ep, n in new.items() if n != 1)
+    parts = []
+    for ep in sorted(new):
+        start = _iso(ep)
+        cross = next((w for w, stage in windows if stage is not None and stage >= level and w >= start), None)
+        if cross is None:
+            parts.append(f"episode {ep}: stage never reached {level:g} ft")
+            continue
+        gross = (datetime.fromisoformat(cross) - datetime.fromisoformat(start)).total_seconds() / 3600
+        parts.append(f"episode {ep}: lead {gross:+.1f} h gross, {gross - feed_delay_h:+.1f} h net of feed delay")
+    return not bad, "; ".join(parts) + (f"; not exactly one new alert: {', '.join(bad)}" if bad else "")
+
+
 def alert_before_crossing(windows: list[tuple[str, float | None]], alert_window: str | None, level: float) -> tuple[bool, str]:
-    """windows = (window_start, stage_last) ascending. True if the alert's window comes before the first stage at `level`."""
+    """S3 acceptance, against the trained model. windows = (window_start, stage_last) ascending. True if the alert's window
+    comes before the first stage at `level`."""
     crossing = next((w for w, stage in windows if stage is not None and stage >= level), None)
     if alert_window is None:
         return False, "no alert"
@@ -143,16 +169,15 @@ def check_alert_and_v1():
     return with_v1 > 0, f"{len(rows)} alert(s) of the May 2019 replay, {with_v1} with a template v1 advisory"
 
 
-def check_alert_before_crossing():
-    """Runbook step 10. The rise-rate baseline may not meet this: it is reported, never tuned or waved through."""
+def check_alert_once_per_episode():
+    """Runbook step 10. The rise-rate baseline alerts late (a measured finding): the lead time is reported, negative allowed."""
     from streams.forecaster import load_gauges
     minor = load_gauges()[DRWT2]["levels"]["minor"]
-    ids = [r[0] for r in _query("SELECT alert_id FROM alerts WHERE site_no = %s AND mode = 'SIMULATION' AND alert_id LIKE %s ORDER BY 1",
-                                (DRWT2, f"{DRWT2}|%|2019-05-%"))]
+    alerts = _query("SELECT alert_id, COALESCE(details->>'kind', 'new') FROM alerts WHERE site_no = %s AND mode = 'SIMULATION' AND alert_id LIKE %s ORDER BY 1",
+                    (DRWT2, f"{DRWT2}|%|2019-05-%"))
     windows = [(w.isoformat(), s) for w, s in _query("SELECT window_start, stage_last FROM windowed_aggregates WHERE site_no = %s "
                                                      "AND mode = 'SIMULATION' AND window_start >= %s AND window_start < %s ORDER BY 1", (DRWT2, *FLOOD))]
-    first = min((_iso(i.split("|")[2]) for i in ids), default=None)
-    return alert_before_crossing(windows, first, minor)
+    return episode_lead_times(alerts, windows, minor)
 
 
 def _iso(ts: str) -> str:
@@ -178,7 +203,7 @@ def check_no_duplicate_windows():
 
 
 def check_drills():
-    rows = _query("SELECT run_label, recovery_time_s, notes FROM evaluation_runs WHERE run_label LIKE 'fault_drill:%%' ORDER BY run_id")
+    rows = _query("SELECT run_label, recovery_time_s, notes FROM evaluation_runs WHERE run_label LIKE 'fault_drill:%%' ORDER BY created_at, run_id")
     return drills_verdict(latest_drills(rows))
 
 
@@ -233,7 +258,7 @@ CHECKS = {"S1": [
     ("core", "May 2019 replay windows in PostgreSQL", check_replay_windows),
     ("core", "one forecast per window", check_one_forecast_per_window),
     ("core", "alert with template v1 advisory", check_alert_and_v1),
-    ("core", "alert before the minor crossing", check_alert_before_crossing),
+    ("core", "one alert per episode, lead time reported", check_alert_once_per_episode),
     ("core", "delivery only after human approval", check_delivered_after_approval),
     ("core", "topics match PostgreSQL", check_sink_matches),
     ("core", "no window emitted twice", check_no_duplicate_windows),

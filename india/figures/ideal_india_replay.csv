@@ -1,0 +1,3 @@
+variant,site_no,replay_file,readings,windows,zero_filled_windows,riserate_alerts,riserate_lead_h,s3_v0_alerts,s3_v0_lead_h
+ideal_india,SYN-IND-BDAT2-ideal_india,data/replay/synthetic_india_ideal_india.jsonl,1619,407,1,1,1.5,1,1.5
+india_today,SYN-IND-BDAT2-india_today,data/replay/synthetic_india_india_today.jsonl,17,384,368,0,,0,

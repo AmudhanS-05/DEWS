@@ -15,7 +15,7 @@ from datetime import datetime
 
 from common.nwps import CATEGORIES, category_of
 
-ISSUER = "Flood early-warning prototype (RVCE student project). Not an official NWS or government warning."
+ISSUER = "DEWS flood early-warning prototype. Not an official NWS or government warning."
 CAT_COLOUR = {"action": "#b8942f", "minor": "#c76f1c", "moderate": "#b83d32", "major": "#7a56ad"}
 
 

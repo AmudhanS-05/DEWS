@@ -1,4 +1,4 @@
-# Agentic AI layer: multi-agent flood advisories (workstream `agents`, AI373TA)
+# Agentic AI layer: multi-agent flood advisories (workstream `agents`)
 
 Turns a forecaster alert (`alerts.flood` / the `alerts` table) into a checked, plain-language advisory **draft**
 (version 2+, the template text from the sink is version 1). Agents draft and check only: they never produce to
@@ -16,7 +16,7 @@ coordinator -> [evidence || context] -> reconcile -> writer -> reviewer --pass--
 |---|---|---|
 | coordinator | loads the alert, drops duplicates and retractions, counts the update number in the episode, plans | get_alert, get_episode_history |
 | evidence | the gauge's own windows and forecast, official levels; direction rising / not rising | get_recent_windows, get_forecast, get_official_levels, get_past_floods |
-| context | radar rain, upstream/downstream/nearby gauges, NWS impact statements; direction or `unknown` | get_rain, get_neighbours, get_gauge_info, get_impacts |
+| context | radar rain, upstream/downstream/nearby gauges, NWS impact statements; direction, signal kind (LEADING / SUPPORTING) or `unknown` | get_rain, get_neighbours, get_gauge_info, get_impacts |
 | reconcile | evidence and context disagree -> advisory marked UNCERTAIN, both signals stated | (pure rules, `rules.py`) |
 | writer | LLM draft from the facts (or the deterministic template when there is no LLM or it fails) | `llm.py`, `advisory.py` |
 | reviewer | deterministic checks first (`checks.py`), then an LLM judgement on a draft that passed them | `checks.py`, `llm.py` |
@@ -30,13 +30,32 @@ forecast reaches the alert's category while the gauge is still below it (a Kafka
 wall-clock time, so "latest window before raised_at" would be the end of the replay). Evidence and context read up
 to that window (`as_of`) and use the forecast row with the alert's horizon.
 
+**Context signals** (`rules.context_signals`, user decision 31 Oct): radar rain and upstream gauges are LEADING
+signals (water on its way to the gauge); downstream and nearby gauges rising in the same window are SUPPORTING
+context only (the storm affects the area). The text names the kind and never says a downstream or nearby rise causes
+or predicts the rise at this gauge (deterministic check `context_kind`). `unknown` only when there is no radar rain
+and no gauge reading at all. Only a LEADING signal can disagree with the gauge evidence (-> UNCERTAIN); quiet
+neighbouring gauges do not, because a flash flood can stay local. Driftwood, May 2019: downstream Onion Creek at US 183
++6.1 ft and nearby Slaughter Creek +7.4 ft in 3 h -> `rising: SUPPORTING signal only`, no leading signal.
+
+**Facts the writer and reviewer see** are in plain words: `data_source` ("a replay of a historical USGS gauge record
+(mode SIMULATION), not a real-time event", or "live USGS gauge readings"), `data_status` ("provisional per USGS (may
+be revised)" / "approved per USGS"), the model as "rise-rate baseline", `readings_time_utc`, and, when radar rain is
+missing, `rain_note` (the MRMS archive starts 2020-10-14, so a 2019 replay never has radar rain). Booleans and raw
+field names never reach the text (deterministic check `raw_field`: snake_case names such as as_of, true/false,
+"provisional data not available").
+
+**The alert's own window:** `get_alert` uses `window_start` / `window_start_ts` from the alert (core adds them to
+`alerts.flood` since 31 Oct; the sink keeps them in `alerts.details`); older rows without them use the fallback below.
+
 **The advisory text** (template and LLM alike) follows the deterministic checks, each of which is also a numbered
 writer instruction with the exact values (a test keeps the two lists equal):
 numbers only from the facts; stages and rates to 0.1 ft; the alert's official category and its stage; when the
 forecast stage crosses a higher official category, that category and its stage too ("forecast to reach MAJOR
 (13.0 ft)", "Alert category: MINOR (5.5 ft)"), never "forecast to reach MINOR"; probability as a whole % or
 "not available" when the model gives none; horizon in hours; lead time in hours or "not available"; "rain data not
-available" when radar rain is missing; never null/None/NaN/"?"; no Markdown; SIMULATION label on replayed data (and
+available" when radar rain is missing; never null/None/NaN/"?"; no raw field names or
+true/false; downstream/nearby gauges only as a supporting signal; no Markdown; SIMULATION label on replayed data (and
 never on live data); "provisional" for provisional data; UNCERTAIN with both signals when they disagree; no
 certainty language; at most 900 characters.
 
@@ -55,7 +74,7 @@ certainty language; at most 900 characters.
 | `seed.py` | puts the May 2019 DRWT2 flood into PostgreSQL (measured record, see below) |
 | `schema_agents.sql` | `advisories`, `agent_events`, `agent_runs`, `gauge_impacts`, `past_floods` (also in `storage/schema.sql`) |
 | `fixtures/drwt2_2019-05_replay.json` | measured USGS record for 08158700 + 2 neighbours, run through core's windowing and forecaster |
-| `fixtures/agent_events_DRWT2.json` | recorded agent_events for the console (regenerate: `python -m tests.agents.record_fixture`) |
+| `fixtures/agent_events_DRWT2.json` | recorded agent_events for the console (regenerate: `python -m tests.agents.record_fixture --write`) |
 
 ## Set up and run (Windows laptop, PowerShell, repo folder)
 
@@ -73,7 +92,9 @@ python -m pytest -q tests/agents             # always LLM_PROVIDER=none, no netw
 
 | Variable | |
 |---|---|
-| `LLM_PROVIDER` | `groq` (default model `GROQ_MODEL=openai/gpt-oss-120b`, key `GROQ_API_KEY`), `gemini` (`GEMINI_API_KEY` from Google AI Studio, starts with `AIza`; `GEMINI_MODEL` default gemini-2.5-flash), `ollama` (local `qwen2.5:7b`, `OLLAMA_HOST`), `none` (template only) |
+| `LLM_PROVIDER` | `groq` (default model `GROQ_MODEL=openai/gpt-oss-120b`, key `GROQ_API_KEY`), `gemini` (`GEMINI_API_KEY` from Google AI Studio, starts with `AIza`; `GEMINI_MODEL` default gemini-3.5-flash-lite; gemini-2.5-flash is closed to new keys, gemini-3.5-flash timed out at 30 s once), `ollama` (local `qwen2.5:7b`, `OLLAMA_HOST`), `none` (template only) |
+| `GROQ_REASONING_EFFORT` | `low` (default) / `medium` / `high`, sent only for `openai/gpt-oss-*`. Measured 31 Oct, 5 runs each: low 2.0-3.1 s, 3.0-3.3k tokens, 5/5 on attempt 1; not set (Groq default, round 4) 4.2-11.0 s, 4.0-8.4k tokens, 4/5 on attempt 1 |
+| Groq 429 | waits once for the reset hint (`retry-after`, else `x-ratelimit-reset-*`) when it is at most 20 s, shown as a progress line, then retries Groq; a longer hint goes straight to `LLM_FALLBACK` |
 | `LLM_FALLBACK` | `gemini` / `groq` / `none`: a failed call is retried once there, then the template text is used |
 | `LANGSMITH_TRACING=true` + `LANGSMITH_API_KEY` | optional tracing; the CLI prints the trace link |
 | `PG_DSN` | PostgreSQL (default the docker one) |
@@ -83,7 +104,7 @@ Driftwood, 08158700), the downstream gauge 08159000 and nearby 08158840, 2019-05
 and rise-rate forecaster turn it into rows (mode SIMULATION). It is the same data a core replay writes, so the
 order does not matter. Its alert 08158700|major|2019-05-04T01:00:00Z: gauge 8.16 ft (already above MODERATE 7.0 ft),
 rising 5.5 ft/h, forecast 24.72 ft in 3 h (MAJOR is 13.0 ft), no probability (the rise-rate baseline gives none), no
-radar rain joined. Rebuild the fixture with `python -m tests.agents.make_replay_fixture` (needs network and
+radar rain joined. Rebuild the fixture with `python -m tests.agents.make_replay_fixture --write` (without `--write` it only builds a temp copy) (needs network and
 `requirements.txt`). `seed.build()` is a separate ILLUSTRATIVE shape (made-up rain and probabilities) used only by
 in-memory tests; it is never written to a database that holds replay rows.
 

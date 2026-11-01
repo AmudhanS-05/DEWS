@@ -1,7 +1,6 @@
 # CLAUDE.md: rules for every session working on this repo
 
-Project: real-time flood and flash-flood forecasting and alerting with Apache Kafka (RVCE, AI372IA Stream Processing
-and Analytics + AI373TA Agentic AI). Team: Aaditey Chalva, Amudhan S, Dhaksha Muthukumaran.
+Project: real-time flood and flash-flood forecasting and alerting with Apache Kafka. Team: Aaditey Chalva, Amudhan S, Dhaksha Muthukumaran.
 
 Read first: your handoff in `docs/handoffs/`, `docs/SLICES.md` (tasks and done-criteria), `docs/CONTRACTS.md`
 (interfaces), `docs/BUILD_PHASES.md` (decisions and phase details), `docs/RUNBOOK.md` (open steps), the top of

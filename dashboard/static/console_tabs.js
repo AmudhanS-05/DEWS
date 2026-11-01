@@ -1,5 +1,5 @@
-/* Metrics tab v1 (throughput and lag from the live view, latency waterfall from PostgreSQL) and Agents tab v1 (the graph in
-   agentic_ai/graph.py, with the last run from agent_events). Read-only. Live and replay latency are always shown apart. */
+/* Metrics tab (pipeline: throughput and lag from the live view, latency waterfall and fault drills from PostgreSQL; agents: from
+   agent_events) and Agents tab (live flow of agentic_ai/graph.py in the style of the pipeline diagram). Read-only. Live and replay always apart. */
 (function(){
 "use strict";
 const $=id=>document.getElementById(id), esc=t=>String(t??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
@@ -25,6 +25,7 @@ async function loadMetrics(){
   try{
     const d=await (await fetch("/api/metrics")).json();
     if(!d.ok){ box.innerHTML=`<div class="note">${esc(d.error)}</div>`; return; }
+    drawAgentMetrics(d);
     if(!d.waterfall.length){ box.innerHTML='<div class="note">no traces yet: they appear once the forecaster has run</div>'; return; }
     box.innerHTML=d.waterfall.map(w=>{
       const vals=w.stages.filter(s=>s.n&&s.median_s>0).map(s=>s.median_s), top=Math.max(...vals,1), lg=v=>Math.log10(1+Math.max(0,v))/Math.log10(1+top)*100;
@@ -33,29 +34,68 @@ async function loadMetrics(){
     }).join("");
   }catch(e){ box.innerHTML='<div class="note">cannot reach the console server</div>'; }
 }
-/* static graph, as built in agentic_ai/graph.py */
-const NODES={coordinator:[20,70],evidence:[190,20],context:[190,120],reconcile:[360,70],writer:[530,70],reviewer:[700,70],save_advisory:[870,20],keep_v1:[870,120]};
-const EDGES=[["coordinator","evidence"],["coordinator","context"],["evidence","reconcile"],["context","reconcile"],["reconcile","writer"],["writer","reviewer"],["reviewer","save_advisory"],["reviewer","keep_v1"]];
-const NW=130,NH=44;
-function graph(seen){
-  const mid=n=>[NODES[n][0],NODES[n][1]+NH/2];
-  const e=EDGES.map(([a,b])=>{ const x0=NODES[a][0]+NW,y0=NODES[a][1]+NH/2,[x1,y1]=mid(b),c=(x0+x1)/2; return `<path d="M${x0} ${y0}C${c} ${y0} ${c} ${y1} ${x1} ${y1}" class="agedge" marker-end="url(#agarr)"/>`; }).join("");
-  const back=`<path d="M${NODES.reviewer[0]+NW/2} ${NODES.reviewer[1]} C${NODES.reviewer[0]+40} 16 ${NODES.writer[0]+90} 16 ${NODES.writer[0]+NW/2} ${NODES.writer[1]}" class="agedge back" marker-end="url(#agarr)"/><text x="${(NODES.reviewer[0]+NODES.writer[0]+NW)/2}" y="24" class="elabel" text-anchor="middle">revise</text>`;
-  const n=Object.entries(NODES).map(([k,[x,y]])=>{ const s=seen[k]; return `<g class="agnode${s?" seen":""}"><rect x="${x}" y="${y}" width="${NW}" height="${NH}" rx="8"/><text x="${x+NW/2}" y="${y+(s?19:27)}" text-anchor="middle" class="ttl">${k.replace("_"," ")}</text>${s?`<text x="${x+NW/2}" y="${y+34}" text-anchor="middle" class="ln">${esc(s)}</text>`:""}</g>`; }).join("");
-  return `<svg viewBox="0 0 1020 180" role="img" aria-label="Agent graph"><defs><marker id="agarr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>${e}${back}${n}</svg>`;
+function drawAgentMetrics(d){
+  const ls=d.langsmith||{};
+  $("mx-ls").innerHTML=`Measured from agent_events in PostgreSQL. LangSmith is separate: when tracing is on, it keeps the full trace of each run (prompts, tool calls, tokens) in the cloud; these figures do not depend on it. Tracing is <b>${ls.enabled?"on, project "+esc(ls.project):"off"}</b>${ls.enabled?' · <a href="https://smith.langchain.com" target="_blank" rel="noopener">open LangSmith</a>':""}.`;
+  $("mx-drills").innerHTML=(d.drills||[]).map(r=>`<tr><td>${esc(r.scenario)}</td><td class="${r.status==="failed"?"tag-bad":"tag-ok"}">${esc(r.status)}</td><td class="r">${r.recovery_s==null||r.recovery_s<0?"":r.recovery_s.toFixed(1)+" s"}</td><td>${esc(r.data_source)}</td><td>${esc(r.reason||"")}</td><td class="t">${new Date(r.at).toLocaleString([], {hour12:false})}</td></tr>`).join("")||'<tr><td colspan="6" class="note">no drills recorded</td></tr>';
+  const rows=d.agents||[];
+  $("mx-agents").innerHTML=rows.length?rows.map(m=>{
+    const lab=m.mode==="SIMULATION"?"Replay (SIMULATION)":m.mode==="LIVE"?"Live":"Runs with no alert row (seed or test data)";
+    const kv=[["Runs",num(m.runs)],["Duration, median",fmtS(m.median_s)],["Duration, p95",fmtS(m.p95_s)],["Reviewer passed",m.judged?`${m.passed} of ${m.judged}`:"not measured yet"],["Review rounds per run",m.avg_review_rounds==null?"":(+m.avg_review_rounds).toFixed(1)],["Revisions",num(m.revisions)],["Disagreements",num(m.disagreements)],["Tool calls",num(m.tool_calls)],["Tokens per run",m.tokens_per_run==null?"":num(m.tokens_per_run)],["v1 to v2, median",m.v1_to_v2_n?fmtS(m.v1_to_v2_s)+` (${m.v1_to_v2_n})`:"not measured yet"]];
+    return `<h3>${lab}</h3><div class="mx-two"><table><tbody>${kv.map(([k,v])=>`<tr><td>${k}</td><td class="r">${v}</td></tr>`).join("")}</tbody></table>`+
+      `<table><thead><tr><th>Agent</th><th class="r">Time, median per run</th><th class="r">Tokens, median per run</th><th class="r">Runs</th></tr></thead><tbody>${m.per_agent.map(a=>`<tr><td>${esc(a.agent)}</td><td class="r">${fmtS((a.median_ms||0)/1000)}</td><td class="r">${a.median_tokens?num(a.median_tokens):""}</td><td class="r">${a.runs}</td></tr>`).join("")}</tbody></table></div>`;
+  }).join("")+'<div class="note" style="margin-top:6px">v1 to v2 is long while the agents are started by hand after the alert; it means more once the agent consumer runs on its own.</div>':'<div class="note">No agent run recorded yet.</div>';
 }
+/* the graph in agentic_ai/graph.py, drawn like the pipeline: same nodes, status dots and moving dashes */
+const AL={alert:["topic",16,170,132,64,"alerts.flood"],coordinator:["group",176,170,132,64,"Coordinator"],evidence:["group",336,50,132,64,"Evidence"],tools:["info",336,170,132,64,"Tools (MCP)"],context:["group",336,290,132,64,"Context"],
+  reconcile:["info",496,170,132,64,"Reconcile"],writer:["group",656,170,132,64,"Writer"],reviewer:["group",816,170,132,64,"Reviewer"],save:["store",976,90,132,64,"Save advisory"],keep:["store",976,250,132,64,"Keep v1"],
+  human:["manual",816,390,132,64,"Human gate"],approved:["topic",656,390,132,64,"alerts.approved"],notifier:["group",496,390,132,64,"Notifier"]};
+const AE=[["e_a_c","alert","coordinator","M148 202H176"],["e_c_e","coordinator","evidence","M308 190C322 190 318 82 336 82"],["e_c_x","coordinator","context","M308 214C322 214 318 322 336 322"],
+  ["e_e_t","evidence","tools","M402 114V170"],["e_x_t","context","tools","M402 290V234"],["e_e_r","evidence","reconcile","M468 82C482 82 478 190 496 190"],["e_x_r","context","reconcile","M468 322C482 322 478 214 496 214"],
+  ["e_r_w","reconcile","writer","M628 202H656"],["e_w_v","writer","reviewer","M788 202H816"],["e_v_s","reviewer","save","M948 190C962 190 958 122 976 122"],["e_v_k","reviewer","keep","M948 214C962 214 958 282 976 282"],
+  ["e_s_h","save","human","M1042 154V170H1108V422H948"],["e_k_h","keep","human","M1042 314V422H948"],["e_h_a","human","approved","M816 422H788"],["e_a_n","approved","notifier","M656 422H628"]];
+function agentState(d){
+  const by={}; (d.agents||[]).forEach(a=>by[a.agent]=a); const act=!!d.active, st={};
+  const set=(id,status,lines)=>{ st[id]={status,lines:lines||[]}; };
+  const agentNode=id=>{ const a=by[id]; if(!a){ set(id,"absent",[d.run?"not reached":"waiting for a run"]); return; }
+    const running=act&&a.open, bits=[]; if(a.ms) bits.push((a.ms/1000).toFixed(1)+" s"); if(a.tokens) bits.push(num(a.tokens)+" tokens");
+    const l2=[]; if(a.starts>1) l2.push(a.starts+" tries"); if(a.tool_calls) l2.push(a.tool_calls+" tool calls"); if(a.verdict) l2.push(a.verdict);
+    set(id,running?"run":(a.verdict&&a.verdict!=="pass"?"warn":"ok"),[running?"running…":bits.join(" · ")||"ran",l2.join(" · ")]); };
+  ["coordinator","evidence","context","writer","reviewer"].forEach(agentNode);
+  set("alert",d.run?"ok":"absent",d.run?[String(d.run.alert_id).split("|").slice(0,2).join(" "),d.run.mode||""]:["no alert yet"]);
+  const calls=(d.agents||[]).reduce((n,a)=>n+(a.tool_calls||0),0); set("tools",calls?"ok":"absent",[calls?num(calls)+" calls this run":"no calls"]);
+  const merged=st.evidence.status==="ok"&&st.context.status==="ok"; set("reconcile",merged?"ok":"absent",[merged?"evidence and context":"not reached"]);
+  const adv=d.advisory, v2=adv&&adv.version>1, rvDone=st.reviewer.status!=="absent"&&st.reviewer.status!=="run";
+  set("save",v2?"ok":"absent",[v2?`v${adv.version} saved`:"not reached"]); set("keep",rvDone&&!v2?"warn":"absent",[rvDone&&!v2?"template stays":"not reached"]);
+  const s=adv&&adv.status;
+  set("human",s==="draft"||s==="rejected"?"warn":(s==="approved"||s==="sent")?"ok":"absent",[s==="draft"?"waiting for a person":(s==="approved"||s==="sent")?"approved":s?esc(s):"not reached"]);
+  set("approved",s==="approved"||s==="sent"?"ok":"absent",[s==="approved"||s==="sent"?"published":"needs approval"]);
+  set("notifier",s==="sent"?"ok":"absent",[s==="sent"?"delivered":"not reached"]);
+  return st;
+}
+function edgeClass(st,from,to){ const a=st[from].status, b=st[to].status, seen=x=>x!=="absent"; if(b==="run") return "flow"; if(seen(a)&&b==="warn"&&to==="human") return "flow"; return seen(a)&&seen(b)?"idle":"inactive"; }
+function agentGraph(d){
+  const st=agentState(d);
+  const edges=AE.map(([id,f,t,p])=>`<path d="${p}" class="edge ${edgeClass(st,f,t)}" marker-end="url(#agarr)"/>`).join("");
+  const rev=d.revisions||0, back=`<path d="M880 170C880 132 724 132 724 170" class="edge ${rev?(d.active?"flow":"idle"):"inactive"}" marker-end="url(#agarr)"/><text x="802" y="130" text-anchor="middle" class="elabel">revise${rev?" ×"+rev:""}</text>`;
+  const nodes=Object.entries(AL).map(([id,[kind,x,y,w,h,title]])=>{ const s=st[id], L=s.lines; return `<g class="node ${kind} ${s.status}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10"/><circle cx="${x+w-14}" cy="${y+14}" r="5" class="sdot ${s.status}"/><text x="${x+10}" y="${y+22}" class="ttl">${esc(title)}</text>${L.map((l,i)=>l?`<text x="${x+10}" y="${y+38+i*14}" class="ln">${esc(String(l).slice(0,24))}</text>`:"").join("")}</g>`; }).join("");
+  return `<svg viewBox="0 0 1120 470" role="img" aria-label="Live agent flow"><defs><marker id="agarr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#52657a"/></marker></defs>${edges}${back}${nodes}</svg>`;
+}
+const setHtml=(id,h)=>{ const e=$(id); if(e.dataset.h!==h){ e.innerHTML=h; e.dataset.h=h; } };     // an unchanged graph keeps its dashes moving
 async function loadAgents(){
   try{
     const d=await (await fetch("/api/agents")).json();
-    if(!d.ok){ $("ag-note").textContent=d.error; $("ag-graph").innerHTML=graph({}); return; }
-    if(!d.run){ $("ag-note").textContent="No agent run recorded yet. This shows the graph; a run appears after python -m agentic_ai.run --alert-id <id>."; $("ag-graph").innerHTML=graph({}); $("ag-agents").innerHTML=""; $("ag-events").innerHTML=""; return; }
-    const r=d.run, seen={}; d.agents.forEach(a=>{ if(a.agent in NODES){ const bits=[]; if(a.ms) bits.push((a.ms/1000).toFixed(1)+" s"); if(a.starts>1) bits.push(a.starts+" tries"); if(a.verdict) bits.push(a.verdict); seen[a.agent]=bits.join(" · ")||"ran"; } });
-    $("ag-note").innerHTML=`Last run <b>${esc(r.run_id)}</b> for alert <b>${esc(r.alert_id)}</b>${r.mode?" · <b>"+esc(r.mode)+"</b>":""} · ${r.duration_s==null?"":r.duration_s.toFixed(1)+" s"} · ${r.review_rounds} review round${r.review_rounds===1?"":"s"} · last verdict ${esc(r.last_verdict||"none")} · ${d.disagreements} disagreement${d.disagreements===1?"":"s"} · ${new Date(r.ended_at).toLocaleString([], {hour12:false})}`;
-    $("ag-graph").innerHTML=graph(seen);
+    if(!d.ok){ $("ag-note").textContent=d.error; setHtml("ag-graph",agentGraph({})); return; }
+    const ls=d.langsmith&&d.langsmith.enabled?` · LangSmith traces in project <b>${esc(d.langsmith.project)}</b> (<a href="https://smith.langchain.com" target="_blank" rel="noopener">open</a>)`:" · LangSmith tracing off";
+    if(!d.run){ $("ag-note").innerHTML="No agent run recorded yet. A run appears after python -m agentic_ai.run --alert-id &lt;id&gt;."+ls; setHtml("ag-graph",agentGraph({})); $("ag-agents").innerHTML=""; $("ag-events").innerHTML=""; return; }
+    const r=d.run;
+    $("ag-note").innerHTML=`${d.active?"<b>Running now</b>":"Last run"} <b>${esc(r.run_id)}</b> for alert <b>${esc(r.alert_id)}</b>${r.mode?" · <b>"+esc(r.mode)+"</b>":""} · ${r.duration_s==null?"":r.duration_s.toFixed(1)+" s"} · ${r.review_rounds} review round${r.review_rounds===1?"":"s"} · last verdict ${esc(r.last_verdict||"none")} · ${d.disagreements} disagreement${d.disagreements===1?"":"s"} · ${new Date(r.ended_at).toLocaleString([], {hour12:false})}${ls}`;
+    setHtml("ag-graph",agentGraph(d));
     $("ag-agents").innerHTML=d.agents.map(a=>`<tr><td>${esc(a.agent)}</td><td class="r">${a.starts}</td><td class="r">${a.ms?(a.ms/1000).toFixed(1)+" s":""}</td><td class="r">${a.tool_calls||""}</td><td class="r">${a.tokens?num(a.tokens):""}</td><td>${esc(a.verdict||"")}</td></tr>`).join("");
     $("ag-events").innerHTML=d.events.slice().reverse().map(e=>{ const dt=e.detail||{}, txt=dt.name||dt.tool||(dt.reasons&&dt.reasons.length?dt.reasons.join("; "):"")||dt.verdict||""; return `<tr><td class="t">${new Date(e.ts).toLocaleTimeString([], {hour12:false})}</td><td>${esc(e.agent)}</td><td>${esc(e.kind)}</td><td>${esc(String(txt).slice(0,140))}</td></tr>`; }).join("");
   }catch(e){ $("ag-note").textContent="cannot reach the console server"; }
 }
 window.onTabShown=t=>{ if(t==="metrics"){ loadMetrics(); if(window.lastView) window.onMetrics(window.lastView.metrics); } if(t==="agents") loadAgents(); };
-setInterval(()=>{ if(!$("tab-metrics").hidden) loadMetrics(); if(!$("tab-agents").hidden) loadAgents(); },8000);
+setInterval(()=>{ if(!$("tab-metrics").hidden) loadMetrics(); },8000);
+setInterval(()=>{ if(!$("tab-agents").hidden) loadAgents(); },2500);
 })();

@@ -53,7 +53,18 @@ def test_current_advisory_prefers_newest_unsuperseded(conn):
         assert cur.fetchone() == (2, "agents")
 
 
-def test_waterfall_keeps_feed_delay_and_gross_to_live_and_marks_old_traces(conn):
+def test_failed_drill_rows_get_a_status_and_reason(conn):
+    apply(conn)
+    with conn.cursor() as cur:
+        cur.execute("INSERT INTO evaluation_runs (run_label, data_source, notes) VALUES ('fault_drill:a','replay','x; FAILED: rejoined (elapsed 1s)'),"
+                    "('fault_drill:b','replay','fine'),('m1.4','replay','fine')")
+    apply(conn)
+    with conn.cursor() as cur:
+        cur.execute("SELECT run_label, status, failure_reason FROM evaluation_runs ORDER BY 1")
+        assert cur.fetchall() == [("fault_drill:a", "failed", "rejoined "), ("fault_drill:b", "passed", None), ("m1.4", "completed", None)]
+
+
+def test_waterfall_keeps_feed_delay_to_live_and_replay_gross_to_wall_clock_and_marks_old_traces(conn):
     apply(conn)
     with conn.cursor() as cur:
         for mode in ("LIVE", "SIMULATION"):
@@ -64,5 +75,5 @@ def test_waterfall_keeps_feed_delay_and_gross_to_live_and_marks_old_traces(conn)
         cur.execute("SELECT trace_id, feed_delay_s, ingest_s, net_total_s, gross_total_s, instrumented FROM latency_waterfall")
         rows = {r[0]: tuple(float(x) if x is not None and not isinstance(x, bool) else x for x in r[1:]) for r in cur.fetchall()}
     assert rows["LIVE"] == (3600.0, 2.0, 7200.0, 10800.0, True)
-    assert rows["SIMULATION"] == (None, 2.0, 7200.0, None, True)
+    assert rows["SIMULATION"] == (None, 2.0, 7200.0, 7200.0, True)     # gross from the replay's send time, never from 2019
     assert rows["old"][-1] is False

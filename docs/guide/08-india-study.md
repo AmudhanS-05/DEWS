@@ -4,9 +4,10 @@ The team is in India, but the live pipeline runs on Texas gauges. That is a data
 India study tests it with the same pipeline and the same metrics, so the gap is measured and not just asserted. Full
 plan: [`docs/INDIA_STUDY.md`](../INDIA_STUDY.md). Code: `india/` (ML + India workstream).
 
-> **Status (31 Oct 2026):** the audit script, Table 1 builder and India-WRIS loader are written and tested on synthetic
-> series and a hand-made Excel fixture (fictitious station, assumed layout). **No real Indian data has been processed
-> yet and no India result is claimed.**
+> **Status (31 Oct 2026):** the **US side** of the audit (Table 1) has been run on real data (38 gauges). The
+> India-WRIS Excel loader and an API client built from the published OpenAPI spec exist, but they are tested only on
+> a hand-made fixture and mocked responses. The real API response layout is unverified. **No real Indian data has been
+> processed yet, and no India result is claimed.** The console shows India as a *planned* area with no gauges.
 
 ## Why US data for the live pipeline
 
@@ -20,8 +21,9 @@ Of the open sources checked, only the US provides all of the following openly, f
 | 10+ years of history | yes | varies; CAMELS-IND is daily and ends in 2020 |
 
 India-WRIS also publishes an API specification (`docs/indiawris_api.json`, OpenAPI 3, endpoints such as
-`/Dataset/River Water Level`). Whether it gives sub-daily, recent data for free stations is part of the audit and has
-not been tested yet.
+`/Dataset/River Water Level`). `india/indiawris_api.py` is a client for it. Whether the API gives sub-daily, recent
+data for free stations is part of the audit and has not been tested yet: the site was not reachable from the cloud
+session where the client was written.
 
 ## The four steps
 
@@ -44,7 +46,12 @@ stay empty. Highest flood level is kept for context.
 python -m india.audit --out india/figures/audit_us.csv      # US side; needs the cached USGS history (see 06)
 python -m india.table1                                     # Table 1 (CSV + Markdown); India cells say "pending" until exports exist
 python -m india.indiawris_loader data/raw/indiawris        # check downloaded India-WRIS Excel files
+python -m india.indiawris_api --probe                      # one small API request; prints status and the raw body
+python -m india.indiawris_api --basin Godavari --tributary Godavari --agency CWC --start 2015-01-01 --end 2025-12-31
 ```
+
+The API client saves every raw response under `data/raw/indiawris/api/` and writes per-station CSVs that the loader and
+the audit read unchanged. Run `--probe` first: the response layout is guessed from the spec.
 
 **Manual part:** choose 3 to 5 free India-WRIS stations with known floods (for example in the Godavari, Krishna,
 Mahanadi or Periyar basins). Download 2015 to 2025, one year per Excel file, into `data/raw/indiawris/`. Copy their

@@ -10,7 +10,7 @@ Items marked *unverified* are concerns I could not confirm from a source.
 - [ ] **Hazard scope**: floods with a US live pipeline, India as a retrospective test,
       and the wording "forecast of crossing an official flood category" rather than
       "predicts a flood". Get it confirmed.
-- [ ] **Human-approval notification design** accepted for the Agentic AI course.
+- [ ] **Human-approval notification design** accepted for the agents workstream.
 
 ## Data sources
 - [ ] **Run `tools.fetch_sample` and `pytest`** on your machine before trusting any

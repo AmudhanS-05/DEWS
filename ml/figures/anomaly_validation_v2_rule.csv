@@ -1,0 +1,8 @@
+fault,injected,detected,detection_rate,median_time_to_flag_h,reasons
+spike,380,141,0.371,1.0,excursion:81;reversal:60
+flatline,380,2,0.005,9.29,creep:1;pattern:1
+step,380,57,0.15,1.58,jump_then_flat:56;reversal:1
+dropout,380,380,1.0,3.42,no_readings:380
+drift,380,5,0.013,26.17,pattern:4;jump_then_flat:1
+CLEAN test windows,996933,8135,0.00816,,flags_per_gauge_year=71.53
+REAL FLOOD windows (12 h before to 6 h after a minor crossing),745,54,0.0725,,

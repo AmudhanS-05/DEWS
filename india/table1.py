@@ -84,9 +84,20 @@ def build_table(us_rows: list[dict], india_rows: list[dict], n_us_gauges_with_ca
                             if n_india_with_levels else PENDING),
          "india_literature": "warning / danger level / HFL in CWC web pages and daily PDF bulletins; no open API found",
          "india_provenance": "INDIA_STUDY.md"},
+        {"property": "Measurement method", "us_usgs": "automatic sensors (USGS IV gage height)",
+         "us_provenance": "source",
+         "india_measured": (f"{sum('MANUAL' in str(r.get('method', '')).upper() for r in india_rows)} of "
+                            f"{len(india_rows)} stations: manual staff-gauge readings"
+                            if india_rows else PENDING),
+         "india_literature": "manual staff-gauge readings, about daily (00:00 / 08:00): description 'MANUAL-Water "
+                             "Level by Staff Gauge' at Aheri (Gudem Bridge, Pranhita) and NEELEESWARAM (Periyar)",
+         "india_provenance": "observed in two India-WRIS API responses (--discover, 31 Oct 2026); measured per "
+                             "station once fetched"},
         {"property": "Access method", "us_usgs": "REST API (JSON), no key", "us_provenance": "source",
-         "india_measured": "manual browser download, Excel" if ind else PENDING,
-         "india_literature": "manual download, one year per Excel file", "india_provenance": "INDIA_STUDY.md"},
+         "india_measured": "manual browser download (Excel) or the India-WRIS POST API from an Indian connection "
+                           "(no key; unreachable from the cloud session)" if ind else PENDING,
+         "india_literature": "manual download, one year per Excel file; POST API (OpenAPI spec, no auth)",
+         "india_provenance": "INDIA_STUDY.md; docs/indiawris_api.json"},
         {"property": "Share of stations free to use", "us_usgs": "all USGS IV data are public",
          "us_provenance": "source terms",
          "india_measured": "", "india_literature": "645 of 4,824 listed gauges (Peninsular)",
@@ -109,6 +120,7 @@ def to_markdown(table: list[dict]) -> str:
 
 
 def audit_india(india_dir: str, thresholds_path: str) -> tuple[list[dict], int]:
+    """Audit rows per India-WRIS station; each row also carries `method` (the export's description field)."""
     from india import indiawris_loader as L
     from india.audit import audit_station
     if not os.path.isdir(india_dir):
@@ -117,7 +129,9 @@ def audit_india(india_dir: str, thresholds_path: str) -> tuple[list[dict], int]:
     rows = []
     for code, rs in sorted(L.load_folder(india_dir).items()):
         danger = (th.get(code) or {}).get("danger_level_m")
-        rows.append(audit_station(rs, danger))
+        row = audit_station(rs, danger)
+        row["method"] = (rs[0].get("method") or "") if rs else ""
+        rows.append(row)
         print(f"  india {code}: {len(rs)} readings, danger level {danger if danger is not None else 'MISSING'}")
     return rows, sum(1 for t in th.values() if t.get("danger_level_m") is not None)
 

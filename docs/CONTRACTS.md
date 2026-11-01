@@ -67,11 +67,27 @@ Oct; for a replay this is the historical time, `raised_at` is not), `episode_sta
 windows as `history` (oldest first) and `official_levels`. Must run in under 50 ms per call on the laptop and never
 raise (return the baseline with `model = "rise_rate"` on any error).
 
+**Sensor-fault flag (S3, PROPOSED by ml, revised 31 Oct 2026 after the team decision; core and agents to accept
+or amend):** `ml/fault_rules.py`: `check_gauge(readings, site_no, ctx=None) -> {suspect, reasons, flags}`.
+`readings` = the gauge's recent `gauge.usgs` / `replay.gauge` readings, oldest first (at least the last 48 h; the
+rules work on readings, not on hourly windows). `ctx` = `Context.from_windows(windows_by_site, rain_by_site)` built
+from recent `aggregates.window` records of all gauges (neighbours within 60 km) and, if available, hourly rain per
+gauge from `rain.mrms`; without `ctx` the stuck and step rules cannot find independent evidence and stay silent.
+`reasons` is a list from the SHIPPED rules only: `no_readings` (>= 3 h without readings), `stuck` (identical value
+for >= 24 h while a nearby gauge moves >= 0.1 ft or >= 5 mm of rain fell), `step` (a jump that holds flat, with no
+rain and no matching change at nearby gauges); `unavailable` on error. `flags` = {rule: [flag_ts]}. Never raises;
+settings and per-gauge scales in `ml/models/fault_rules.json`. Shipping rule (team): a rule is included only if its
+false-flag rate on real flood windows (12 h before to 6 h after a minor crossing) is <= 1 % on the 2024-2026 test
+period; measured 0.49 % (no_readings), 0 % (stuck), 0 % (step). The spike rule is implemented but NOT shipped
+(1.07 %). The Isolation Forest (`ml/anomaly.py`) is not part of the contract (measured negative result,
+ml/MODEL_CARD.md). Proposed use: core shows `suspect`/`reasons` next to the gauge in the console; agents may say
+"readings at <gauge> look like a sensor fault (<reason>)". A flag never suppresses or raises a flood alert.
+
 ## Agent tools (MCP server, S4; plain Python functions in S1)
 
 Environment: `LLM_PROVIDER` = `groq` | `gemini` | `ollama` | `none`; `GROQ_API_KEY`; `GROQ_MODEL` (default
-`openai/gpt-oss-120b`); `LLM_FALLBACK` = `gemini` | `groq` | `none` (a failed or rate-limited call is retried once on
-it, then template v1 stays); `GEMINI_API_KEY`; `GEMINI_MODEL` (default `gemini-2.5-flash`); `OLLAMA_MODEL` (default
+`openai/gpt-oss-120b`); `GROQ_REASONING_EFFORT` = `low` (default) | `medium` | `high` (only for `openai/gpt-oss-*`, else not sent); `LLM_FALLBACK` = `gemini` | `groq` | `none` (a Groq 429 first waits once for its reset hint when it is <= 20 s and retries Groq; a
+failed call is then retried once on it, then template v1 stays); `GEMINI_API_KEY`; `GEMINI_MODEL` (default `gemini-3.5-flash-lite`; `gemini-2.5-flash` is closed to new keys); `OLLAMA_MODEL` (default
 `qwen2.5:7b`, optional local provider); `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT` (optional,
 default `dews-agents`). All in `.env`.
 

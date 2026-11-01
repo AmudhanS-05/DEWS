@@ -30,7 +30,8 @@ from ml.dataset import primary_series
 
 COLUMNS = ["run_label", "data_source", "site_no", "model", "horizon_h", "precision", "recall", "f1",
            "false_alarms", "median_lead_time_h", "mae_ft", "rmse_ft", "notes"]
-# Rise-rate 3 h F1 per gauge from FAQ.md ("Baselines"); the harness prints measured vs these, it never tunes to them.
+# OLD FAQ values (notebook 02, which had a 1 h look-ahead; see ml/REFERENCE_BASELINES.md). Printed next to the
+# measured values only to show the correction; the bar to beat is the harness's own output (ml/figures/baselines.csv).
 REFERENCE_F1 = {"DRWT2": 0.65, "LCPT2": 0.26, "JNCT2": 0.64, "AHOT2": 0.41}
 
 
@@ -232,7 +233,8 @@ def main(argv=None):
                   f"F1={_fmt(r['f1'])} FA={r['false_alarms']}  {r['notes']}")
     table = reference_table(rows, {g["site_no"]: g["lid"] for g in gauges})
     if table:
-        print("\nrise-rate 3 h F1 vs FAQ reference (no tuning):\n  gauge   ref    measured  diff")
+        print("\nrise-rate 3 h F1, old FAQ value (1 h look-ahead, ml/REFERENCE_BASELINES.md) vs measured:"
+              "\n  gauge   old    measured  diff")
         for lid, ref, m, d in table:
             print(f"  {lid:6s} {ref:5.2f}  {_fmt(m):>8s}  {'NA' if d is None else f'{d:+.2f}'}")
     print(f"\ndone: {len(gauges)} gauges, {len(rows)} rows -> {a.out} in {timer.elapsed()}")

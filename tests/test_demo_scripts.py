@@ -14,6 +14,11 @@ def test_demo_scripts_are_ascii_for_windows_powershell_5_1():
         (SCRIPTS / name).read_text(encoding="utf-8").encode("ascii")       # no BOM: 5.1 would misread other characters
 
 
+def test_start_demo_reads_the_venv_from_a_parameter_or_environment():
+    s = (SCRIPTS / "start_demo.ps1").read_text(encoding="utf-8")
+    assert "[string]$Venv = $env:DEWS_VENV" in s and "'.venv'" in s
+
+
 def test_start_demo_starts_every_pipeline_process():
     s = (SCRIPTS / "start_demo.ps1").read_text(encoding="utf-8")
     for module in ("storage.sink", "streams.forecaster", "alerting.notifier", "dashboard.flow_monitor", "producers.usgs_iv_producer"):

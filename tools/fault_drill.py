@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -511,11 +512,17 @@ def producer_drill(a) -> dict:
                       recovery, notes, False, 0, data_source="live")
 
 
-def record(label: str, recovery: float | None, notes: str, data_source: str = "replay"):
+def failure_reason(notes: str) -> str | None:
+    m = re.search(r"FAILED: ([^(]*)", notes)
+    return m.group(1).strip() if m else None
+
+
+def record(label: str, recovery: float | None, notes: str, data_source: str = "replay", ok: bool = True):
+    """Every run gets a row, a failed one too (status failed + reason). Failed rows are never deleted."""
     import psycopg2
     with psycopg2.connect(config.PG_DSN, connect_timeout=5) as conn, conn.cursor() as cur:
-        cur.execute("INSERT INTO evaluation_runs (run_label, data_source, recovery_time_s, notes) VALUES (%s,%s,%s,%s)",
-                    (label, data_source, recovery, notes))
+        cur.execute("INSERT INTO evaluation_runs (run_label, data_source, recovery_time_s, notes, status, failure_reason) VALUES (%s,%s,%s,%s,%s,%s)",
+                    (label, data_source, recovery, notes, "passed" if ok else "failed", None if ok else failure_reason(notes) or "drill failed"))
 
 
 SCENARIOS = {"faust": faust_drill, "broker": broker_drill, "sink": sink_drill, "postgres": postgres_drill,
@@ -541,7 +548,7 @@ def main():
     watch_console(a.console)
     res = SCENARIOS[a.scenario](a)
     if not a.no_db:
-        record(f"fault_drill:{a.scenario}", res["recovery_time_s"], res["notes"], res.get("data_source", "replay"))
+        record(f"fault_drill:{a.scenario}", res["recovery_time_s"], res["notes"], res.get("data_source", "replay"), res["ok"])
     sys.exit(0 if res["ok"] else 1)
 
 

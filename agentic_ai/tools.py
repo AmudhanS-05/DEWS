@@ -183,7 +183,13 @@ class Tools:
         site, mode = a["site_no"], a["mode"]
         levels = self.get_official_levels(site)
         episode = alert_id.split("|")[-1]
-        rows = self._forecast_rows(site, mode, episode, a["raised_at"], a.get("horizon_h"))
+        det = a.get("details") if isinstance(a.get("details"), dict) else {}
+        a = {**a, "window_start": det.get("window_start"), "window_start_ts": det.get("window_start_ts")}
+        end = a["raised_at"]
+        if a["window_start"] or a["window_start_ts"] is not None:   # replay: raised_at may be before/after the data time
+            own = _ts(a["window_start"]) if a["window_start"] else datetime.fromtimestamp(float(a["window_start_ts"]), timezone.utc)
+            end = max(_ts(end), own + timedelta(hours=1))
+        rows = self._forecast_rows(site, mode, episode, end, a.get("horizon_h"))
         fc = anchor_window(a, levels, rows)
         as_of = _iso(_ts(fc["window_start"]) + timedelta(hours=1)) if fc else a["raised_at"]
         if fc is None:
@@ -254,6 +260,8 @@ class Tools:
 def anchor_window(alert: dict, levels: dict, rows: list[dict]) -> dict | None:
     """The forecast row the alert was raised on (pure; `rows` from `_forecast_rows`, oldest first).
 
+    0. the alert's own `window_start` (or `window_start_ts`, epoch), which core's forecaster puts on alerts.flood
+       since 31 Oct (the sink keeps it in alerts.details); older rows have neither and use the fallbacks below:
     1. the window that ends exactly at `raised_at` (alerts stamped with their window end, e.g. the seed);
     2. else the first window from the episode start whose forecast reaches the alert's official category while the
        gauge is still below it: that is when the forecaster raises it (a new alert at the episode start, an upgrade
@@ -274,6 +282,13 @@ def anchor_window(alert: dict, levels: dict, rows: list[dict]) -> dict | None:
     by_ws: dict[str, list[dict]] = {}
     for r in rows:
         by_ws.setdefault(r["window_start"], []).append(r)
+    own = alert.get("window_start")
+    if own is None and alert.get("window_start_ts") is not None:
+        own = datetime.fromtimestamp(float(alert["window_start_ts"]), timezone.utc)
+    if own is not None:
+        mine = [r for r in rows if _ts(r["window_start"]) == _ts(own)]
+        if mine:
+            return pick(mine)
     exact = [r for r in rows if _ts(r["window_start"]) + timedelta(hours=1) == raised]
     if exact:
         return pick(exact)

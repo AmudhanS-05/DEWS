@@ -19,8 +19,8 @@ SELECT a.alert_id, a.site_no, a.mode, a.category, a.probability, a.horizon_h, a.
 FROM alerts a LEFT JOIN current_advisory c USING (alert_id);
 
 -- Latency waterfall per trace: seconds spent between consecutive pipeline stages.
--- A replayed reading is years old and "fetched" when the replay sends it, so feed delay and the gross total apply to
--- LIVE only. instrumented = false marks traces from before ingest_time was written: they have no complete waterfall.
+-- A replayed reading is years old and "fetched" when the replay sends it, so feed delay applies to LIVE only and a
+-- replay's gross total is measured from that send time (wall clock), never from the historical reading time. instrumented = false marks traces from before ingest_time was written: they have no complete waterfall.
 CREATE OR REPLACE VIEW latency_waterfall AS
 SELECT trace_id, site_no, mode, reading_time,
        CASE WHEN mode = 'LIVE' THEN EXTRACT(EPOCH FROM (fetched_at - reading_time)) END AS feed_delay_s,
@@ -31,7 +31,7 @@ SELECT trace_id, site_no, mode, reading_time,
        EXTRACT(EPOCH FROM (approved_time - alert_time))       AS human_s,
        EXTRACT(EPOCH FROM (delivered_time - approved_time))   AS delivery_s,
        EXTRACT(EPOCH FROM (delivered_time - fetched_at))      AS net_total_s,
-       CASE WHEN mode = 'LIVE' THEN EXTRACT(EPOCH FROM (delivered_time - reading_time)) END AS gross_total_s,
+       EXTRACT(EPOCH FROM (delivered_time - CASE WHEN mode = 'LIVE' THEN reading_time ELSE fetched_at END)) AS gross_total_s,
        ingest_time IS NOT NULL                                AS instrumented
 FROM latency_trace;
 

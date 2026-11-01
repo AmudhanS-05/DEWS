@@ -1,4 +1,4 @@
-# Handoff: multi-agent advisory system (workstream `agents`, AAI course)
+# Handoff: multi-agent advisory system (workstream `agents`)
 
 ## Mission
 Build the Coordinator–Worker–Delegator multi-agent system in LangGraph that turns a forecaster alert into a checked,
@@ -10,7 +10,7 @@ Agents draft and check only: they never publish to Kafka and never send email.
 `agent_events`, tool list), `docs/BUILD_PHASES.md` Phase 6b, `agentic_ai/README.md`.
 
 ## Decisions already made
-- LLM: `LLM_PROVIDER=groq` (free tier, Llama 3.3 70B, key in `.env` as `GROQ_API_KEY`) for quality;
+- LLM: `LLM_PROVIDER=groq` (free tier, `openai/gpt-oss-120b`, key in `.env` as `GROQ_API_KEY`) for quality;
   `ollama` (`qwen2.5:7b`, local, offline) as fallback; `none` = deterministic stubs for tests. Every call has a
   timeout; any failure leaves the template v1 in place.
 - Tracing: LangSmith Developer plan (free) through `LANGSMITH_TRACING=true` and `LANGSMITH_API_KEY` in `.env`

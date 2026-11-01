@@ -39,6 +39,17 @@ def test_alert_must_come_before_the_crossing():
     assert vs.alert_before_crossing(w[:1], "2019-05-04T01:00:00+00:00", 5.5)[0]      # never crossed
 
 
+def test_episode_lead_time_is_reported_negative_allowed():
+    w = [("2019-05-04T01:00:00+00:00", 4.0), ("2019-05-04T02:00:00+00:00", 6.0)]
+    ok, text = vs.episode_lead_times([("s|minor|2019-05-04T01:00:00Z", "new"), ("s|major|2019-05-04T01:00:00Z", "upgrade")], w, 5.5)
+    assert ok and "+1.0 h gross, +0.0 h net" in text
+    ok, text = vs.episode_lead_times([("s|minor|2019-05-04T02:00:00Z", "new")], w, 5.5)     # same window: passes, reported as it is
+    assert ok and "+0.0 h gross, -1.0 h net" in text
+    assert not vs.episode_lead_times([], w, 5.5)[0]
+    assert not vs.episode_lead_times([("s|minor|2019-05-04T01:00:00Z", "new"), ("s|major|2019-05-04T01:00:00Z", "new")], w, 5.5)[0]
+    assert "never reached" in vs.episode_lead_times([("s|minor|2019-05-04T01:00:00Z", "new")], w[:1], 5.5)[1]
+
+
 def test_verdict_never_passes_with_a_failure_and_counts_manual_steps():
     good = ("core", "a", True, "")
     bad = ("ml", "b", False, "")

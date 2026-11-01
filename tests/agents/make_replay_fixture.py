@@ -1,6 +1,10 @@
 """Rebuild agentic_ai/fixtures/drwt2_2019-05_replay.json from the measured USGS record (needs network):
 
-    python -m tests.agents.make_replay_fixture
+    python -m tests.agents.make_replay_fixture --write     # refresh the tracked fixture
+    python -m tests.agents.make_replay_fixture             # dry run: build into a temp file, report, keep the fixture
+
+Without --write the tracked file is never touched (tests call `main(out=tmp_path / ...)`). With --write, the old
+`fetched_at` is kept when the data (windows, risk, alerts) are unchanged, so a refresh does not churn git.
 
 Fetches USGS instantaneous gauge height (00065) for DRWT2 (08158700) and its two neighbours for 2019-05-02..05 from
 nwis.waterservices.usgs.gov, then runs core's own pure functions on it, exactly as the replay pipeline does but
@@ -11,6 +15,8 @@ without Kafka: `streams.windowing.aggregate` (1 h tumbling windows) and `streams
 from __future__ import annotations
 
 import json
+import sys
+import tempfile
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -59,8 +65,15 @@ def replay(site: str, readings, gauge: dict) -> dict:
     return out
 
 
-def main() -> None:
+def _same_data(a: dict, b: dict) -> bool:
+    return all(a.get(k) == b.get(k) for k in ("source", "pipeline", "windows", "risk", "alerts"))
+
+
+def main(out: Path | None = None, fetch_fn=None) -> Path:
+    """Build the fixture into `out` (default: a temp file; the tracked OUT only via `--write`). Returns the path."""
     from streams import forecaster
+    out = Path(out) if out is not None else Path(tempfile.gettempdir()) / "drwt2_2019-05_replay.json"
+    fetch_fn = fetch_fn or fetch
     gauges = forecaster.load_gauges()
     data = {"source": "USGS NWIS instantaneous values 00065, " + URL.split("?")[0],
             "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -68,13 +81,23 @@ def main() -> None:
             "note": "measured record; raised_at = window end (a Kafka replay stamps wall-clock time)",
             "windows": [], "risk": [], "alerts": []}
     for site in (SITE, NEIGHBOUR_DOWN, NEIGHBOUR_NEAR):
-        r = replay(site, fetch(site), gauges[site])
+        r = replay(site, fetch_fn(site), gauges[site])
         for k in ("windows", "risk", "alerts"):
             data[k] += r[k]
-    OUT.write_text(json.dumps(data, indent=0) + "\n", encoding="utf-8")
-    print(f"wrote {OUT} ({len(data['windows'])} windows, {len(data['alerts'])} alerts: "
+    if out.exists():
+        try:
+            old = json.loads(out.read_text(encoding="utf-8"))
+        except ValueError:
+            old = {}
+        if _same_data(old, data):
+            data["fetched_at"] = old.get("fetched_at", data["fetched_at"])   # same record: keep the file as it is
+    text = json.dumps(data, indent=0) + "\n"
+    if not out.exists() or out.read_text(encoding="utf-8") != text:
+        out.write_text(text, encoding="utf-8")
+    print(f"wrote {out} ({len(data['windows'])} windows, {len(data['alerts'])} alerts: "
           + ", ".join(a["alert_id"] for a in data["alerts"]) + ")")
+    return out
 
 
 if __name__ == "__main__":
-    main()
+    main(OUT if "--write" in sys.argv[1:] else None)
