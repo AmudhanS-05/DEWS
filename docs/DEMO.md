@@ -30,6 +30,8 @@ faust -A streams.faust_app worker -l info --web-port 6066   # and 6067, 6068
 ## Roles on demo day
 One person narrates, one drives the console and terminals, one handles questions and the Power BI screen.
 
+**Story mode is dropped (decided 1 Nov):** the demo is a replay plus narration across Map, Pipeline flow and Agents.
+
 ## Scenes
 (Each scene: what to run, what appears, what to say, fallback. Added at the end of each slice.)
 

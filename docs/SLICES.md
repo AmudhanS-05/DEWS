@@ -18,7 +18,7 @@ line in `BREADCRUMBS.md` tagged `[core]`, `[ml]` or `[agents]` + commit on the w
 | Console: Readings & alerts | windows, alerts, advisory drafts with Approve / Edit / Reject | S1 |
 | Console: **Metrics** | live KPI tiles and charts: throughput per topic, consumer lag, per-alert latency waterfall (reading → fetched → window → forecast → alert → draft v1 → draft v2 → approved → delivered), detection metrics, recovery times, agent metrics | S1 latency/throughput, S3 detection, S4 agents, S5 recovery |
 | Console: **Agents** | the multi-agent graph drawn like the pipeline: nodes light up while each agent runs, tool calls travel to an MCP tools hub, the reviewer loop pulses on a revision, a disagreement splits amber, the human gate waits; side panel streams the draft as it is written; a timeline scrubber replays any recorded run | S1 static graph, S2 live, S4 full animation |
-| Console: **Story mode** | one replayed flood narrated end to end: a marker leaves the gauge on the map, travels the pipeline, the agents and the approval gate, and the latency waterfall fills in step by step | S5 |
+| ~~Console: Story mode~~ | dropped 1 Nov (team decision): the demo is a replay plus narration across Map, Pipeline flow and Agents | not built |
 | LangSmith (cloud, free Developer plan) | full trace of every agent run (prompts, tool calls, tokens); each advisory links to its trace | S1 optional, S4 linked |
 | Power BI (DirectQuery) | page 1 gauge status and alerts, page 2 rain and stage, page 3 evaluation metrics, page 4 pipeline health | S1, S2, S3, S5 |
 
@@ -77,7 +77,7 @@ workers in parallel, the writer streaming, the reviewer sending it back once, th
 
 | Workstream | Tasks | Done when |
 |---|---|---|
-| **Core** | C5.1 all fault drills with recovery times; throughput run (38 gauges, 10 years, `--no-sleep`); latency report. C5.2 Story mode. C5.3 Power BI page 4; demo checklist and offline fallback (cached data, offline map, Ollama). | `verify_slice S5` PASS; two clean rehearsals |
+| **Core** | C5.1 all fault drills with recovery times; throughput run (38 gauges, 10 years, `--no-sleep`); latency report. C5.2 Story mode: dropped 1 Nov (team decision; demo by replay plus narration across Map, Pipeline flow and Agents). C5.3 Power BI page 4; demo checklist and offline fallback (cached data, offline map, Ollama). | `verify_slice S5` PASS; two clean rehearsals |
 | **ML + India** | I5.1 step D: synthetic "ideal India" dataset + replay through the pipeline; final numbers frozen. | synthetic India figure |
 | **Agents** | A5.1 ablation: single agent vs multi-agent on the same replayed alerts; final numbers. | ablation table |
 | **YOU** | rehearse with the team (who speaks, who clicks) | |
