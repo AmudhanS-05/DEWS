@@ -182,6 +182,9 @@ CREATE TABLE IF NOT EXISTS advisories (
     approved_by     TEXT,
     delivered_at    TIMESTAMPTZ
 );
+-- What was really emailed outlives a replay reset: tools/reset_replay.py copies delivered advisories here before deleting them
+CREATE TABLE IF NOT EXISTS advisories_delivered (LIKE advisories);
+CREATE UNIQUE INDEX IF NOT EXISTS advisories_delivered_uniq ON advisories_delivered (advisory_id, delivered_at);
 
 CREATE TABLE IF NOT EXISTS agent_events (
     event_id        BIGSERIAL PRIMARY KEY,

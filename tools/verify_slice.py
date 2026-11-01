@@ -221,7 +221,8 @@ def _iso(ts: str) -> str:
 
 def check_delivered_after_approval():
     sent, unapproved = _query("SELECT count(*) FILTER (WHERE delivered_at IS NOT NULL AND approved_at IS NOT NULL AND approved_by IS NOT NULL), "
-                              "count(*) FILTER (WHERE delivered_at IS NOT NULL AND approved_at IS NULL) FROM advisories")[0]
+                              "count(*) FILTER (WHERE delivered_at IS NOT NULL AND approved_at IS NULL) "
+                              "FROM (SELECT advisory_id, delivered_at, approved_at, approved_by FROM advisories UNION SELECT advisory_id, delivered_at, approved_at, approved_by FROM advisories_delivered) d")[0]
     return sent > 0 and unapproved == 0, f"{sent} advisories approved by a person and delivered, {unapproved} delivered without approval"
 
 

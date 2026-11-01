@@ -92,6 +92,9 @@ def test_delete_touches_only_that_site_mode_and_range_and_saves_alerts(conn, tmp
     with open(tmp_path / "b.jsonl", "w", encoding="utf-8") as f:
         done = rr.delete_rows(conn, "a", SPAN, f)
     assert done["windowed_aggregates"] == 1 and done["alerts"] == 1 and done["advisories"] == 1
+    with conn.cursor() as cur:
+        cur.execute("SELECT count(*) FROM advisories_delivered")
+        assert cur.fetchone()[0] == 0                                        # never emailed: nothing to keep
     assert len((tmp_path / "b.jsonl").read_text(encoding="utf-8").splitlines()) == 2
     with conn.cursor() as cur:
         cur.execute("SELECT count(*) FROM windowed_aggregates")
@@ -100,6 +103,20 @@ def test_delete_touches_only_that_site_mode_and_range_and_saves_alerts(conn, tmp
         assert [r[0] for r in cur.fetchall()] == ["a|minor|2019-05-05T00:00:00Z", "a|minor|2019-05-08T00:00:00Z"]
         cur.execute("SELECT count(*) FROM evaluation_runs")
         assert cur.fetchone()[0] == 1
+
+
+def test_an_email_really_sent_outlives_the_reset(conn):
+    with conn, conn.cursor() as cur:
+        cur.execute("INSERT INTO alerts (alert_id, site_no, mode, category, raised_at) VALUES ('a|minor|2019-05-04T00:00:00Z','a','SIMULATION','minor',now())")
+        cur.execute("INSERT INTO advisories (advisory_id, alert_id, version, source, text, status, approved_by, approved_at, delivered_at) VALUES "
+                    "('a|minor|2019-05-04T00:00:00Z|1','a|minor|2019-05-04T00:00:00Z',1,'template','x','sent','kj',now(),now())")
+    rr.delete_rows(conn, "a", SPAN)
+    rr.delete_rows(conn, "a", SPAN)
+    with conn.cursor() as cur:
+        cur.execute("SELECT status, approved_by FROM advisories_delivered")
+        assert cur.fetchall() == [("sent", "kj")]
+        cur.execute("SELECT count(*) FROM advisories")
+        assert cur.fetchone()[0] == 0
 
 
 def test_replay_guard_sees_windows_since_the_reset_only(conn, tmp_path, monkeypatch):

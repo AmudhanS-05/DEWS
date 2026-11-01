@@ -33,7 +33,7 @@ $env:KAFKA_BOOTSTRAP="127.0.0.1:9092"; $env:TOPIC_REPLICATION_FACTOR="1"
    `aggregates.window`, `forecasts.stage`, `alerts.flood`, `alerts.approved`, `deadletter.flood`, each `PartitionCount: 3`,
    `ReplicationFactor: 3`, `min.insync.replicas=2`.
 3. `docker exec -it flood-postgres psql -U spa_user -d disaster_warning -c "\dt"` →
-   13 tables (advisories, agent_events, agent_runs, alerts, catchment_rain, evaluation_runs, gauge_impacts,
+   14 tables (advisories, advisories_delivered, agent_events, agent_runs, alerts, catchment_rain, evaluation_runs, gauge_impacts,
    gauge_readings, gauges, latency_trace, past_floods, risk_scores, windowed_aggregates). `\dv` → 5 views
    (agent_run_summary, alert_overview, current_advisory, feed_staleness, latency_waterfall).
 4. Broker failure smoke test: `docker stop flood-kafka-2`, then

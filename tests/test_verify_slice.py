@@ -9,7 +9,7 @@ def test_declared_objects_reads_tables_and_views():
 def test_real_schema_declares_13_tables_and_5_views():
     tables, views = vs.declared_objects((vs.ROOT / "storage" / "schema.sql").read_text(encoding="utf-8"))
     _, more = vs.declared_objects((vs.ROOT / "storage" / "views.sql").read_text(encoding="utf-8"))
-    assert len(tables) == 13 and len(views | more) == 5
+    assert len(tables) == 14 and len(views | more) == 5
 
 
 def test_missing_lists_what_is_gone():
