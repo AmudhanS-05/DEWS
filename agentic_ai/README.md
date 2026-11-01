@@ -82,6 +82,16 @@ the last 48 h of raw readings in `gauge_readings` with neighbour windows as cont
 fault (...); the data are questionable" (deterministic check `suspect_data`). No raw readings stored -> not checked,
 nothing said. A flag never blocks or changes the alert.
 
+**Alerts raised by the model's probability (core 1 Nov, `alert_rule = alert_by_model`, p_minor >= `tau` at 3 h;
+both read from the alert record in `alerts.details`).** The headline is the probability, never the stage forecast:
+"probability of crossing MINOR flood stage (10.0 ft) within 3 h: 89% (model alert threshold 83%)". When the model's
+own stage forecast stays below the category (LLAT2 2023-10-26: 5.4 ft vs MINOR 10.0 ft) the advisory is UNCERTAIN and
+says, in the facts' exact sentence (`advisory.disagreement_sentence`): "UNCERTAIN: the two forecasts disagree. The
+model's probability of crossing MINOR within 3 h is 89%, but its stage forecast is 5.4 ft, below the MINOR stage (10.0
+ft). Treat as uncertain and re-check at the next window."; lead time "not available (the two forecasts disagree)".
+Deterministic check `model_rule` (the sentence's parts present; "forecast to reach MINOR" rejected); the LLM judge is
+told this wording is correct. Under `alert_rule = forecast_stage` (rise-rate horizons) the wording is unchanged.
+
 **Reviewer checks added in A3.1** (each also a writer requirement): `category_stage` (a category paired with another
 category's stage), `threshold` (danger/warning levels or made-up categories instead of the official NWPS stages),
 `cause` (no "caused by / due to / dam release" outside data notes), `context_kind` on every alert, `update`,

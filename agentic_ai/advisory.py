@@ -127,6 +127,32 @@ def lead_time_h(evidence: dict, alert: dict) -> float | None:
     return round((level - stage) / rate, 1)
 
 
+def model_rule(alert: dict) -> bool:
+    """The alert was raised by the model's probability (core 1 Nov: p_minor >= tau at 3 h), not by the stage forecast."""
+    return alert.get("alert_rule") == "alert_by_model"
+
+
+def forecasts_disagree(alert: dict) -> bool:
+    """Model-probability alert whose own stage forecast stays below the alert's category stage (LLAT2 2023-10-26:
+    p_minor above tau, stage forecast 5.4 ft below MINOR 10.0 ft): the classifier and the regressor disagree."""
+    level = (alert.get("official_levels") or {}).get(alert["category"])
+    fc = alert.get("forecast_stage")
+    return model_rule(alert) and None not in (level, fc) and fc < level
+
+
+def disagreement_sentence(alert: dict) -> str | None:
+    """The plain wording for that case (writer, template, reviewer and core's bulletin use the same sentence)."""
+    if not forecasts_disagree(alert):
+        return None
+    cat, lv, h = alert["category"].upper(), alert["official_levels"][alert["category"]], alert.get("horizon_h")
+    p = pct(alert.get("probability"))
+    within = f" within {h:g} h" if h is not None else ""
+    return (f"UNCERTAIN: the two forecasts disagree. The model's probability of crossing {cat}{within} is "
+            f"{p if p is not None else NA}{'%' if p is not None else ''}, but its stage forecast is "
+            f"{ft(alert['forecast_stage']):.1f} ft, below the {cat} stage ({lv:.1f} ft). Treat as uncertain and "
+            f"re-check at the next window.")
+
+
 def lead_time(evidence: dict, alert: dict):
     """Lead time to the alert's category, consistent with the forecast (replay eval 1 Nov: with s3_v0 the rise-rate
     estimate said 20.4 h while the model forecast the crossing within 3 h, and the LLM judge rejected it):
@@ -134,6 +160,8 @@ def lead_time(evidence: dict, alert: dict):
     - "within N h (model forecast)" when the gauge is below the category, the forecast reaches it within the horizon
       and the current rise rate alone would be slower (or is not rising);
     - None ("not available") otherwise (e.g. the gauge is already above the category)."""
+    if forecasts_disagree(alert):   # live LLAT2 run 1 Nov: a rise-rate lead time next to a stage forecast that
+        return "not available (the two forecasts disagree)"   # never reaches the category was judged misleading
     lt = lead_time_h(evidence, alert)
     h = alert.get("horizon_h")
     if lt is not None and (h is None or lt <= h):
@@ -142,6 +170,8 @@ def lead_time(evidence: dict, alert: dict):
     cur, fc = alert.get("current_stage"), alert.get("forecast_stage")
     if None not in (h, level, cur, fc) and cur < level <= fc:
         return f"within {h:g} h (model forecast)"
+    if lt is not None and h is not None and lt > h:
+        return None      # slower than the horizon and the stage forecast does not reach it: no number to give
     return lt
 
 
@@ -179,7 +209,12 @@ def build_facts(alert: dict, evidence: dict, context: dict, update_n: int, episo
                       "current_stage_ft": ft(alert.get("current_stage")),
                       "official_levels_ft": {c: ft(lv.get(c)) for c in rules.CATEGORIES},
                       "data_status": data_status(alert.get("provisional_data")),
-                      "model": model_name(alert.get("model")), "readings_time_utc": as_of},
+                      "model": model_name(alert.get("model")), "readings_time_utc": as_of,
+                      **({"alert_rule": "the model's probability of crossing the category within the horizon is at or "
+                                        "above its alert threshold", "alert_threshold_pct": pct(alert.get("tau"))}
+                         if model_rule(alert) else
+                         {"alert_rule": "the stage forecast crosses the category within the horizon"}
+                         if alert.get("alert_rule") == "forecast_stage" else {})},
             "highest_category_forecast": fc_cat.upper() if fc_cat else "below all official categories",
             "category_now": cur_cat.upper() if cur_cat else "below all official categories",
             "evidence": {"stage_now_ft": ft(evidence.get("stage_last")),
@@ -201,6 +236,7 @@ def build_facts(alert: dict, evidence: dict, context: dict, update_n: int, episo
                         "impacts": (context or {}).get("impacts") or "no NWS impact statement loaded"},
             "update_n": update_n, "lead_time_h": NA if lt is None else lt,
             **({"episode": episode} if episode and update_n > 1 else {}),
+            **({"forecasts_disagree": disagreement_sentence(alert)} if forecasts_disagree(alert) else {}),
             **({"data_quality": data_quality_note(data_quality)} if data_quality_note(data_quality) else {}),
             **({"other_probability": other_probability(alert, evidence)} if other_probability(alert, evidence) else {})}
 
@@ -238,7 +274,13 @@ def template_text(alert: dict, evidence: dict, context: dict, confidence: str, u
         lines.append("SIMULATION: replay of a historical USGS gauge record, not a real-time event.")
     up = (episode or {}).get("upgraded_from") if update_n > 1 else None
     up_txt = f" (upgraded from {up})" if up and up.lower() in rules.CATEGORIES and rules.rank(up.lower()) < rules.rank(cat) else ""
-    lines.append(f"{head}{name}: forecast to reach {reach.upper()} flood stage ({lv[reach]:.1f} ft){within}{up_txt}.")
+    if model_rule(alert):     # alert raised by the model's probability: that is the headline, never the stage forecast
+        p0, t0 = pct(alert.get("probability")), pct(alert.get("tau"))
+        thr = f" (model alert threshold {t0}%)" if t0 is not None else ""
+        lines.append(f"{head}{name}: probability of crossing {cat.upper()} flood stage ({lv[cat]:.1f} ft){within}: "
+                     f"{p0 if p0 is not None else NA}{'%' if p0 is not None else ''}{thr}{up_txt}.")
+    else:
+        lines.append(f"{head}{name}: forecast to reach {reach.upper()} flood stage ({lv[reach]:.1f} ft){within}{up_txt}.")
     if higher:
         lines.append(f"Alert category: {cat.upper()} ({lv[cat]:.1f} ft); the forecast stage is above the official "
                      f"{higher.upper()} stage, the highest official category it crosses.")
@@ -250,9 +292,16 @@ def template_text(alert: dict, evidence: dict, context: dict, confidence: str, u
                  f"(as of {alert.get('as_of') or alert['raised_at']}).")
     p = pct(alert.get("probability"))
     p_txt = f"{p}%" if p is not None else f"not available ({model_name(alert.get('model'))} gives none)"
-    lines.append(f"Forecast: {_num(ft(alert['forecast_stage']))} ft{' in ' + format(h, 'g') + ' h' if h is not None else ''}; "
-                 f"probability of reaching {cat.upper()}: {p_txt}. Official stages: action {lv['action']:.1f}, "
-                 f"minor {lv['minor']:.1f}, moderate {lv['moderate']:.1f}, major {lv['major']:.1f} ft.")
+    stages_txt = (f"Official stages: action {lv['action']:.1f}, minor {lv['minor']:.1f}, moderate {lv['moderate']:.1f}, "
+                  f"major {lv['major']:.1f} ft.")
+    if forecasts_disagree(alert):
+        lines.append(disagreement_sentence(alert) + " " + stages_txt)
+    elif model_rule(alert):
+        lines.append(f"Stage forecast: {_num(ft(alert['forecast_stage']))} ft{' in ' + format(h, 'g') + ' h' if h is not None else ''}, "
+                     f"at or above the {cat.upper()} stage. {stages_txt}")
+    else:
+        lines.append(f"Forecast: {_num(ft(alert['forecast_stage']))} ft{' in ' + format(h, 'g') + ' h' if h is not None else ''}; "
+                     f"probability of reaching {cat.upper()}: {p_txt}. {stages_txt}")
     op = other_probability(alert, evidence)
     if op:
         lines.append(op[0].upper() + op[1:] + ".")
@@ -351,6 +400,13 @@ def requirements(facts: dict, confidence: str) -> list[tuple[str, str]]:
                     f"({lv[fc.lower()]:.1f} ft), above the alert's {cat.upper()}. Say the forecast reaches {fc} "
                     f"({lv[fc.lower()]:.1f} ft) and that the alert category is {cat.upper()}; never write that the "
                     f"forecast reaches {cat.upper()}."))
+    if facts.get("forecasts_disagree"):
+        req.append(("model_rule", "This alert was raised by the model's probability, and its stage forecast stays below "
+                    f"the {cat.upper()} stage. Say so plainly, in these words or very close: \"{facts['forecasts_disagree']}\" "
+                    f"Never write that the forecast reaches {cat.upper()}; the stage forecast is not the reason for the alert."))
+    elif str(a.get("alert_rule", "")).startswith("the model's"):
+        req.append(("model_rule", f"Lead with the model's probability of crossing {cat.upper()} within "
+                    f"{a.get('horizon_h'):g} h ({a.get('probability_pct')}%), the reason for the alert."))
     req.append(("certainty", "No certainty language (never: " + ", ".join(f"'{p}'" for p in rules.FORBIDDEN_PHRASES)
                 + "); say 'forecast to reach'."))
     req.append(("cause", "Do not say why the water rises (no 'caused by', 'due to', 'because of', dam release): "
@@ -369,6 +425,7 @@ def requirements(facts: dict, confidence: str) -> list[tuple[str, str]]:
     req.append(("lead_time", f"Write 'Lead time to {cat.upper()}: about {lt:.1f} h' (an estimate)." if isinstance(lt, float)
                 else f"Write 'Lead time to {cat.upper()}: {lt}' (the current rise rate alone is slower; do not "
                      f"give a rise-rate number)." if isinstance(lt, str) and lt.startswith("within")
+                else f"Write 'Lead time to {cat.upper()}: {lt}' (no lead-time number)." if isinstance(lt, str)
                 else f"Write 'Lead time to {cat.upper()}: not available'."))
     if facts["context"].get("rain") == RAIN_NA:
         req.append(("rain", f"Write 'rain data not available' for the radar rain (reason you may add: "
@@ -391,7 +448,7 @@ def requirements(facts: dict, confidence: str) -> list[tuple[str, str]]:
         req.append(("live_label", "Live data: do not use the word SIMULATION."))
     if str(a.get("data_status", "")).startswith("provisional per"):
         req.append(("provisional", "Say the data are provisional (use the word 'provisional')."))
-    if confidence == "uncertain":
+    if confidence == "uncertain" and (not facts.get("forecasts_disagree") or facts.get("context_disagreement")):
         req.append(("uncertain", "Write UNCERTAIN, then state the gauge evidence signal and the context signal using the "
                                  "words 'evidence' and 'context', and ask for a re-check at the next window."))
     if facts.get("data_quality"):

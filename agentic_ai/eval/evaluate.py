@@ -108,7 +108,9 @@ def load_replays(conn, path: Path | None = None) -> list[dict]:
                             "ON CONFLICT (alert_id) DO NOTHING",
                             (a["alert_id"], a["site_no"], a["mode"], a["category"], a["probability"], a["horizon_h"],
                              a["provisional_data"], a["raised_at"], Json({"window_start": a["window_start"],
-                                                                           "window_start_ts": a["window_start_ts"]})))
+                                                                           "window_start_ts": a["window_start_ts"],
+                                                                           "alert_rule": a.get("alert_rule"),
+                                                                           "tau": a.get("tau")})))
                 alerts.append({**a, "event": f"{ev['lid']} {ev['crossing_utc'][:10]}"})
     return alerts
 

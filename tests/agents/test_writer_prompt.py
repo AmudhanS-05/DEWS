@@ -20,6 +20,8 @@ def test_every_check_has_a_requirement():
                                                 "normal")}
     sus = {**advisory.build_facts(ALERT, EV, CX, 2), "data_quality": "stuck readings"}
     ids |= {i for i, _ in advisory.requirements(sus, "normal")}
+    mdl = {**ALERT, "alert_rule": "alert_by_model", "tau": 0.827, "forecast_stage": 4.0}     # stage forecast below MINOR
+    ids |= {i for i, _ in advisory.requirements(advisory.build_facts(mdl, EV, CX, 1), "uncertain")}
     assert ids == set(checks.CHECKS)
 
 

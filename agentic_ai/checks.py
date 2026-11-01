@@ -21,7 +21,7 @@ _ANY_NUM = re.compile(r"\d+(?:\.\d+)?")
 CHECKS = ("numbers", "precision", "category", "official_stage", "category_stage", "threshold", "forecast_category",
           "certainty", "cause", "probability", "horizon", "lead_time", "rain", "missing_value", "raw_field",
           "abbreviation", "context_kind", "markdown", "simulation", "live_label", "provisional", "uncertain",
-          "suspect_data", "update", "length")
+          "suspect_data", "update", "model_rule", "length")
 
 _PRECISION = re.compile(r"(?<![\w.])\d+\.\d{2,}\s*(?:ft|feet|foot|mm)\b|(?<![\w.])\d+\.\d{3,}")
 _MISSING = re.compile(r"\b(?:null|None|NaN|nan|undefined)\b|(?:^|(?<=[\s:=(]))\?(?=[\s,.;)]|$)", re.M)
@@ -61,7 +61,7 @@ _CAT_STAGE = re.compile(r"\b(action|minor|moderate|major)\b(?:\s+flood)?(?:\s+(?
 # Thresholds other than the official NWPS stages (danger/warning level, "flood threshold", made-up category names).
 _THRESHOLD = re.compile(r"\b(?:threshold|danger\s+(?:level|mark|line)|warning\s+(?:level|mark|line)|alert\s+level|"
                         r"critical\s+(?:level|stage)|evacuation\s+(?:level|stage)|safe\s+level|bankfull)\b"
-                        r"[^.\n\d]{0,30}(\d+(?:\.\d+)?)\s*(?:ft|feet|foot)?", re.I)
+                        r"[^.\n\d]{0,30}(\d+(?:\.\d+)?)(?![\d.]*\s*%)\s*(?:ft|feet|foot)?", re.I)  # % = a probability
 _FAKE_CATEGORY = re.compile(r"\b(?:severe|extreme|critical|catastrophic|red|orange|yellow|amber|danger)\s+"
                             r"(?:flood\s+)?(?:category|stage|level|threshold|alert\s+level)\b", re.I)
 # The advisory forecasts a crossing; it never asserts why the water rises (no cause in the facts).
@@ -206,6 +206,9 @@ def review_detailed(draft: str, alert: dict, facts: dict, confidence: str = "nor
     if isinstance(lt, (int, float)):
         if not _near(draft, r"lead[\s-]*time", re.compile(rf"(?<![\d.]){lt:.1f}(?![\d])")):
             out.append(("lead_time", f"lead time not stated (write: Lead time to {cat.upper()}: about {lt:.1f} h)"))
+    elif isinstance(lt, str) and lt.startswith("not available"):
+        if not _near(draft, r"lead[\s-]*time", _NA):
+            out.append(("lead_time", f"lead time must say 'not available' (write: Lead time to {cat.upper()}: {lt})"))
     elif isinstance(lt, str) and lt.startswith("within"):
         h = re.escape(lt.split()[1])
         if not _near(draft, r"lead[\s-]*time", re.compile(rf"within\s+{h}\s*(?:h|hours?)\b")):
@@ -239,7 +242,8 @@ def review_detailed(draft: str, alert: dict, facts: dict, confidence: str = "nor
         out.append(("live_label", "SIMULATION label on live data"))
     if alert.get("provisional_data") and "provisional" not in low:
         out.append(("provisional", "provisional-data note missing (use the word 'provisional')"))
-    if confidence == "uncertain" and not ("UNCERTAIN" in draft and "evidence" in low and "context" in low):
+    needs_signals = not facts.get("forecasts_disagree") or facts.get("context_disagreement")
+    if confidence == "uncertain" and needs_signals and not ("UNCERTAIN" in draft and "evidence" in low and "context" in low):
         out.append(("uncertain", "uncertain case must say UNCERTAIN and state both the evidence and the context signal"))
     if facts.get("data_quality") and not _SUSPECT.search(draft):
         out.append(("suspect_data", "the gauge readings are flagged as a possible sensor fault: say the data are "
@@ -252,6 +256,7 @@ def review_detailed(draft: str, alert: dict, facts: dict, confidence: str = "nor
         out.append(("update", "first alert of the episode: no 'Update n' wording"))
     elif any(u != n for u in ups):
         out.append(("update", f"wrong update number {ups} (this is update {n})"))
+    out += _model_rule(draft, alert, facts)
     if len(draft) > rules.MAX_ADVISORY_CHARS:
         out.append(("length", f"too long: {len(draft)} > {rules.MAX_ADVISORY_CHARS} characters"))
     return out
@@ -273,6 +278,29 @@ def _forecast_category(draft: str, alert: dict) -> list[tuple[str, str]]:
                  rf"(?:official\s+)?{cat.upper()}\b", draft):
         out.append(("forecast_category", f"the forecast is called {cat.upper()} but it crosses {hi.upper()}: say the "
                                          f"forecast reaches {hi.upper()}; {cat.upper()} is the alert's category"))
+    return out
+
+
+def _model_rule(draft: str, alert: dict, facts: dict) -> list[tuple[str, str]]:
+    """Core 1 Nov: an alert raised by the model's probability whose stage forecast stays below the category must say
+    the two forecasts disagree (UNCERTAIN, the probability, the stage forecast below the category stage) and must never
+    present the stage forecast as reaching the category."""
+    if not facts.get("forecasts_disagree"):
+        return []
+    from agentic_ai.advisory import ft
+    cat = alert["category"].upper()
+    out = []
+    fs = ft(alert.get("forecast_stage"))
+    low = draft.lower()
+    ok = ("UNCERTAIN" in draft and "disagree" in low and "below" in low and fs is not None
+          and any(abs(n - fs) <= 0.06 for n in _nums(draft)) and "probab" in low)
+    if not ok:
+        out.append(("model_rule", "the model's probability and its stage forecast disagree: write UNCERTAIN, the "
+                                  f"probability, and the stage forecast {fs} ft below the {cat} stage (copy: "
+                                  f"{facts['forecasts_disagree'][:160]})"))
+    if re.search(rf"forecast(?:ed)?\s+(?:to\s+)?(?:reach|cross|exceed|rise\s+(?:to|above))\w*\s+(?:the\s+)?"
+                 rf"(?:official\s+)?{cat}\b", draft):
+        out.append(("model_rule", f"the stage forecast stays below {cat}: never write that the forecast reaches {cat}"))
     return out
 
 

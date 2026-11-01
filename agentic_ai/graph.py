@@ -107,8 +107,11 @@ def _now():
 
 
 def _facts(s: State) -> dict:
-    return advisory.build_facts(s["alert"], s["evidence"], s["context"], s["update_n"], s.get("episode"),
-                                s["evidence"].get("data_quality"))
+    f = advisory.build_facts(s["alert"], s["evidence"], s["context"], s["update_n"], s.get("episode"),
+                             s["evidence"].get("data_quality"))
+    if s.get("disagreement"):
+        f["context_disagreement"] = "the gauge evidence and a leading context signal point different ways"
+    return f
 
 
 def build_graph(tools, run: Run):
@@ -221,7 +224,14 @@ def build_graph(tools, run: Run):
             run.event("coordinator", "disagreement", dis)
             t0 = _now()
             run.row("coordinator", t0, "disagreement between evidence and context", dis, verdict="uncertain")
-        return {"disagreement": dis, "confidence": "uncertain" if dis else "normal"}
+        model_dis = advisory.forecasts_disagree(s["alert"])
+        if model_dis:   # core 1 Nov: the model's probability raised it, its own stage forecast stays below the category
+            d = {"kind": "model", "probability": s["alert"].get("probability"), "tau": s["alert"].get("tau"),
+                 "forecast_stage": s["alert"].get("forecast_stage"),
+                 "category_stage": s["alert"]["official_levels"][s["alert"]["category"]]}
+            run.event("coordinator", "disagreement", d)
+            run.row("coordinator", _now(), "model probability vs stage forecast", d, verdict="uncertain")
+        return {"disagreement": dis, "confidence": "uncertain" if (dis or model_dis) else "normal"}
 
     def writer(s: State) -> dict:
         t0, a = _now(), s["alert"]
@@ -272,7 +282,13 @@ def build_graph(tools, run: Run):
                              "both. data_source says whether the data are a replay of a historical USGS record "
                              "(mode SIMULATION): calling such data replayed historical data is correct. Upstream "
                              "gauges and radar rain are leading signals; downstream and nearby gauges are supporting "
-                             "context only, and saying so is correct.",
+                             "context only, and saying so is correct. When the alert was raised by the model's "
+                             "probability and its stage forecast stays below the category (forecasts_disagree in "
+                             "FACTS), stating both and calling the advisory UNCERTAIN is correct, even when the stage "
+                             "forecast is below the current stage or the gauge is rising: that contradiction between "
+                             "the two model outputs is exactly what the advisory reports, so never FAIL a draft for "
+                             "it; FAIL only if the draft hides it or presents the stage forecast as reaching the "
+                             "category.",
                              f"FACTS (JSON):\n{json.dumps(facts, default=str)}\n\nDRAFT:\n{s['draft']}",
                              on_wait=waiter("reviewer"))
             tokens = r.tokens

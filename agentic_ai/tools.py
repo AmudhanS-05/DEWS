@@ -207,6 +207,7 @@ class Tools:
                 "official_levels": levels,
                 "provisional_data": a["provisional_data"], "model": fc["model"] if fc else None,
                 "raised_at": a["raised_at"], "window_start": window[-1]["window_start"] if window else None,
+                "alert_rule": det.get("alert_rule"), "tau": det.get("tau"),
                 "as_of": as_of, "episode_start": episode, "status": a["status"]}
 
     def get_open_alerts(self, mode: str | None = None) -> list[dict]:

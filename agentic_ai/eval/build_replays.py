@@ -121,7 +121,8 @@ def replay(site: str, readings, gauge: dict, t0: float, t1: float, rain: dict[fl
         out["alerts"] += [{k: a[k] for k in ("alert_id", "kind", "site_no", "mode", "category", "probability",
                                              "horizon_h", "forecast_stage", "current_stage", "provisional_data",
                                              "model", "raised_at", "window_start", "window_start_ts",
-                                             "episode_start")} for a in alerts]
+                                             "episode_start")} | {"alert_rule": a.get("alert_rule"), "tau": a.get("tau")}
+                             for a in alerts]
         s += W
     return out
 
