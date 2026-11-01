@@ -1,0 +1,77 @@
+table latency_trace
+	lineageTag: 4ba1024d-23b3-5a80-a880-f1d910e563df
+
+	column trace_id
+		dataType: string
+		lineageTag: b728600f-ebdf-5846-a40c-bb6b05bc7740
+		summarizeBy: none
+		sourceColumn: trace_id
+
+	column site_no
+		dataType: string
+		lineageTag: a02382b7-cd91-51e1-8dca-ebbcce87599c
+		summarizeBy: none
+		sourceColumn: site_no
+
+	column mode
+		dataType: string
+		lineageTag: 8594325a-f552-5e6e-ae5e-630618e2b81d
+		summarizeBy: none
+		sourceColumn: mode
+
+	column reading_time
+		dataType: dateTime
+		lineageTag: 405adfb4-9d7f-55ba-9845-837844e8444b
+		summarizeBy: none
+		sourceColumn: reading_time
+
+	column fetched_at
+		dataType: dateTime
+		lineageTag: 7ef2bd65-411d-5e7d-adb9-ac40271d2880
+		summarizeBy: none
+		sourceColumn: fetched_at
+
+	column ingest_time
+		dataType: dateTime
+		lineageTag: b1758f3b-15a8-5b48-8123-2ae7bb5c11e5
+		summarizeBy: none
+		sourceColumn: ingest_time
+
+	column window_close_time
+		dataType: dateTime
+		lineageTag: 4654e06d-2bef-52ce-a35c-c6e2ce8f2cd7
+		summarizeBy: none
+		sourceColumn: window_close_time
+
+	column forecast_time
+		dataType: dateTime
+		lineageTag: a4b6e21b-8d85-5a2d-94ff-c8a3754e2401
+		summarizeBy: none
+		sourceColumn: forecast_time
+
+	column alert_time
+		dataType: dateTime
+		lineageTag: 12179e8f-80eb-553d-9db0-d821ae244a6c
+		summarizeBy: none
+		sourceColumn: alert_time
+
+	column approved_time
+		dataType: dateTime
+		lineageTag: c5192ece-00ab-52ed-873d-fcc279d1df02
+		summarizeBy: none
+		sourceColumn: approved_time
+
+	column delivered_time
+		dataType: dateTime
+		lineageTag: 7e4db10d-7e36-5250-b5aa-3f885472cf4c
+		summarizeBy: none
+		sourceColumn: delivered_time
+
+	partition latency_trace = m
+		mode: directQuery
+		source =
+				let
+					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
+					Data = Source{[Schema="public",Item="latency_trace"]}[Data]
+				in
+					Data

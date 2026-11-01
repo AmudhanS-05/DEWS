@@ -1,0 +1,47 @@
+table catchment_rain
+	lineageTag: 8f5190c1-3f75-5bcc-ae87-93a45c8103ac
+
+	column site_no
+		dataType: string
+		lineageTag: 1fb74414-7d57-50ba-9b48-96d80e3a4894
+		summarizeBy: none
+		sourceColumn: site_no
+
+	column product
+		dataType: string
+		lineageTag: f84b817a-2561-5d0f-8213-5f42a48ffe9e
+		summarizeBy: none
+		sourceColumn: product
+
+	column window_end
+		dataType: dateTime
+		lineageTag: 5446f89c-57ce-5d82-89f6-29ff5c0856e7
+		summarizeBy: none
+		sourceColumn: window_end
+
+	column accum_hours
+		dataType: int64
+		lineageTag: 236b9c0e-b012-5b72-b1ff-650bb478873b
+		summarizeBy: none
+		sourceColumn: accum_hours
+
+	column rain_mm
+		dataType: double
+		lineageTag: 69430b10-81bd-5a44-ab14-6fe866552034
+		summarizeBy: none
+		sourceColumn: rain_mm
+
+	column computed_at
+		dataType: dateTime
+		lineageTag: bb7df781-caeb-51b4-b261-c337a4569ce3
+		summarizeBy: none
+		sourceColumn: computed_at
+
+	partition catchment_rain = m
+		mode: directQuery
+		source =
+				let
+					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
+					Data = Source{[Schema="public",Item="catchment_rain"]}[Data]
+				in
+					Data

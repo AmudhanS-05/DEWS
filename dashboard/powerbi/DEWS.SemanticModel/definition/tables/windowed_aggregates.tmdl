@@ -1,0 +1,95 @@
+table windowed_aggregates
+	lineageTag: 71eb552c-1c52-59b3-baee-339a49c1cf94
+
+	column site_no
+		dataType: string
+		lineageTag: 1d3f42c0-ebe8-52dc-acfc-b9b97142cb11
+		summarizeBy: none
+		sourceColumn: site_no
+
+	column window_start
+		dataType: dateTime
+		lineageTag: 1ef9da26-80a5-5ec8-a7f4-fdab8d275531
+		summarizeBy: none
+		sourceColumn: window_start
+
+	column window_end
+		dataType: dateTime
+		lineageTag: 7f9f0535-1169-5b74-b677-cdc0de8aaf8e
+		summarizeBy: none
+		sourceColumn: window_end
+
+	column mode
+		dataType: string
+		lineageTag: 8274dee7-33ca-5352-84c7-2820396a5e96
+		summarizeBy: none
+		sourceColumn: mode
+
+	column n_readings
+		dataType: int64
+		lineageTag: 5ea2d637-b3ab-5f96-a0db-5f52c816e337
+		summarizeBy: none
+		sourceColumn: n_readings
+
+	column stage_last
+		dataType: double
+		lineageTag: 8bf900df-ffa1-5fbb-bec9-78008d0fa2d2
+		summarizeBy: none
+		sourceColumn: stage_last
+
+	column stage_max
+		dataType: double
+		lineageTag: a936a1f5-5cea-5209-bbba-2605b8ff3213
+		summarizeBy: none
+		sourceColumn: stage_max
+
+	column stage_min
+		dataType: double
+		lineageTag: 818e75d8-6df1-56d8-a84c-a4776b25453c
+		summarizeBy: none
+		sourceColumn: stage_min
+
+	column rise_rate_ft_per_h
+		dataType: double
+		lineageTag: e7a399d4-2702-5dc0-928c-45bc16e5bf22
+		summarizeBy: none
+		sourceColumn: rise_rate_ft_per_h
+
+	column rain_1h
+		dataType: double
+		lineageTag: 4d307f9e-1fe4-59ba-97ea-00adf6f2a1de
+		summarizeBy: none
+		sourceColumn: rain_1h
+
+	column rain_3h
+		dataType: double
+		lineageTag: 5cc62d25-9915-5196-ae81-e216f651108d
+		summarizeBy: none
+		sourceColumn: rain_3h
+
+	column rain_6h
+		dataType: double
+		lineageTag: aab95356-ea6a-5ee5-819c-fbcaeb5e7394
+		summarizeBy: none
+		sourceColumn: rain_6h
+
+	column provisional
+		dataType: boolean
+		lineageTag: c6815eee-112f-5b68-8c94-23eacf307fa2
+		summarizeBy: none
+		sourceColumn: provisional
+
+	column emitted_at
+		dataType: dateTime
+		lineageTag: 56767e69-4d3c-5036-bf44-751845f5f586
+		summarizeBy: none
+		sourceColumn: emitted_at
+
+	partition windowed_aggregates = m
+		mode: directQuery
+		source =
+				let
+					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
+					Data = Source{[Schema="public",Item="windowed_aggregates"]}[Data]
+				in
+					Data

@@ -1,0 +1,27 @@
+model Model
+	culture: en-US
+	defaultPowerBIDataSourceVersion: powerBI_V3
+	sourceQueryCulture: en-US
+	dataAccessOptions
+		legacyRedirects
+		returnErrorValuesAsNull
+
+ref table advisories
+ref table agent_events
+ref table agent_run_metrics
+ref table agent_run_summary
+ref table agent_runs
+ref table alert_overview
+ref table alerts
+ref table catchment_rain
+ref table current_advisory
+ref table evaluation_runs
+ref table feed_staleness
+ref table gauge_impacts
+ref table gauge_readings
+ref table gauges
+ref table latency_trace
+ref table latency_waterfall
+ref table past_floods
+ref table risk_scores
+ref table windowed_aggregates

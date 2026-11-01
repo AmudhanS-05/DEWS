@@ -1,0 +1,11 @@
+{
+    "metadata":  {
+                     "type":  "SemanticModel",
+                     "displayName":  "DEWS"
+                 },
+    "config":  {
+                   "version":  "2.0",
+                   "logicalId":  "c8acd701-67b2-5cbf-9762-ad42c1c449c5"
+               },
+    "$schema":  "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json"
+}

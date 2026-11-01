@@ -1,0 +1,59 @@
+relationship 8e7a2751-eeb3-5a4b-9671-4f1dcb30d547
+	fromColumn: gauge_readings.site_no
+	toColumn: gauges.site_no
+
+relationship 6d69686d-5ffd-520b-b963-3f787ad841e8
+	fromColumn: catchment_rain.site_no
+	toColumn: gauges.site_no
+
+relationship db101b77-6d40-5284-8918-3c8301365530
+	fromColumn: windowed_aggregates.site_no
+	toColumn: gauges.site_no
+
+relationship 16ad62ae-71a6-5a3f-abb8-055a4a4cb951
+	fromColumn: risk_scores.site_no
+	toColumn: gauges.site_no
+
+relationship 9ab7507f-11e6-598b-a27e-1d1e2fa4a7af
+	fromColumn: alerts.site_no
+	toColumn: gauges.site_no
+
+relationship 442a4ae8-4ce9-593a-bd80-07b4f9122e37
+	fromColumn: latency_trace.site_no
+	toColumn: gauges.site_no
+
+relationship cbad14cd-c856-510f-ab13-c853408dc2d3
+	fromColumn: evaluation_runs.site_no
+	toColumn: gauges.site_no
+
+relationship 0835ab83-c104-5c2f-97fb-ac359c362e3f
+	fromColumn: feed_staleness.site_no
+	toColumn: gauges.site_no
+
+relationship a00fe375-0a47-5376-8a78-6958a0923623
+	fromColumn: latency_waterfall.site_no
+	toColumn: gauges.site_no
+
+relationship 05482326-d878-5802-a018-ca49cad53435
+	fromColumn: alert_overview.site_no
+	toColumn: gauges.site_no
+
+relationship 384292a6-5f25-50db-90f9-9b50c563dac7
+	fromColumn: agent_run_metrics.site_no
+	toColumn: gauges.site_no
+
+relationship fa44f88b-386a-566b-8726-48b015b29e3c
+	fromColumn: gauge_impacts.site_no
+	toColumn: gauges.site_no
+
+relationship 01d15de4-1479-5a18-a083-5a33f113fd4f
+	fromColumn: past_floods.site_no
+	toColumn: gauges.site_no
+
+relationship 468fe111-ab4a-5721-9a36-36d6381100d0
+	fromColumn: advisories.alert_id
+	toColumn: alerts.alert_id
+
+relationship 064f401a-17af-5360-ad33-8a334f3dfbb8
+	fromColumn: agent_events.alert_id
+	toColumn: alerts.alert_id

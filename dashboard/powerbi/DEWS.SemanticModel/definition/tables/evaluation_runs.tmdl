@@ -1,0 +1,145 @@
+table evaluation_runs
+	lineageTag: 6dacf97b-be89-5415-b8ae-44cc08199f64
+
+	measure 'F1 (mean of rows)' = AVERAGE(evaluation_runs[f1])
+		formatString: 0.00
+		lineageTag: 246c5f8d-2a68-5342-a7f6-067141bd7f63
+
+	measure 'False alarms' = SUM(evaluation_runs[false_alarms])
+		formatString: 0
+		lineageTag: 41d37a16-eeae-5e69-b001-ce62452a55ec
+
+	measure 'Lead time, median of rows (h)' = MEDIAN(evaluation_runs[median_lead_time_h])
+		formatString: 0.00
+		lineageTag: eca38f5c-53f0-50b8-b8a5-ab2c8662f934
+
+	measure 'Drill recovery, median (s)' = CALCULATE(MEDIAN(evaluation_runs[recovery_time_s]), evaluation_runs[status] = "passed")
+		formatString: 0.0
+		lineageTag: f010e8d3-2f35-5b16-b091-ad93a00f7b19
+
+	measure 'Drills failed' = CALCULATE(COUNTROWS(evaluation_runs), evaluation_runs[status] = "failed")
+		formatString: 0
+		lineageTag: e5cadfd6-3463-595f-80c1-a993ade51f08
+
+	column run_id
+		dataType: int64
+		lineageTag: f7858345-906a-5f43-951a-08181520dd39
+		summarizeBy: none
+		sourceColumn: run_id
+
+	column run_label
+		dataType: string
+		lineageTag: c3c299ed-5390-5ab2-a338-b04a985900c7
+		summarizeBy: none
+		sourceColumn: run_label
+
+	column data_source
+		dataType: string
+		lineageTag: 820c13a5-bd7f-5c61-9e38-edb045ba3fb4
+		summarizeBy: none
+		sourceColumn: data_source
+
+	column site_no
+		dataType: string
+		lineageTag: 9ddb5951-0432-59f7-8551-2700a32897de
+		summarizeBy: none
+		sourceColumn: site_no
+
+	column model
+		dataType: string
+		lineageTag: 42df70f9-8414-5aad-83db-2c23c9c040c9
+		summarizeBy: none
+		sourceColumn: model
+
+	column horizon_h
+		dataType: double
+		lineageTag: 72c836d8-0dce-5bfd-a781-22ad9dbe0442
+		summarizeBy: none
+		sourceColumn: horizon_h
+
+	column precision
+		dataType: double
+		lineageTag: e5e36561-eaa3-514e-bd77-822fd68bc599
+		summarizeBy: none
+		sourceColumn: precision
+
+	column recall
+		dataType: double
+		lineageTag: a0904a10-b3cd-5163-8ffb-35ee72128066
+		summarizeBy: none
+		sourceColumn: recall
+
+	column f1
+		dataType: double
+		lineageTag: d0356892-8834-543f-9351-55c3cd753662
+		summarizeBy: none
+		sourceColumn: f1
+
+	column false_alarms
+		dataType: int64
+		lineageTag: 22aa2502-540c-51fd-b06d-c077a29eb134
+		summarizeBy: none
+		sourceColumn: false_alarms
+
+	column median_lead_time_h
+		dataType: double
+		lineageTag: d0b747df-3c0f-599b-8a10-45483dbd65be
+		summarizeBy: none
+		sourceColumn: median_lead_time_h
+
+	column mae_ft
+		dataType: double
+		lineageTag: 910ba972-b132-5d50-a4a0-3d8c91a1634b
+		summarizeBy: none
+		sourceColumn: mae_ft
+
+	column rmse_ft
+		dataType: double
+		lineageTag: 617989d8-d7fe-5507-9a5d-829c1fe633da
+		summarizeBy: none
+		sourceColumn: rmse_ft
+
+	column throughput_msgs_s
+		dataType: double
+		lineageTag: 8c4972a2-3000-5aba-8e4e-541ad52827dc
+		summarizeBy: none
+		sourceColumn: throughput_msgs_s
+
+	column recovery_time_s
+		dataType: double
+		lineageTag: 5dfa3458-33a9-565f-94f6-2cf96876d798
+		summarizeBy: none
+		sourceColumn: recovery_time_s
+
+	column notes
+		dataType: string
+		lineageTag: b2818e92-4159-57ac-946b-00cae54b1ed5
+		summarizeBy: none
+		sourceColumn: notes
+
+	column created_at
+		dataType: dateTime
+		lineageTag: fe2b2b73-0d8e-5eda-9b9c-160649fe68cf
+		summarizeBy: none
+		sourceColumn: created_at
+
+	column status
+		dataType: string
+		lineageTag: 07cd7a1a-e7e7-5226-993c-52116052001b
+		summarizeBy: none
+		sourceColumn: status
+
+	column failure_reason
+		dataType: string
+		lineageTag: 89a49906-eb9f-57be-9eee-923f49b628d5
+		summarizeBy: none
+		sourceColumn: failure_reason
+
+	partition evaluation_runs = m
+		mode: directQuery
+		source =
+				let
+					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
+					Data = Source{[Schema="public",Item="evaluation_runs"]}[Data]
+				in
+					Data

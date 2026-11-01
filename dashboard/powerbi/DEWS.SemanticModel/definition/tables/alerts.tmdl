@@ -1,0 +1,95 @@
+table alerts
+	lineageTag: b57eece6-0f40-509e-af8a-026c59e1603d
+
+	column alert_id
+		dataType: string
+		lineageTag: 66af08d7-4023-5891-9c21-750fcffc1147
+		summarizeBy: none
+		sourceColumn: alert_id
+
+	column site_no
+		dataType: string
+		lineageTag: b7c3b32b-ec62-5130-8040-3197723bfa04
+		summarizeBy: none
+		sourceColumn: site_no
+
+	column mode
+		dataType: string
+		lineageTag: 514e8970-7e84-51a9-8361-fe9c80caee72
+		summarizeBy: none
+		sourceColumn: mode
+
+	column category
+		dataType: string
+		lineageTag: 0764a217-dd07-5603-b803-435bc73f8c90
+		summarizeBy: none
+		sourceColumn: category
+
+	column probability
+		dataType: double
+		lineageTag: ef36d245-1ba4-5627-8b70-f756011e6c94
+		summarizeBy: none
+		sourceColumn: probability
+
+	column horizon_h
+		dataType: double
+		lineageTag: a9aa5ce3-d473-5fbb-8378-7a3d9424e044
+		summarizeBy: none
+		sourceColumn: horizon_h
+
+	column provisional_data
+		dataType: boolean
+		lineageTag: fd438481-4cc2-547d-98d1-2690810a3e22
+		summarizeBy: none
+		sourceColumn: provisional_data
+
+	column status
+		dataType: string
+		lineageTag: c94fded7-4fbc-5c9a-96eb-20da646dbb81
+		summarizeBy: none
+		sourceColumn: status
+
+	column message
+		dataType: string
+		lineageTag: 18bb627a-bd04-52cc-9181-a9cb5d389c74
+		summarizeBy: none
+		sourceColumn: message
+
+	column raised_at
+		dataType: dateTime
+		lineageTag: 4303c96d-3a7d-58fc-b105-40b1bb7e3d8c
+		summarizeBy: none
+		sourceColumn: raised_at
+
+	column approved_at
+		dataType: dateTime
+		lineageTag: 8b5a0ec2-09ab-5640-bd86-6dc40a8a2442
+		summarizeBy: none
+		sourceColumn: approved_at
+
+	column approved_by
+		dataType: string
+		lineageTag: 1c11101a-6977-5d57-aa3d-b2dc24d80eab
+		summarizeBy: none
+		sourceColumn: approved_by
+
+	column delivered_at
+		dataType: dateTime
+		lineageTag: ae0317b8-2804-57a4-930c-68ac4dde56fe
+		summarizeBy: none
+		sourceColumn: delivered_at
+
+	column channel
+		dataType: string
+		lineageTag: 86101618-2cf0-5995-bf48-a8ca5cafe1c2
+		summarizeBy: none
+		sourceColumn: channel
+
+	partition alerts = m
+		mode: directQuery
+		source =
+				let
+					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
+					Data = Source{[Schema="public",Item="alerts"]}[Data]
+				in
+					Data

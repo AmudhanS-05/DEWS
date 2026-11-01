@@ -1,0 +1,41 @@
+table past_floods
+	lineageTag: 3a98b7ee-e063-5f56-b95a-3791182c14a0
+
+	column site_no
+		dataType: string
+		lineageTag: 40afc575-4cf7-58c8-8bf3-2cb2f30ad66d
+		summarizeBy: none
+		sourceColumn: site_no
+
+	column crossing_time
+		dataType: dateTime
+		lineageTag: a37af9fb-96ad-56be-8998-87787bc1cd5f
+		summarizeBy: none
+		sourceColumn: crossing_time
+
+	column category
+		dataType: string
+		lineageTag: 1361f85a-a369-53e1-b8a2-ab43fe0bd367
+		summarizeBy: none
+		sourceColumn: category
+
+	column peak_stage_ft
+		dataType: double
+		lineageTag: 5fcdf3c4-cb75-58cb-9ac2-ff428c886320
+		summarizeBy: none
+		sourceColumn: peak_stage_ft
+
+	column rise_time_h
+		dataType: double
+		lineageTag: 24cd3ce5-1243-57cf-8c33-e450fe07b9f0
+		summarizeBy: none
+		sourceColumn: rise_time_h
+
+	partition past_floods = m
+		mode: directQuery
+		source =
+				let
+					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
+					Data = Source{[Schema="public",Item="past_floods"]}[Data]
+				in
+					Data

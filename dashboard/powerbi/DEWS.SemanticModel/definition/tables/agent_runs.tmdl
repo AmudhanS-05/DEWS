@@ -1,0 +1,65 @@
+table agent_runs
+	lineageTag: 7d5b6f3a-4082-5610-8397-02a18b45ba93
+
+	column id
+		dataType: int64
+		lineageTag: 66438886-5498-5e42-a40c-0126ce2cd970
+		summarizeBy: none
+		sourceColumn: id
+
+	column run_id
+		dataType: string
+		lineageTag: 6e39e55c-6181-5fac-aa81-a22183582403
+		summarizeBy: none
+		sourceColumn: run_id
+
+	column alert_id
+		dataType: string
+		lineageTag: 1f3ba2f1-615a-54d6-b0b9-2cdf4bccfcc3
+		summarizeBy: none
+		sourceColumn: alert_id
+
+	column agent
+		dataType: string
+		lineageTag: a705daa2-967b-543a-bfff-ebd2be0b0a86
+		summarizeBy: none
+		sourceColumn: agent
+
+	column input_summary
+		dataType: string
+		lineageTag: 9479ba34-428c-5db2-a605-7b3082502f3f
+		summarizeBy: none
+		sourceColumn: input_summary
+
+	column started_at
+		dataType: dateTime
+		lineageTag: c96faa32-e853-5b46-b6e4-f68035fcc2f0
+		summarizeBy: none
+		sourceColumn: started_at
+
+	column ended_at
+		dataType: dateTime
+		lineageTag: 42dabb78-d8ac-564f-b7fd-df2ced513c44
+		summarizeBy: none
+		sourceColumn: ended_at
+
+	column tokens
+		dataType: int64
+		lineageTag: fc8d22c8-5e16-5d0a-af05-0ee03c740bb9
+		summarizeBy: none
+		sourceColumn: tokens
+
+	column verdict
+		dataType: string
+		lineageTag: 6a8301ca-731f-5b0a-8180-4cd71726d8eb
+		summarizeBy: none
+		sourceColumn: verdict
+
+	partition agent_runs = m
+		mode: directQuery
+		source =
+				let
+					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
+					Data = Source{[Schema="public",Item="agent_runs"]}[Data]
+				in
+					Data

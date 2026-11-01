@@ -1,0 +1,35 @@
+table gauge_impacts
+	lineageTag: 0ea2751f-b3d8-5b9d-914b-a6031d00cf3a
+
+	column site_no
+		dataType: string
+		lineageTag: 7d5dd956-8006-55ee-a9e7-3dbc2f552572
+		summarizeBy: none
+		sourceColumn: site_no
+
+	column stage_ft
+		dataType: double
+		lineageTag: 8219f2da-b0c2-5b51-b1b2-21de186a451b
+		summarizeBy: none
+		sourceColumn: stage_ft
+
+	column category
+		dataType: string
+		lineageTag: 81d5a3f9-38db-52ec-a44b-8a5e032592fb
+		summarizeBy: none
+		sourceColumn: category
+
+	column statement
+		dataType: string
+		lineageTag: 9fc4ec9c-8414-5d98-b306-6f01b67f8caa
+		summarizeBy: none
+		sourceColumn: statement
+
+	partition gauge_impacts = m
+		mode: directQuery
+		source =
+				let
+					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
+					Data = Source{[Schema="public",Item="gauge_impacts"]}[Data]
+				in
+					Data

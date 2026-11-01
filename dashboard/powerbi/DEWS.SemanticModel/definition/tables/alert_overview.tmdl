@@ -1,0 +1,107 @@
+table alert_overview
+	lineageTag: 9c18bb86-694d-5491-b29a-44a5486f6506
+
+	column alert_id
+		dataType: string
+		lineageTag: e5d82043-221b-54dc-915a-405e1e8c4799
+		summarizeBy: none
+		sourceColumn: alert_id
+
+	column site_no
+		dataType: string
+		lineageTag: d3135014-e26a-571a-a08b-e26c6ac2489c
+		summarizeBy: none
+		sourceColumn: site_no
+
+	column mode
+		dataType: string
+		lineageTag: b03038c9-7590-5be4-b9d6-eda564f0e53f
+		summarizeBy: none
+		sourceColumn: mode
+
+	column category
+		dataType: string
+		lineageTag: 32f07779-5fe2-579b-a3f7-e40140178d47
+		summarizeBy: none
+		sourceColumn: category
+
+	column probability
+		dataType: double
+		lineageTag: 046e2eee-0f80-59f8-bd9a-17b752e913c9
+		summarizeBy: none
+		sourceColumn: probability
+
+	column horizon_h
+		dataType: double
+		lineageTag: 78ae62e8-d74b-58be-9ecc-4137d6853f27
+		summarizeBy: none
+		sourceColumn: horizon_h
+
+	column alert_status
+		dataType: string
+		lineageTag: 1ad25118-016b-5254-bdff-73b84e7d598b
+		summarizeBy: none
+		sourceColumn: alert_status
+
+	column raised_at
+		dataType: dateTime
+		lineageTag: c67b8d37-250c-5345-9ed1-4ce925090a57
+		summarizeBy: none
+		sourceColumn: raised_at
+
+	column approved_at
+		dataType: dateTime
+		lineageTag: 1ad3294b-dd7f-5f04-9f7e-54931cd0b01d
+		summarizeBy: none
+		sourceColumn: approved_at
+
+	column delivered_at
+		dataType: dateTime
+		lineageTag: e97ef668-a600-56ed-8599-8698e46a4bf4
+		summarizeBy: none
+		sourceColumn: delivered_at
+
+	column advisory_version
+		dataType: int64
+		lineageTag: 3cde2ab7-3bdd-5d32-a807-5f77a34922e0
+		summarizeBy: none
+		sourceColumn: advisory_version
+
+	column advisory_source
+		dataType: string
+		lineageTag: 678b340f-b6f1-5695-b1e8-4acfc8443c8a
+		summarizeBy: none
+		sourceColumn: advisory_source
+
+	column confidence
+		dataType: string
+		lineageTag: f3c3ad0a-fdcf-5fb7-8226-5440f8d4119f
+		summarizeBy: none
+		sourceColumn: confidence
+
+	column advisory_status
+		dataType: string
+		lineageTag: 0dcb932b-6a07-576a-b691-1e83387c3d48
+		summarizeBy: none
+		sourceColumn: advisory_status
+
+	column raise_to_approval_s
+		dataType: double
+		lineageTag: 8cca389b-89f3-5183-96a1-37e56c7234cf
+		summarizeBy: none
+		sourceColumn: raise_to_approval_s
+
+	column approval_to_delivery_s
+		dataType: double
+		lineageTag: 479ab997-2361-5b9d-83ad-7f01cab6d47b
+		summarizeBy: none
+		sourceColumn: approval_to_delivery_s
+
+	partition alert_overview = m
+		mode: directQuery
+		source =
+				let
+					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
+					Data = Source{[Schema="public",Item="alert_overview"]}[Data]
+				in
+					Data

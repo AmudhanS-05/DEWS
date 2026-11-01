@@ -1,0 +1,89 @@
+table current_advisory
+	lineageTag: c0ea44ff-6369-5c1b-9ace-45625c64e31a
+
+	column alert_id
+		dataType: string
+		lineageTag: 65e3bc8e-5073-5105-bc87-7e7af6bc20af
+		summarizeBy: none
+		sourceColumn: alert_id
+
+	column advisory_id
+		dataType: string
+		lineageTag: 073e14fb-d2a7-59ba-b787-03b7281c763d
+		summarizeBy: none
+		sourceColumn: advisory_id
+
+	column version
+		dataType: int64
+		lineageTag: dc910e1d-5bed-58a7-83bf-1aef6637e411
+		summarizeBy: none
+		sourceColumn: version
+
+	column source
+		dataType: string
+		lineageTag: 4d2b2837-bc8d-583d-a536-5b49c148d99a
+		summarizeBy: none
+		sourceColumn: source
+
+	column text
+		dataType: string
+		lineageTag: b7c83750-77db-59db-b29f-384d4cb1e06c
+		summarizeBy: none
+		sourceColumn: text
+
+	column confidence
+		dataType: string
+		lineageTag: 995a5084-5d02-5032-ae03-cd53867d7b17
+		summarizeBy: none
+		sourceColumn: confidence
+
+	column status
+		dataType: string
+		lineageTag: e86c39a9-5538-5570-9b6f-15dfa5ebfaa6
+		summarizeBy: none
+		sourceColumn: status
+
+	column reviewer_verdict
+		dataType: string
+		lineageTag: ad789b1b-2f19-5b23-aca0-781fd57b20a4
+		summarizeBy: none
+		sourceColumn: reviewer_verdict
+
+	column edited_text
+		dataType: string
+		lineageTag: 7c926638-741c-5212-a9d5-346fac80a77a
+		summarizeBy: none
+		sourceColumn: edited_text
+
+	column created_at
+		dataType: dateTime
+		lineageTag: eb166f65-e3c7-5f6d-af70-3ca684d16a63
+		summarizeBy: none
+		sourceColumn: created_at
+
+	column approved_at
+		dataType: dateTime
+		lineageTag: e642cd30-996e-525c-9016-4988a6af69f3
+		summarizeBy: none
+		sourceColumn: approved_at
+
+	column approved_by
+		dataType: string
+		lineageTag: 3eda3188-c45d-56dd-a353-b553a447609c
+		summarizeBy: none
+		sourceColumn: approved_by
+
+	column delivered_at
+		dataType: dateTime
+		lineageTag: df945573-a7da-53f8-b665-ad9762a73dd9
+		summarizeBy: none
+		sourceColumn: delivered_at
+
+	partition current_advisory = m
+		mode: directQuery
+		source =
+				let
+					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
+					Data = Source{[Schema="public",Item="current_advisory"]}[Data]
+				in
+					Data
