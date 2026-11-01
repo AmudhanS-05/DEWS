@@ -16,6 +16,12 @@ hint)` is called before sleeping so the CLI can show it.
 LLM_FALLBACK: when the primary call fails (error, timeout, rate limit, empty reply) the same prompt is tried once on
 the fallback provider; if that fails too the caller keeps its deterministic text (and template v1 stays).
 Every call has a timeout. A failure never raises: complete() returns text=None with `error` set.
+
+Judge (1 Nov, user decision "make Gemini the judge"): the reviewer's LLM judgement uses JUDGE_PROVIDER = gemini
+(default) | groq | ollama | none, model JUDGE_MODEL (default: that provider's model variable / default), so the
+writer's model does not grade its own draft. JUDGE_FALLBACK = none (default) | groq | gemini | ollama: only when set
+is a failed judge call retried there (it may be the writer's model). LLM_FALLBACK is never used for the judge.
+`same_model_judge()` says when judge and writer are the same provider and model (the reviewer logs a warning).
 """
 from __future__ import annotations
 
@@ -90,6 +96,29 @@ def fallback() -> str:
     return "none" if f == provider() else f
 
 
+def judge_provider() -> str:
+    """JUDGE_PROVIDER: who runs the reviewer's LLM judgement (default gemini, independent of the groq writer)."""
+    return _pick("JUDGE_PROVIDER", "gemini")
+
+
+def judge_model() -> str | None:
+    """JUDGE_MODEL, else the judge provider's usual model (GEMINI_MODEL / GROQ_MODEL / OLLAMA_MODEL or default)."""
+    load_env()
+    return (os.getenv("JUDGE_MODEL") or "").strip() or model_name(judge_provider())
+
+
+def judge_fallback() -> str:
+    """JUDGE_FALLBACK (default none): retried there once when the judge call fails; 'none' when equal to the judge."""
+    f = _pick("JUDGE_FALLBACK", "none")
+    return "none" if f == judge_provider() else f
+
+
+def same_model_judge() -> bool:
+    """True when the judge is the writer's provider and model (the model would grade its own draft)."""
+    p = provider()
+    return p != "none" and judge_provider() == p and judge_model() == model_name(p)
+
+
 def model_name(prov: str) -> str | None:
     load_env()
     return {"groq": os.getenv("GROQ_MODEL") or GROQ_MODEL, "gemini": os.getenv("GEMINI_MODEL") or GEMINI_MODEL,
@@ -140,8 +169,8 @@ def rate_limit_hint(err: Exception | None) -> float | None:
     return max(resets) if resets else None
 
 
-def _build(prov: str, timeout_s: float):
-    model = model_name(prov)
+def _build(prov: str, timeout_s: float, model: str | None = None):
+    model = model or model_name(prov)
     if prov == "groq":
         from langchain_groq import ChatGroq
         key = os.getenv("GROQ_API_KEY")
@@ -168,26 +197,28 @@ def _text(content) -> str:
     return str(content)
 
 
-def _call(prov: str, system: str, user: str, timeout_s: float) -> LlmReply:
+def _call(prov: str, system: str, user: str, timeout_s: float, model: str | None = None) -> LlmReply:
     t0 = time.monotonic()
+    model = model or model_name(prov)
     try:
-        msg = _build(prov, timeout_s).invoke([("system", system), ("human", user)])
+        msg = _build(prov, timeout_s, model).invoke([("system", system), ("human", user)])
         usage = getattr(msg, "usage_metadata", None) or {}
         text = _text(msg.content).strip()
         if not text:
             raise RuntimeError("empty reply")
-        return LlmReply(text=text, tokens=int(usage.get("total_tokens", 0)), provider=prov, model=model_name(prov),
+        return LlmReply(text=text, tokens=int(usage.get("total_tokens", 0)), provider=prov, model=model,
                         latency_s=round(time.monotonic() - t0, 2), reasoning_effort=reasoning_effort(prov),
                         prompt_tokens=int(usage.get("input_tokens", 0)), output_tokens=int(usage.get("output_tokens", 0)))
     except Exception as e:  # noqa: BLE001 - any failure leaves template v1 / deterministic text in place
-        return LlmReply(text=None, provider=prov, model=model_name(prov), latency_s=round(time.monotonic() - t0, 2),
+        return LlmReply(text=None, provider=prov, model=model, latency_s=round(time.monotonic() - t0, 2),
                         error=f"{type(e).__name__}: {str(e)[:200]}", reasoning_effort=reasoning_effort(prov),
                         error_obj=e)
 
 
-def _call_waiting(prov: str, system: str, user: str, timeout_s: float, on_wait=None) -> LlmReply:
+def _call_waiting(prov: str, system: str, user: str, timeout_s: float, on_wait=None,
+                  model: str | None = None) -> LlmReply:
     """_call, and on a 429 with a hint <= RATE_LIMIT_WAIT_CAP_S: wait once, then call the same provider again."""
-    reply = _call(prov, system, user, timeout_s)
+    reply = _call(prov, system, user, timeout_s, model)
     hint = rate_limit_hint(reply.error_obj) if reply.text is None else None
     if hint is None or hint > RATE_LIMIT_WAIT_CAP_S:
         if hint is not None and on_wait:
@@ -197,7 +228,7 @@ def _call_waiting(prov: str, system: str, user: str, timeout_s: float, on_wait=N
     if on_wait:
         _safe(on_wait, prov, wait, hint)
     time.sleep(wait)
-    second = _call(prov, system, user, timeout_s)
+    second = _call(prov, system, user, timeout_s, model)
     second.waited_s = wait
     second.latency_s = round(reply.latency_s + wait + second.latency_s, 2)
     if second.text is None:
@@ -215,14 +246,23 @@ def _safe(fn, *args):
 def complete(system: str, user: str, timeout_s: float = DEFAULT_TIMEOUT_S, on_wait=None) -> LlmReply:
     """One chat completion under the configured provider (one wait on a short 429 hint), retried once on
     LLM_FALLBACK on failure. Never raises."""
-    prov = provider()
+    return _complete(provider(), None, fallback(), system, user, timeout_s, on_wait)
+
+
+def judge(system: str, user: str, timeout_s: float = DEFAULT_TIMEOUT_S, on_wait=None) -> LlmReply:
+    """The reviewer's LLM judgement on JUDGE_PROVIDER / JUDGE_MODEL, retried once on JUDGE_FALLBACK only when that
+    is set (never on LLM_FALLBACK). text=None with `error` when the judge is unavailable. Never raises."""
+    return _complete(judge_provider(), judge_model(), judge_fallback(), system, user, timeout_s, on_wait)
+
+
+def _complete(prov: str, model: str | None, fb: str, system: str, user: str, timeout_s: float, on_wait) -> LlmReply:
+    model = model or model_name(prov)
     if forced_down():      # fault drill "LLM down" (C4.3): fail at once, as a provider outage would
-        return LlmReply(text=None, provider=prov if prov != "none" else "forced_down", model=model_name(prov),
+        return LlmReply(text=None, provider=prov if prov != "none" else "forced_down", model=model,
                         error="LLM forced down (LLM_FORCE_DOWN=1, fault drill)")
     if prov == "none":
         return LlmReply(text=None, provider="none")
-    reply = _call_waiting(prov, system, user, timeout_s, on_wait)
-    fb = fallback()
+    reply = _call_waiting(prov, system, user, timeout_s, on_wait, model)
     if reply.text is None and fb != "none":
         second = _call(fb, system, user, timeout_s)
         second.fallback_from, second.primary_error = prov, reply.error

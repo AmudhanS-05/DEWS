@@ -56,7 +56,9 @@ Oct; for a replay this is the historical time, `raised_at` is not), `episode_sta
 
 **`agent_events`** (S1, drives the console's live Agents tab): `event_id` (serial), `run_id`, `alert_id`, `agent`
 (`coordinator` | `evidence` | `context` | `writer` | `reviewer` | `human`), `kind` = `start` | `end` | `tool_call` |
-`token_chunk` | `verdict` | `disagreement` | `revision`, `detail` (JSON: tool name, short text, verdict reasons),
+`token_chunk` | `verdict` | `disagreement` | `revision`, `detail` (JSON: tool name, short text, verdict reasons;
+reviewer `verdict` also `judge_status`, `judge_provider`, `judge_model`, `judge`; a judge on the writer's own model
+logs reviewer `revision` with `warning` = `same-model judge`),
 `ts`. Written by the agents as they run; read-only for the console.
 
 **`agent_runs`** (S1 skeleton, S4 full): `run_id`, `alert_id`, `agent`, `input_summary`, `output`, `tool_calls`,
@@ -65,6 +67,9 @@ on every row of a run when tracing is on, and its web URL filled after the run; 
 LangSmith is unreachable). Core, for storage/schema.sql:
 `ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS trace_run_id TEXT; ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS trace_url TEXT;`
 (agentic_ai/schema_agents.sql already runs both). Console link: `SELECT DISTINCT run_id, trace_url FROM agent_runs`.
+Judge per attempt (agents 1 Nov, no new column): the reviewer row's `output.judge` = `{status, provider, model,
+tokens, latency_s, fallback_from, same_model}` (`error` when `unavailable`); the coordinator's final row carries
+`judge_status`, `judge_provider`, `judge_model` and, when the last judge was unavailable, `note` = "judge unavailable: deterministic checks only".
 
 ## ML model (S3)
 
@@ -100,7 +105,7 @@ ml/MODEL_CARD.md). Proposed use: core shows `suspect`/`reasons` next to the gaug
 
 Environment: `LLM_PROVIDER` = `groq` | `gemini` | `ollama` | `none`; `GROQ_API_KEY`; `GROQ_MODEL` (default
 `openai/gpt-oss-120b`); `GROQ_REASONING_EFFORT` = `low` (default) | `medium` | `high` (only for `openai/gpt-oss-*`, else not sent); `LLM_FALLBACK` = `gemini` | `groq` | `none` (a Groq 429 first waits once for its reset hint when it is <= 20 s and retries Groq; a
-failed call is then retried once on it, then template v1 stays); `GEMINI_API_KEY`; `GEMINI_MODEL` (default `gemini-3.5-flash-lite`; `gemini-2.5-flash` is closed to new keys); `AGENT_TOOLS` = `mcp` (default; the agents' tools via the stdio server `agentic_ai/mcp_server.py`, direct-call
+failed call is then retried once on it, then template v1 stays); `GEMINI_API_KEY`; `GEMINI_MODEL` (default `gemini-3.5-flash-lite`; `gemini-2.5-flash` is closed to new keys); `JUDGE_PROVIDER` = `gemini` (default) | `groq` | `ollama` | `none` (the reviewer's LLM judge, independent of the writer), `JUDGE_MODEL` (optional, default that provider's model), `JUDGE_FALLBACK` = `none` (default) | `groq` | `gemini` | `ollama` (a failed judge call is retried there only when set; else "judge unavailable" and the deterministic checks decide); `AGENT_TOOLS` = `mcp` (default; the agents' tools via the stdio server `agentic_ai/mcp_server.py`, direct-call
 fallback) | `direct`; `OLLAMA_MODEL` (default
 `qwen2.5:7b`, optional local provider); `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_PROJECT` (optional,
 default `dews-agents`). All in `.env`.

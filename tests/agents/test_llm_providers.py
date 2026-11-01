@@ -23,7 +23,7 @@ def _providers(monkeypatch, primary, fb, behaviour):
     monkeypatch.setenv("LLM_FALLBACK", fb)
     calls = []
 
-    def build(prov, timeout_s):
+    def build(prov, timeout_s, model=None):
         calls.append(prov)
         return _Chat(behaviour[prov])
     monkeypatch.setattr(llm, "_build", build)
@@ -155,7 +155,7 @@ def _seq_providers(monkeypatch, fb, groq_results, gemini_result=None):
     calls, slept, waits = [], [], []
     seq = {"groq": _Seq(groq_results), "gemini": _Seq([gemini_result])}
 
-    def build(prov, timeout_s):
+    def build(prov, timeout_s, model=None):
         calls.append(prov)
         return seq[prov]
     monkeypatch.setattr(llm, "_build", build)

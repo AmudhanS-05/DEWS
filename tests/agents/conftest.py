@@ -8,6 +8,8 @@ import pytest
 
 os.environ["LLM_PROVIDER"] = "none"
 os.environ["LLM_FALLBACK"] = "none"
+os.environ["JUDGE_PROVIDER"] = "none"   # tests that need a judge patch llm.judge
+os.environ["JUDGE_FALLBACK"] = "none"
 os.environ["LANGSMITH_TRACING"] = "false"
 os.environ.pop("GROQ_API_KEY", None)
 os.environ.pop("GEMINI_API_KEY", None)

@@ -76,6 +76,9 @@ def _scripted(monkeypatch, outputs):
     calls = iter(outputs)
     monkeypatch.setattr(llm, "provider", lambda: "groq")
     monkeypatch.setattr(llm, "complete", lambda s, u, timeout_s=20, **k: llm.LlmReply(text=next(calls), tokens=10, provider="groq"))
+    monkeypatch.setattr(llm, "judge_provider", lambda: "gemini")
+    monkeypatch.setattr(llm, "judge", lambda s, u, timeout_s=20, **k: llm.LlmReply(text=next(calls), tokens=10,
+                                                                                   provider="gemini"))
 
 
 def test_reviewer_sends_bad_draft_back_then_passes(monkeypatch):

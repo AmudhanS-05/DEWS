@@ -24,6 +24,9 @@ def _scripted(monkeypatch, outputs):
     monkeypatch.setattr(llm, "provider", lambda: "groq")
     monkeypatch.setattr(llm, "complete", lambda s, u, timeout_s=20, **k: llm.LlmReply(
         text=next(calls), tokens=10, provider="groq", model="openai/gpt-oss-120b"))
+    monkeypatch.setattr(llm, "judge_provider", lambda: "gemini")   # independent judge, scripted from the same list
+    monkeypatch.setattr(llm, "judge", lambda s, u, timeout_s=20, **k: llm.LlmReply(
+        text=next(calls), tokens=10, provider="gemini", model="gemini-3.5-flash-lite"))
 
 
 def test_progress_lines_as_the_run_happens(monkeypatch):

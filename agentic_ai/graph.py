@@ -48,6 +48,7 @@ class State(TypedDict, total=False):
     llm_error: str | None
     llm_down: str | None
     facts: dict
+    judges: list[dict]      # per reviewer attempt: judge status (pass/fail/unclear/unavailable/off/not_run), provider, model
 
 
 class Run:
@@ -152,7 +153,8 @@ def build_graph(tools, run: Run):
         run.row("coordinator", t0, f"alert {s['alert_id']} ({alert['category']}, {alert['mode']})",
                 {"plan": plan, "urgent": urgent, "update_n": update_n, "episode": episode, "edit_examples": len(examples)})
         return {"alert": alert, "urgent": urgent, "plan": plan, "update_n": update_n, "episode": episode,
-                "examples": examples, "attempt": 0, "feedback": [], "tokens": 0, "outcome": "pending"}
+                "examples": examples, "attempt": 0, "feedback": [], "tokens": 0, "outcome": "pending",
+                "judges": []}
 
     def _drop(s: State, t0, reason: str) -> dict:
         run.event("coordinator", "end", {"dropped": reason})
@@ -274,8 +276,15 @@ def build_graph(tools, run: Run):
         facts = _facts(s)
         reasons = checks.review(s["draft"], a, facts, s["confidence"])
         tokens, judge = 0, None
-        if not reasons and llm.provider() != "none":   # LLM judgement second, only on a draft that passed the rules
-            r = llm.complete("You review flood advisories. Reply 'PASS' or 'FAIL: <one reason>'. FAIL only if the text "
+        jinfo = {"status": "not_run", "provider": None, "model": None,
+                 "why": "deterministic checks failed" if reasons else "LLM_PROVIDER none (template only)"}
+        if not reasons and llm.provider() != "none" and llm.judge_provider() == "none":
+            jinfo = {"status": "off", "provider": "none", "model": None, "why": "JUDGE_PROVIDER none"}
+        elif not reasons and llm.provider() != "none":   # LLM judgement second, only on a draft that passed the rules
+            if llm.same_model_judge():   # the writer's model would grade its own draft
+                run.event("reviewer", "revision", {"warning": "same-model judge", "attempt": s["attempt"],
+                                                   "provider": llm.judge_provider(), "model": llm.judge_model()})
+            r = llm.judge("You review flood advisories. Reply 'PASS' or 'FAIL: <one reason>'. FAIL only if the text "
                              "is misleading, certain-sounding, or inconsistent with the facts. Numbers in FACTS are "
                              "already rounded for the report (0.1 ft, whole %). The alert's category and the highest "
                              "official category the forecast crosses can differ; that is correct when the text states "
@@ -293,14 +302,27 @@ def build_graph(tools, run: Run):
                              on_wait=waiter("reviewer"))
             tokens = r.tokens
             judge = (r.text or f"no reply ({r.error})")[:200]
-            if r.text and r.text.upper().startswith("FAIL"):
+            # A failed judge call never blocks and never counts as a judge PASS: the deterministic checks decide and
+            # the run records "judge unavailable".
+            status = ("unavailable" if r.text is None else "fail" if r.text.upper().startswith("FAIL")
+                      else "pass" if r.text.upper().startswith("PASS") else "unclear")
+            jinfo = {"status": status, "provider": r.provider, "model": r.model, "tokens": r.tokens,
+                     "latency_s": r.latency_s, "fallback_from": r.fallback_from, "same_model": llm.same_model_judge()}
+            if status == "unavailable":
+                jinfo["error"] = (r.error or "")[:200]
+                judge = f"judge unavailable ({r.provider} {r.model or ''}: {r.error})"[:200]
+            if status == "fail":
                 reasons.append("LLM review: " + r.text[5:].strip(" :"))
         verdict = "pass" if not reasons else "fail"
         run.event("reviewer", "verdict", {"verdict": verdict, "reasons": reasons, "attempt": s["attempt"], "tokens": tokens,
-                                          "max_attempts": rules.MAX_REVISIONS + 1, "llm_judgement": judge})
+                                          "max_attempts": rules.MAX_REVISIONS + 1, "llm_judgement": judge,
+                                          "judge": jinfo, "judge_provider": jinfo["provider"],
+                                          "judge_model": jinfo["model"], "judge_status": jinfo["status"]})
         run.event("reviewer", "end", {"attempt": s["attempt"]})
-        run.row("reviewer", t0, f"draft attempt {s['attempt']}", {"reasons": reasons}, tokens, verdict)
-        return {"verdict": verdict, "reasons": reasons, "feedback": reasons, "tokens": s["tokens"] + tokens}
+        run.row("reviewer", t0, f"draft attempt {s['attempt']}", {"reasons": reasons, "judge": jinfo}, tokens, verdict)
+        judges = s.get("judges", []) + [{"attempt": s["attempt"], **jinfo}]
+        return {"verdict": verdict, "reasons": reasons, "feedback": reasons, "tokens": s["tokens"] + tokens,
+                "judges": judges}
 
     def route_after_reviewer(s: State):
         if s["verdict"] == "pass":
@@ -309,8 +331,12 @@ def build_graph(tools, run: Run):
 
     def save_advisory(s: State) -> dict:
         res = run.call("coordinator", "save_advisory", s["alert_id"], s["draft"], s["confidence"], "pass")
-        run.event("coordinator", "end", {"saved": res["advisory_id"], "confidence": s["confidence"]})
-        run.row("coordinator", _now(), "assemble final package", {"advisory_id": res["advisory_id"]}, verdict="pass")
+        last = (s.get("judges") or [{}])[-1]
+        jd = {"judge_status": last.get("status"), "judge_provider": last.get("provider"), "judge_model": last.get("model")}
+        if last.get("status") == "unavailable":
+            jd["note"] = "judge unavailable: deterministic checks only"
+        run.event("coordinator", "end", {"saved": res["advisory_id"], "confidence": s["confidence"], **jd})
+        run.row("coordinator", _now(), "assemble final package", {"advisory_id": res["advisory_id"], **jd}, verdict="pass")
         return {"outcome": "saved", "advisory_id": res["advisory_id"], "version": res.get("version")}
 
     def keep_v1(s: State) -> dict:
@@ -380,4 +406,6 @@ def run_alert(tools, alert_id: str, force: bool = False, on_event=None) -> dict:
             "attempts": final.get("attempt"), "tokens": final.get("tokens", 0), "draft": final.get("draft"),
             "llm_down": final.get("llm_down"), "disagreement": final.get("disagreement"),
             "update_n": final.get("update_n"), "facts": final.get("facts"),
+            "judges": final.get("judges", []),
+            "judge_unavailable": any(j.get("status") == "unavailable" for j in final.get("judges", [])),
             "events": run.events}

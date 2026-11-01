@@ -6,7 +6,10 @@
 Loads agentic_ai/eval/replay_events.json (build_replays.py) into the database (mode SIMULATION), then runs every
 non-retracted alert through each configuration:
   multi     the LangGraph multi-agent graph (coordinator, evidence || context, reconcile, writer, reviewer with up to
-            2 revisions; tools over MCP), LLM_PROVIDER from the environment (groq)
+            2 revisions; tools over MCP), LLM_PROVIDER from the environment (groq). Rows measured before 1 Nov had the
+            judge on the writer's model (Groq judged its own draft)
+  multi_ij  the same graph with an independent judge: JUDGE_PROVIDER=gemini (JUDGE_MODEL / GEMINI_MODEL), no
+            JUDGE_FALLBACK (a failed judge call is recorded "judge unavailable" and the deterministic checks decide)
   single    A5.1 baseline: ONE LLM call writes the advisory from the raw tool outputs and the same rules in prose
             (no workers, no precomputed facts, no reviewer loop); scored afterwards with the same deterministic checks
   template  LLM_PROVIDER=none: the deterministic template through the graph (no LLM)
@@ -157,6 +160,19 @@ def _judge(events: list[dict]) -> str | None:
     return v[-1][:60] if v else None
 
 
+def _judges(events: list[dict]) -> list[dict]:
+    """Per reviewer attempt: judge status, provider, model and the judgement text (FAIL reasons)."""
+    out = []
+    for e in events:
+        if e["agent"] == "reviewer" and e["kind"] == "verdict":
+            d = e["detail"]
+            j = d.get("judge") or {}
+            out.append({"attempt": d.get("attempt"), "status": j.get("status") or d.get("judge_status"),
+                        "provider": j.get("provider"), "model": j.get("model"), "tokens": j.get("tokens", 0),
+                        "text": (d.get("llm_judgement") or "")[:300]})
+    return out
+
+
 def score(cfg: str, alert: dict, res: dict, facts: dict | None, confidence: str | None, ref_alert: dict | None) -> dict:
     text = res.get("draft") if res.get("outcome") in ("saved", "written") else None
     ok_n, n = faithfulness(text, facts)
@@ -172,7 +188,10 @@ def score(cfg: str, alert: dict, res: dict, facts: dict | None, confidence: str 
             "uncertain_in_text": bool(text and "UNCERTAIN" in text),
             "checks_failed": ";".join(i for i, _ in fails), "checks_pass": bool(text) and not fails,
             "numbers_ok": ok_n, "numbers": n, "faithful": bool(text) and ok_n == n,
-            "judge": _judge(ev), "llm_down": bool(res.get("llm_down")), "chars": len(text) if text else 0,
+            "judge": _judge(ev), "judges": _judges(ev),
+            "same_model_warnings": sum(1 for e in ev if e["agent"] == "reviewer" and
+                                       (e.get("detail") or {}).get("warning") == "same-model judge"),
+            "llm_down": bool(res.get("llm_down")), "chars": len(text) if text else 0,
             "update_n": res.get("update_n"), "via_mcp": (res.get("tools_via") or {}).get("mcp") if isinstance(res.get("tools_via"), dict) else 0,
             "text": text, "error": res.get("error") or res.get("llm_error")}
 
@@ -205,17 +224,21 @@ def run(dsn: str, configs: list[str], gap_s: float, limit: int | None = None) ->
         for cfg in configs:
             if (cfg, a["alert_id"]) in done:
                 continue
-            live = cfg in ("multi", "single") and llm.provider() != "none"
+            live = cfg in ("multi", "multi_ij", "single") and llm.provider() != "none"
             if live:
                 wait = gap_s - (time.monotonic() - last_llm)
                 if wait > 0 and last_llm:
                     time.sleep(wait)
-            env_old = {k: os.environ.get(k) for k in ("LLM_PROVIDER", "LLM_FORCE_DOWN")}
+            env_old = {k: os.environ.get(k) for k in ("LLM_PROVIDER", "LLM_FORCE_DOWN", "JUDGE_PROVIDER",
+                                                      "JUDGE_FALLBACK")}
             try:
                 if cfg == "template":
                     os.environ["LLM_PROVIDER"] = "none"
                 if cfg == "llm_down":
                     os.environ["LLM_FORCE_DOWN"] = "1"
+                if cfg == "multi_ij":     # independent judge: Gemini judges the Groq writer, no judge fallback
+                    os.environ["JUDGE_PROVIDER"] = "gemini"
+                    os.environ["JUDGE_FALLBACK"] = "none"
                 if cfg == "single":
                     res = single_agent(tools, a["alert_id"])
                 else:
@@ -237,7 +260,8 @@ def run(dsn: str, configs: list[str], gap_s: float, limit: int | None = None) ->
                         "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")})
             with open(RUNS, "a", encoding="utf-8") as f:
                 f.write(json.dumps(row, default=str) + "\n")
-            print(f"{cfg:8s} {a['alert_id']:45s} {row['outcome']:8s} att {row['attempts']} checks "
+            js = ",".join(f"{j['status']}" for j in row["judges"])
+            print(f"{cfg:8s} {a['alert_id']:45s} {row['outcome']:8s} att {row['attempts']} judge [{js}] checks "
                   f"{'PASS' if row['checks_pass'] else 'fail:' + row['checks_failed']} faithful {row['numbers_ok']}/"
                   f"{row['numbers']} tok {row['tokens']} {row['elapsed_s']} s", flush=True)
 
@@ -289,13 +313,21 @@ def summarise(rows: list[dict], cfg: str) -> dict:
             "uncertain_texts": sum(1 for r in rs if r["uncertain_in_text"]),
             "judge_pass": sum(1 for r in rs if (r.get("judge") or "").upper().startswith("PASS")),
             "judge_fail": sum(1 for r in rs if (r.get("judge") or "").upper().startswith("FAIL")),
+            "judge_calls": sum(1 for r in rs for j in r.get("judges") or [] if j.get("status") in
+                               ("pass", "fail", "unclear", "unavailable")),
+            "judge_fail_attempts": sum(1 for r in rs for j in r.get("judges") or [] if j.get("status") == "fail"),
+            "judge_unavailable": sum(1 for r in rs for j in r.get("judges") or [] if j.get("status") == "unavailable"),
+            "judge_fail_reasons": [j["text"] for r in rs for j in r.get("judges") or [] if j.get("status") == "fail"],
+            "judge_models": sorted({f"{j['provider']} {j['model']}" for r in rs for j in r.get("judges") or []
+                                    if j.get("provider") and j.get("provider") != "none"}),
+            "same_model_warnings": sum(r.get("same_model_warnings") or 0 for r in rs),
             "failed_checks": sorted({c for r in texts for c in (r["checks_failed"] or "").split(";") if c})}
 
 
 def report() -> dict:
     from agentic_ai.eval import corrupt
     rows = _rows()
-    cfgs = [c for c in ("multi", "single", "template", "llm_down") if any(r["config"] == c for r in rows)]
+    cfgs = [c for c in ("multi", "multi_ij", "single", "template", "llm_down") if any(r["config"] == c for r in rows)]
     sums = {c: summarise(rows, c) for c in cfgs}
     fields = ["config", "event", "alert_id", "category", "kind", "probability", "model", "outcome", "attempts", "tokens",
               "elapsed_s", "llm_text", "provider", "confidence", "disagreement", "uncertain_in_text", "checks_pass",
@@ -315,7 +347,7 @@ def report() -> dict:
     from ml.harness import COLUMNS
     er = []
     for c, s in sums.items():
-        model = {"multi": "multi-agent graph", "single": "single agent (1 LLM call)", "template": "template (no LLM)",
+        model = {"multi": "multi-agent graph", "multi_ij": "multi-agent graph, independent judge (gemini)", "single": "single agent (1 LLM call)", "template": "template (no LLM)",
                  "llm_down": "multi-agent graph, LLM forced down"}[c]
         prov = next((r["provider"] for r in rows if r["config"] == c and r.get("provider")), None)
         note = (f"agents eval {c}: alerts={s['alerts']} saved={s['saved']} v1_kept={s['v1_kept']} "
@@ -323,6 +355,9 @@ def report() -> dict:
                 f"{s['texts']} numbers_ok={s['numbers_ok']}/{s['numbers']} tokens_median={s['tokens_median']} "
                 f"time_median_s={s['time_median_s']} disagreements={s['disagreements']} judge_pass={s['judge_pass']} "
                 f"judge_fail={s['judge_fail']} provider={prov}")
+        if c == "multi_ij":
+            note += (f" judge_calls={s['judge_calls']} judge_fail_attempts={s['judge_fail_attempts']} "
+                     f"judge_unavailable={s['judge_unavailable']} judge={';'.join(s['judge_models'])}")
         if c == "multi" and cr:
             note += f" seeded_errors_caught={cr['caught']}/{cr['total']}"
         er.append({k: None for k in COLUMNS} | {"run_label": f"agent_eval:{c}", "data_source": "replay",
@@ -362,6 +397,10 @@ def _write_md(rows, sums, cr) -> None:
     row("faithfulness: texts with every number in the evidence", lambda s: _pct(s["faithful_texts"], s["texts"]))
     row("faithfulness: numbers found in the evidence", lambda s: _pct(s["numbers_ok"], s["numbers"]))
     row("LLM judge PASS / FAIL (final verdicts)", lambda s: f"{s['judge_pass']} / {s['judge_fail']}")
+    if "multi_ij" in sums:
+        row("judge calls / FAIL (any attempt) / unavailable", lambda s: f"{s['judge_calls']} / "
+            f"{s['judge_fail_attempts']} / {s['judge_unavailable']}" if s["judge_calls"] or s["config"] == "multi_ij"
+            else "-")
     row("alerts raised by the model's probability (alert_by_model)", lambda s: str(s["model_rule"]))
     row("of these, stage forecast below the category (forecasts disagree)", lambda s: str(s["forecasts_disagree"]))
     row("disagreements (evidence vs leading context)", lambda s: str(s["disagreements"]))
@@ -387,6 +426,17 @@ def _write_md(rows, sums, cr) -> None:
     for r in sorted((r for r in rows if r["config"] == "multi"), key=lambda r: r["alert_id"]):
         lines.append(f"| {r['alert_id']} | {r['outcome']} | {r['attempts']} | {'pass' if r['checks_pass'] else r['checks_failed'] or '-'} "
                      f"| {r['numbers_ok']}/{r['numbers']} | {r['judge'] or '-'} | {r['tokens']} | {r['elapsed_s']} |")
+    ij = sorted((r for r in rows if r["config"] == "multi_ij"), key=lambda r: r["alert_id"])
+    if ij:
+        lines += ["", "Per alert (multi_ij, independent judge; judge per attempt):", "",
+                  "| alert | outcome | attempts | checks | judge per attempt | tokens | s |", "|---|---|---|---|---|---|---|"]
+        for r in ij:
+            js = "; ".join(f"{j['attempt']}: {j['status']}" + (f" ({j['text'][:90]})" if j["status"] in
+                                                               ("fail", "unavailable", "unclear") else "")
+                           for j in r.get("judges") or []) or "-"
+            lines.append(f"| {r['alert_id']} | {r['outcome']} | {r['attempts']} | "
+                         f"{'pass' if r['checks_pass'] else r['checks_failed'] or '-'} | {js.replace('|', '/')} "
+                         f"| {r['tokens']} | {r['elapsed_s']} |")
     (HERE / "agent_eval.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     if "multi" in sums and "single" in sums:
         a, b = sums["multi"], sums["single"]
@@ -436,7 +486,42 @@ def _write_md(rows, sums, cr) -> None:
             ab += ["Single-agent check failures by check: " + ", ".join(f"{k} {v}" for k, v in
                                                                       sorted(single_fail.items(), key=lambda x: -x[1])), ""]
         ab += _before_section(a, b)
+        ab += _judge_section(sums)
         (HERE / "ablation.md").write_text("\n".join(ab) + "\n", encoding="utf-8")
+
+
+def _judge_section(sums: dict) -> list[str]:
+    """Independent judge (1 Nov): multi with Gemini judging the Groq writer, next to the multi table above, whose
+    judge ran on the writer's own model."""
+    if "multi_ij" not in sums or "multi" not in sums:
+        return []
+    a, j = sums["multi"], sums["multi_ij"]
+    reasons = "; ".join(x.replace("|", "/") for x in j["judge_fail_reasons"]) or "none"
+    return ["## Independent judge", "",
+            "User decision 1 Nov (\"make Gemini the judge\"): the reviewer's LLM judgement runs on JUDGE_PROVIDER "
+            "instead of the writer's model. Same replayed alerts, same writer (Groq) and deterministic checks; only "
+            "the judge differs. In the multi-agent table above the judge was the writer's own model (Groq judged its "
+            "own draft; measured before this change). A judge call that fails is recorded as \"judge unavailable\" "
+            "and the deterministic checks decide (no fallback to the writer's model). Measured; replay only.", "",
+            f"Judge: {', '.join(j['judge_models']) or '-'}.", "",
+            "| metric | multi, judge = writer (Groq) | multi, independent judge |", "|---|---|---|",
+            f"| alerts | {a['alerts']} | {j['alerts']} |",
+            f"| draft saved (v2) | {_pct(a['saved'], a['alerts'])} | {_pct(j['saved'], j['alerts'])} |",
+            f"| text passes all deterministic checks | {_pct(a['checks_pass'], a['texts'])} | {_pct(j['checks_pass'], j['texts'])} |",
+            f"| saved on attempt 1 | {_pct(a['attempt1'], a['alerts'])} | {_pct(j['attempt1'], j['alerts'])} |",
+            f"| mean attempts | {a['attempts_mean']} | {j['attempts_mean']} |",
+            f"| judge PASS / FAIL (final verdicts) | {a['judge_pass']} / {a['judge_fail']} | {j['judge_pass']} / {j['judge_fail']} |",
+            f"| judge calls / FAIL on any attempt / unavailable | not recorded | {j['judge_calls']} / "
+            f"{j['judge_fail_attempts']} / {j['judge_unavailable']} |",
+            f"| numbers found in the evidence | {_pct(a['numbers_ok'], a['numbers'])} | {_pct(j['numbers_ok'], j['numbers'])} |",
+            f"| UNCERTAIN where needed | {a['uncertain_where_needed']} of {a['needs_uncertain']} | "
+            f"{j['uncertain_where_needed']} of {j['needs_uncertain']} |",
+            f"| tokens per alert, median (total) | {a['tokens_median']} ({a['tokens_total']}) | "
+            f"{j['tokens_median']} ({j['tokens_total']}) |",
+            f"| time per alert, median s (max) | {a['time_median_s']} ({a['time_max_s']}) | "
+            f"{j['time_median_s']} ({j['time_max_s']}) |",
+            f"| same-model judge warnings | - | {j['same_model_warnings']} |", "",
+            f"Independent judge FAIL reasons (any attempt): {reasons}", ""]
 
 
 def _before_section(a: dict, b: dict) -> list[str]:
