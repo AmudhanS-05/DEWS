@@ -2,12 +2,12 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
   "name": "f151668bbe2181947db7",
   "position": {
-    "x": 517.54712892741054,
-    "y": 0,
-    "z": 5000,
-    "height": 277.91115926327194,
-    "width": 718.907908992416,
-    "tabOrder": 5000
+    "x": 784,
+    "y": 276,
+    "z": 600,
+    "height": 210,
+    "width": 480,
+    "tabOrder": 600
   },
   "visual": {
     "visualType": "lineChart",
@@ -54,22 +54,17 @@
           "projections": [
             {
               "field": {
-                "Aggregation": {
+                "Measure": {
                   "Expression": {
-                    "Column": {
-                      "Expression": {
-                        "SourceRef": {
-                          "Entity": "feed_staleness"
-                        }
-                      },
-                      "Property": "staleness_min"
+                    "SourceRef": {
+                      "Entity": "feed_staleness"
                     }
                   },
-                  "Function": 5
+                  "Property": "Staleness, max (min)"
                 }
               },
-              "queryRef": "CountNonNull(feed_staleness.staleness_min)",
-              "nativeQueryRef": "Count of staleness_min"
+              "queryRef": "feed_staleness.Staleness, max (min)",
+              "nativeQueryRef": "Staleness, max (min)"
             }
           ]
         }
@@ -92,6 +87,28 @@
         ],
         "isDefaultSort": true
       }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Feed staleness, live data only: blank unless mode is LIVE'"
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

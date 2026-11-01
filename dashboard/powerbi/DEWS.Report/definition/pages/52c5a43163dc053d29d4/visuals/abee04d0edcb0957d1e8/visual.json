@@ -2,12 +2,12 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
   "name": "abee04d0edcb0957d1e8",
   "position": {
-    "x": 9.4488915545918015,
-    "y": 1.8897783109183603,
-    "z": 0,
-    "height": 280,
-    "width": 280,
-    "tabOrder": 0
+    "x": 16,
+    "y": 60,
+    "z": 200,
+    "height": 100,
+    "width": 130,
+    "tabOrder": 200
   },
   "visual": {
     "visualType": "slicer",
@@ -48,6 +48,26 @@
           }
         }
       ],
+      "selection": [
+        {
+          "properties": {
+            "strictSingleSelect": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "selectAllCheckboxEnabled": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
+      ],
       "general": [
         {
           "properties": {
@@ -56,7 +76,7 @@
                 "Version": 2,
                 "From": [
                   {
-                    "Name": "e",
+                    "Name": "t",
                     "Entity": "evaluation_runs",
                     "Type": 0
                   }
@@ -70,7 +90,7 @@
                             "Column": {
                               "Expression": {
                                 "SourceRef": {
-                                  "Source": "e"
+                                  "Source": "t"
                                 }
                               },
                               "Property": "data_source"
@@ -90,6 +110,28 @@
                     }
                   }
                 ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'data_source'"
+                }
               }
             }
           }

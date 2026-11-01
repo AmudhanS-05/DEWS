@@ -2,12 +2,12 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
   "name": "be940e7f2d4a289b7847",
   "position": {
-    "x": 0,
-    "y": 277.797411704999,
-    "z": 4000,
-    "height": 159.75731310942578,
-    "width": 908.61971830985908,
-    "tabOrder": 4000
+    "x": 16,
+    "y": 276,
+    "z": 500,
+    "height": 210,
+    "width": 760,
+    "tabOrder": 500
   },
   "visual": {
     "visualType": "tableEx",
@@ -51,11 +51,11 @@
                       "Entity": "latency_trace"
                     }
                   },
-                  "Property": "ingest_time"
+                  "Property": "fetched_at"
                 }
               },
-              "queryRef": "latency_trace.ingest_time",
-              "nativeQueryRef": "ingest_time"
+              "queryRef": "latency_trace.fetched_at",
+              "nativeQueryRef": "fetched_at"
             },
             {
               "field": {
@@ -65,11 +65,11 @@
                       "Entity": "latency_trace"
                     }
                   },
-                  "Property": "fetched_at"
+                  "Property": "ingest_time"
                 }
               },
-              "queryRef": "latency_trace.fetched_at",
-              "nativeQueryRef": "fetched_at"
+              "queryRef": "latency_trace.ingest_time",
+              "nativeQueryRef": "ingest_time"
             },
             {
               "field": {
@@ -144,6 +144,28 @@
           ]
         }
       }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Trace detail'"
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

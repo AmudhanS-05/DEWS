@@ -1,6 +1,10 @@
 table gauge_readings
 	lineageTag: 3da22126-5d09-5f7b-8570-f70b433557cb
 
+	measure 'Newest reading (local time)' = MAX(gauge_readings[ingested_at])
+		formatString: "yyyy-mm-dd hh:nn:ss"
+		lineageTag: cc775d6e-9672-5d81-a639-7941247f2aea
+
 	column site_no
 		dataType: string
 		lineageTag: 6be059ba-a1ca-5da9-85ce-36fd0ecfb211

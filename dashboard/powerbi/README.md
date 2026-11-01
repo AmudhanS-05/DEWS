@@ -1,13 +1,25 @@
 # Power BI guide (runbook step 12)
 
-**Project file:** `DEWS.pbip` (written by `python -m tools.make_pbip`) holds the semantic model: every table and view in
-DirectQuery, the relationships and the measures. Its one report page is empty: the visuals below need a person. Open it
-in Power BI Desktop; the password is the local one in `docker/docker-compose.yml`, and it is not stored in these files.
-If the project does not open, connect by hand as below: the pages stay the same. When page 1's check passes, tell the core
-session so step 12 can be closed.
+**Project file:** `DEWS.pbip` holds the semantic model and the report pages, and the saved project is the source of truth:
+`tools.make_pbip` refuses to overwrite it. Open it in Power BI Desktop; the password is the local one in
+`docker/docker-compose.yml`, and it is not stored in these files. Desktop asks once to approve each native query: all are
+read-only `SELECT`s. If the files change on disk while Desktop is open, click **Apply external changes** and do not press
+Save first: Save writes what Desktop has in memory over them.
 
-**On every page:** a slicer on `mode` (`data_source` for `evaluation_runs`), single select, with no "all" state. Live and
-replayed data must never be shown merged. Show the selected mode in the page title.
+**On every page:** a slicer on `mode_list[mode]` (`data_source` for `evaluation_runs`), single select, with no "all" state.
+Live and replayed data must never be shown merged. The selected mode shows in the page title.
+
+**Model tables added for the pages** (native queries in DirectQuery; `storage/` is unchanged):
+
+| Table | Why |
+|---|---|
+| `mode_list` | one mode selection filters every table with a mode column |
+| `gauge_levels` | official levels for all 38 gauges, copied from `config/gauge_locations.csv`: the `gauges` table holds only DRWT2, so it cannot drive the gauge slicer or the reference lines. Update the query if that file changes |
+| `flood_chart` | stage and the newest forecast per gauge, window and mode, so both chart lines share one axis |
+| `latency_stage` | the stages as an axis for the latency bar chart, through the measure `Stage median (s)` |
+
+`alerts[details]` and `agent_events[detail]` are removed from the model: joins to a table with a `jsonb` column fail in
+DirectQuery ("Local evaluation of Table.Join"), and no page reads them. Times show in the laptop's local time.
 
 ## Connect
 
@@ -66,7 +78,9 @@ one page refresh.
 
 ## Page 3: forecast evaluation
 
-Source: `evaluation_runs`, filtered to rows that are not `fault_drill:`. Slicers: `data_source`, `run_label`, `model`, `horizon_h`, `site_no`.
+Source: `evaluation_runs`, filtered to the labels `m3.1-s3` and `m3.1-s3-rainrows`, which excludes `fault_drill:`. Slicers: `data_source`, `run_label`, `model`, `horizon_h`, `site_no`.
+The page opens on `m3.1-s3`, which has `rise_rate` and `s3_v0`. The v1 models (`s3_v1_joint_r10` at 2 to 5 h, `s3_v1_stack_r10` at 1 and 6 h) are only in `m3.1-s3-rainrows`,
+a smaller set of test rows, so compare models only within one label. The `site_no` slicer drives the table by gauge only; cards and charts stay on `POOLED`.
 Rows with `site_no` `POOLED` or `POOLED-SLOW` are summaries and have no row in `gauges`: never add them to the per-gauge rows.
 
 | Visual | Fields |

@@ -1,6 +1,9 @@
 table evaluation_runs
 	lineageTag: 6dacf97b-be89-5415-b8ae-44cc08199f64
 
+	measure 'Title forecast evaluation' = "Forecast Evaluation | data_source: " & SELECTEDVALUE(evaluation_runs[data_source], "select one") & " | " & SELECTEDVALUE(evaluation_runs[run_label], "select one") & " | horizon " & SELECTEDVALUE(evaluation_runs[horizon_h], 0) & " h | forecast of crossing an official category; lead time gross and net of feed delay in notes"
+		lineageTag: 36b9c399-9c43-5a90-a8b4-6ec80d70ca6a
+
 	measure 'F1 (mean of rows)' = AVERAGE(evaluation_runs[f1])
 		formatString: 0.00
 		lineageTag: 246c5f8d-2a68-5342-a7f6-067141bd7f63

@@ -1,6 +1,10 @@
 table feed_staleness
 	lineageTag: af946795-aaa4-5e4b-844f-0ec436d22c61
 
+	measure 'Staleness, max (min)' = IF(SELECTEDVALUE(mode_list[mode]) = "LIVE", MAX(feed_staleness[staleness_min]))
+		formatString: 0.0
+		lineageTag: 99b42209-094b-59da-a96f-d7c89d93440b
+
 	column site_no
 		dataType: string
 		lineageTag: ba1b5c84-4c7b-56e7-bfc3-c776d5777aa3

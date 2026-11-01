@@ -2,12 +2,12 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
   "name": "79660124deb508606e4e",
   "position": {
-    "x": 552.72941349621021,
-    "y": 47.473691956729709,
-    "z": 2000,
-    "height": 330.62035469865333,
-    "width": 593.42114945912135,
-    "tabOrder": 2000
+    "x": 284,
+    "y": 60,
+    "z": 500,
+    "height": 380,
+    "width": 980,
+    "tabOrder": 500
   },
   "visual": {
     "visualType": "lineChart",
@@ -20,13 +20,13 @@
                 "Column": {
                   "Expression": {
                     "SourceRef": {
-                      "Entity": "windowed_aggregates"
+                      "Entity": "flood_chart"
                     }
                   },
                   "Property": "window_start"
                 }
               },
-              "queryRef": "windowed_aggregates.window_start",
+              "queryRef": "flood_chart.window_start",
               "nativeQueryRef": "window_start",
               "active": true
             }
@@ -41,17 +41,18 @@
                     "Column": {
                       "Expression": {
                         "SourceRef": {
-                          "Entity": "windowed_aggregates"
+                          "Entity": "flood_chart"
                         }
                       },
                       "Property": "stage_last"
                     }
                   },
-                  "Function": 1
+                  "Function": 4
                 }
               },
-              "queryRef": "CountNonNull(windowed_aggregates.stage_last)",
-              "nativeQueryRef": "Average of stage_last"
+              "queryRef": "Max(flood_chart.stage_last)",
+              "nativeQueryRef": "Max of stage_last",
+              "displayName": "Stage (ft)"
             },
             {
               "field": {
@@ -60,17 +61,74 @@
                     "Column": {
                       "Expression": {
                         "SourceRef": {
-                          "Entity": "risk_scores"
+                          "Entity": "flood_chart"
                         }
                       },
                       "Property": "forecast_stage"
                     }
                   },
-                  "Function": 1
+                  "Function": 4
                 }
               },
-              "queryRef": "CountNonNull(risk_scores.forecast_stage)",
-              "nativeQueryRef": "Average of forecast_stage"
+              "queryRef": "Max(flood_chart.forecast_stage)",
+              "nativeQueryRef": "Max of forecast_stage",
+              "displayName": "Forecast stage, 3 h ahead (ft)"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "gauge_levels"
+                    }
+                  },
+                  "Property": "Action (ft)"
+                }
+              },
+              "queryRef": "gauge_levels.Action (ft)",
+              "nativeQueryRef": "Action (ft)"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "gauge_levels"
+                    }
+                  },
+                  "Property": "Minor (ft)"
+                }
+              },
+              "queryRef": "gauge_levels.Minor (ft)",
+              "nativeQueryRef": "Minor (ft)"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "gauge_levels"
+                    }
+                  },
+                  "Property": "Moderate (ft)"
+                }
+              },
+              "queryRef": "gauge_levels.Moderate (ft)",
+              "nativeQueryRef": "Moderate (ft)"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "gauge_levels"
+                    }
+                  },
+                  "Property": "Major (ft)"
+                }
+              },
+              "queryRef": "gauge_levels.Major (ft)",
+              "nativeQueryRef": "Major (ft)"
             }
           ]
         }
@@ -82,7 +140,7 @@
               "Column": {
                 "Expression": {
                   "SourceRef": {
-                    "Entity": "windowed_aggregates"
+                    "Entity": "flood_chart"
                   }
                 },
                 "Property": "window_start"
@@ -161,7 +219,7 @@
           }
         }
       ],
-      "y1AxisReferenceLine": [
+      "legend": [
         {
           "properties": {
             "show": {
@@ -171,39 +229,19 @@
                 }
               }
             },
-            "displayName": {
+            "position": {
               "expr": {
                 "Literal": {
-                  "Value": "'Action/Minor'"
-                }
-              }
-            },
-            "value": {
-              "expr": {
-                "Literal": {
-                  "Value": "5.5D"
-                }
-              }
-            },
-            "dataLabelShow": {
-              "expr": {
-                "Literal": {
-                  "Value": "true"
-                }
-              }
-            },
-            "dataLabelText": {
-              "expr": {
-                "Literal": {
-                  "Value": "'ValueAndName'"
+                  "Value": "'Top'"
                 }
               }
             }
-          },
-          "selector": {
-            "id": "1"
           }
-        },
+        }
+      ]
+    },
+    "visualContainerObjects": {
+      "title": [
         {
           "properties": {
             "show": {
@@ -213,141 +251,13 @@
                 }
               }
             },
-            "displayName": {
+            "text": {
               "expr": {
                 "Literal": {
-                  "Value": "'Major'"
-                }
-              }
-            },
-            "value": {
-              "expr": {
-                "Literal": {
-                  "Value": "13D"
-                }
-              }
-            },
-            "dataLabelShow": {
-              "expr": {
-                "Literal": {
-                  "Value": "true"
-                }
-              }
-            },
-            "lineColor": {
-              "solid": {
-                "color": {
-                  "expr": {
-                    "ThemeDataColor": {
-                      "ColorId": 9,
-                      "Percent": 0
-                    }
-                  }
-                }
-              }
-            },
-            "dataLabelColor": {
-              "solid": {
-                "color": {
-                  "expr": {
-                    "ThemeDataColor": {
-                      "ColorId": 9,
-                      "Percent": 0
-                    }
-                  }
-                }
-              }
-            },
-            "style": {
-              "expr": {
-                "Literal": {
-                  "Value": "'solid'"
-                }
-              }
-            },
-            "dataLabelText": {
-              "expr": {
-                "Literal": {
-                  "Value": "'ValueAndName'"
+                  "Value": "'Stage and forecast by window, with official NWS levels (local time)'"
                 }
               }
             }
-          },
-          "selector": {
-            "id": "2"
-          }
-        },
-        {
-          "properties": {
-            "show": {
-              "expr": {
-                "Literal": {
-                  "Value": "true"
-                }
-              }
-            },
-            "displayName": {
-              "expr": {
-                "Literal": {
-                  "Value": "'Moderate'"
-                }
-              }
-            },
-            "value": {
-              "expr": {
-                "Literal": {
-                  "Value": "7D"
-                }
-              }
-            },
-            "dataLabelShow": {
-              "expr": {
-                "Literal": {
-                  "Value": "true"
-                }
-              }
-            },
-            "lineColor": {
-              "solid": {
-                "color": {
-                  "expr": {
-                    "ThemeDataColor": {
-                      "ColorId": 4,
-                      "Percent": 0
-                    }
-                  }
-                }
-              }
-            },
-            "dataLabelColor": {
-              "solid": {
-                "color": {
-                  "expr": {
-                    "ThemeDataColor": {
-                      "ColorId": 4,
-                      "Percent": 0
-                    }
-                  }
-                }
-              }
-            },
-            "style": {
-              "expr": {
-                "Literal": {
-                  "Value": "'dotted'"
-                }
-              }
-            },
-            "dataLabelText": {
-              "expr": {
-                "Literal": {
-                  "Value": "'ValueAndName'"
-                }
-              }
-            }
-          },
-          "selector": {
-            "id": "3"
           }
         }
       ]

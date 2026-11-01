@@ -2,12 +2,12 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
   "name": "eb1c1508909430e50860",
   "position": {
-    "x": 9.4488915545918015,
-    "y": 449.76723799856978,
-    "z": 5000,
-    "height": 270.23829846132554,
-    "width": 493.2321391496921,
-    "tabOrder": 5000
+    "x": 16,
+    "y": 168,
+    "z": 400,
+    "height": 240,
+    "width": 480,
+    "tabOrder": 400
   },
   "visual": {
     "visualType": "clusteredBarChart",
@@ -117,6 +117,28 @@
         ],
         "isDefaultSort": true
       }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'POOLED at the selected horizon: precision, recall, F1 by model'"
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   },
   "filterConfig": {

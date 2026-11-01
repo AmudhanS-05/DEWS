@@ -2,12 +2,12 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
   "name": "68da218c6829e181148e",
   "position": {
-    "x": 83.150245680407863,
-    "y": 534.807261989896,
-    "z": 6000,
-    "height": 185.19827446999932,
-    "width": 1113.0794251309144,
-    "tabOrder": 6000
+    "x": 16,
+    "y": 476,
+    "z": 700,
+    "height": 228,
+    "width": 1248,
+    "tabOrder": 700
   },
   "visual": {
     "visualType": "tableEx",
@@ -37,11 +37,11 @@
                       "Entity": "advisories"
                     }
                   },
-                  "Property": "source"
+                  "Property": "version"
                 }
               },
-              "queryRef": "advisories.source",
-              "nativeQueryRef": "source"
+              "queryRef": "advisories.version",
+              "nativeQueryRef": "version"
             },
             {
               "field": {
@@ -51,11 +51,11 @@
                       "Entity": "advisories"
                     }
                   },
-                  "Property": "version"
+                  "Property": "source"
                 }
               },
-              "queryRef": "advisories.version",
-              "nativeQueryRef": "version"
+              "queryRef": "advisories.source",
+              "nativeQueryRef": "source"
             },
             {
               "field": {
@@ -143,7 +143,46 @@
             }
           ]
         }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Column": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "advisories"
+                  }
+                },
+                "Property": "created_at"
+              }
+            },
+            "direction": "Descending"
+          }
+        ]
       }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Advisory drafts'"
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

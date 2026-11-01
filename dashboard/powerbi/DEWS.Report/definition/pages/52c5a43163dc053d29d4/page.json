@@ -4,5 +4,192 @@
   "displayName": "Forecast Evaluation",
   "displayOption": "FitToPage",
   "height": 720,
-  "width": 1280
+  "width": 1280,
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "a3f0000000000000005",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "evaluation_runs"
+              }
+            },
+            "Property": "run_label"
+          }
+        },
+        "type": "Categorical",
+        "filter": {
+          "Version": 2,
+          "From": [
+            {
+              "Name": "t",
+              "Entity": "evaluation_runs",
+              "Type": 0
+            }
+          ],
+          "Where": [
+            {
+              "Condition": {
+                "In": {
+                  "Expressions": [
+                    {
+                      "Column": {
+                        "Expression": {
+                          "SourceRef": {
+                            "Source": "t"
+                          }
+                        },
+                        "Property": "run_label"
+                      }
+                    }
+                  ],
+                  "Values": [
+                    [
+                      {
+                        "Literal": {
+                          "Value": "'m3.1-s3'"
+                        }
+                      }
+                    ],
+                    [
+                      {
+                        "Literal": {
+                          "Value": "'m3.1-s3-rainrows'"
+                        }
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "howCreated": "User"
+      },
+      {
+        "name": "a3f0000000000000006",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "evaluation_runs"
+              }
+            },
+            "Property": "model"
+          }
+        },
+        "type": "Categorical",
+        "filter": {
+          "Version": 2,
+          "From": [
+            {
+              "Name": "t",
+              "Entity": "evaluation_runs",
+              "Type": 0
+            }
+          ],
+          "Where": [
+            {
+              "Condition": {
+                "In": {
+                  "Expressions": [
+                    {
+                      "Column": {
+                        "Expression": {
+                          "SourceRef": {
+                            "Source": "t"
+                          }
+                        },
+                        "Property": "model"
+                      }
+                    }
+                  ],
+                  "Values": [
+                    [
+                      {
+                        "Literal": {
+                          "Value": "'rise_rate'"
+                        }
+                      }
+                    ],
+                    [
+                      {
+                        "Literal": {
+                          "Value": "'s3_v0'"
+                        }
+                      }
+                    ],
+                    [
+                      {
+                        "Literal": {
+                          "Value": "'s3_v1_joint_r10'"
+                        }
+                      }
+                    ],
+                    [
+                      {
+                        "Literal": {
+                          "Value": "'s3_v1_stack_r10'"
+                        }
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "howCreated": "User"
+      }
+    ]
+  },
+  "visualInteractions": [
+    {
+      "source": "4bc19a60e3001a3cd837",
+      "target": "eb1c1508909430e50860",
+      "type": "NoFilter"
+    },
+    {
+      "source": "4bc19a60e3001a3cd837",
+      "target": "9d0732ca69564c0a3308",
+      "type": "NoFilter"
+    },
+    {
+      "source": "4bc19a60e3001a3cd837",
+      "target": "a3000000000000000002",
+      "type": "NoFilter"
+    },
+    {
+      "source": "b5d35bd36479ca242046",
+      "target": "9d0732ca69564c0a3308",
+      "type": "NoFilter"
+    },
+    {
+      "source": "fada142e05969b572d61",
+      "target": "eb1c1508909430e50860",
+      "type": "NoFilter"
+    },
+    {
+      "source": "fada142e05969b572d61",
+      "target": "9d0732ca69564c0a3308",
+      "type": "NoFilter"
+    },
+    {
+      "source": "fada142e05969b572d61",
+      "target": "a3000000000000000002",
+      "type": "NoFilter"
+    },
+    {
+      "source": "fada142e05969b572d61",
+      "target": "e29bfe06c6dae57c3693",
+      "type": "NoFilter"
+    },
+    {
+      "source": "fada142e05969b572d61",
+      "target": "515a096a9da57ac969a7",
+      "type": "NoFilter"
+    }
+  ]
 }

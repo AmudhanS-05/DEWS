@@ -1,0 +1,71 @@
+table gauge_levels
+	lineageTag: 5e589a15-43af-5e1d-a93b-16ccd113a3e8
+
+	measure 'Action (ft)' = MAX(gauge_levels[action_ft])
+		formatString: 0.0
+		lineageTag: a7e85354-2215-5d5d-857c-6664d291a598
+
+	measure 'Minor (ft)' = MAX(gauge_levels[minor_ft])
+		formatString: 0.0
+		lineageTag: 280a1819-53f5-5fed-a02d-782719d2d74c
+
+	measure 'Moderate (ft)' = MAX(gauge_levels[moderate_ft])
+		formatString: 0.0
+		lineageTag: 73ed0c2b-99f9-54f8-894b-af9fcfbc37f4
+
+	measure 'Major (ft)' = MAX(gauge_levels[major_ft])
+		formatString: 0.0
+		lineageTag: 2eedb6dc-2ff9-5e80-9593-33adf5cd75a9
+
+	column site_no
+		dataType: string
+		lineageTag: b2abfc3b-e27b-5965-a393-e365f6baeb76
+		summarizeBy: none
+		sourceColumn: site_no
+
+	column lid
+		dataType: string
+		lineageTag: 6252b46b-b7fb-5a99-9002-4636378d4ddc
+		summarizeBy: none
+		sourceColumn: lid
+
+	column name
+		dataType: string
+		lineageTag: 07dcd5be-87a8-51ac-8594-ea21e62f9d59
+		summarizeBy: none
+		sourceColumn: name
+
+	column action_ft
+		dataType: double
+		lineageTag: d5bbe906-bbcb-5010-87fc-050550fe9295
+		summarizeBy: none
+		sourceColumn: action_ft
+
+	column minor_ft
+		dataType: double
+		lineageTag: cae81c4e-4c79-57e8-86e5-ab2e30acf880
+		summarizeBy: none
+		sourceColumn: minor_ft
+
+	column moderate_ft
+		dataType: double
+		lineageTag: 753016e3-95d7-5889-b6e2-9197880d0e56
+		summarizeBy: none
+		sourceColumn: moderate_ft
+
+	column major_ft
+		dataType: double
+		lineageTag: 2f4df085-6e49-5144-bfeb-02030288eb3c
+		summarizeBy: none
+		sourceColumn: major_ft
+
+	partition gauge_levels = m
+		mode: directQuery
+		source =
+				let
+					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
+					Data = Value.NativeQuery(Source, "SELECT site_no, lid, name, action_ft::float8 AS action_ft, minor_ft::float8 AS minor_ft, moderate_ft::float8 AS moderate_ft, major_ft::float8 AS major_ft FROM (VALUES ('08155300','ABTT2','Barton Creek at Loop 360',6.0,8.0,11.0,12.0),('08154700','ABUT2','Bull Creek above Loop 360',5.0,5.0,5.0,9.0),('08158000','ACRT2','Colorado River (TX) at Austin',25.0,33.0,38.0,42.0),('08156800','AHOT2','Shoal Creek at West 12th Street',5.0,7.0,10.0,12.0),('08159000','ATIT2','Onion Creek at US 183',15.0,17.0,23.0,27.0),('08170800','BAPT2','Blanco River at Crabapple Road',4.0,7.0,17.0,30.0),('08178880','BDAT2','Medina River at Bandera',10.0,13.0,14.0,24.0),('08170950','BFST2','Blanco River at Fischer Store Rd near Fischer',12.0,17.0,23.0,38.0),('08171350','BSMT2','Blanco River at San Marcos',13.0,18.0,24.0,30.0),('08190500','BTVT2','West Nueces River at Brackettville',9.0,15.0,17.0,18.0),('08195000','CNCT2','Frio River at Concan',7.0,11.0,12.0,15.0),('08167000','COMT2','Guadalupe River at Comfort',10.0,21.0,26.0,28.0),('08158700','DRWT2','Onion Creek near Driftwood',5.5,5.5,7.0,13.0),('08152900','FRBT2','Pedernales River at Fredericksburg',12.0,22.0,25.0,32.0),('08169500','GBCT2','Guadalupe River below Comal',13.0,13.0,14.0,20.0),('08104900','GETT2','San Gabriel River at Georgetown South Fork',7.0,9.0,13.0,26.0),('08173900','GNLT2','Guadalupe River at Gonzales',17.0,31.0,37.0,43.0),('08165500','HNTT2','Guadalupe River at Hunt',10.0,10.0,12.0,22.0),('08148500','JCTT2','North Llano River near Junction',14.0,21.0,25.0,28.0),('08150000','JNCT2','Llano River near Junction',12.0,16.0,22.0,31.0),('08153500','JOCT2','Pedernales River at Johnson City',13.0,14.0,17.0,19.0),('08152000','KNLT2','Sandy Creek near Kingsland',8.0,12.0,14.0,20.0),('08166200','KRRT2','Guadalupe River at Kerrville',7.0,9.0,12.0,20.0),('08170890','LBFT2','Little Blanco River at FM32 near Fischer',8.0,12.0,17.0,25.0),('08172400','LCPT2','Plum Creek at Lockhart',12.0,14.0,15.0,19.0),('08151500','LLAT2','Llano River at Llano',10.0,10.0,12.0,23.0),('08172000','LLGT2','San Marcos River at Luling',11.0,20.0,24.0,30.0),('08173000','LULT2','Plum Creek near Luling',20.0,23.0,24.0,25.0),('08150800','MBCT2','Beaver Creek (Llano River Basin) near Mason',14.0,17.0,20.0,25.0),('08150700','MLRT2','Llano River near Mason',11.0,18.0,24.0,28.0),('08169000','NBCT2','Comal River at New Braunfels',9.0,11.0,15.0,23.0),('08168500','NBRT2','Guadalupe River above Comal River at New Braunfels',6.0,7.0,10.0,14.0),('08155200','OHBT2','Barton Creek above Hwy 71 near Oak Hill',12.0,12.0,15.0,18.0),('08196000','RWDT2','Dry Frio River near Reagan Wells near Uvalde 23N',7.0,10.0,13.0,20.0),('08158840','SCAT2','Slaughter Creek at FM 1826 near Austin ',8.0,8.0,9.0,15.0),('08169740','SEGT2','Guadalupe River at Seguin',17.0,19.0,22.0,26.0),('08185000','SELT2','Cibolo Creek at Selma',14.0,17.0,20.0,22.0),('08177700','SIOT2','Olmos Creek at Dresden Drive',9.0,9.0,10.0,12.0)) AS v(site_no, lid, name, action_ft, minor_ft, moderate_ft, major_ft)", null, [EnableFolding=true])
+				in
+					Data
+
+	annotation PBI_ResultType = Table

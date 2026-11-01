@@ -2,17 +2,36 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
   "name": "4352784de3d7cb336480",
   "position": {
-    "x": 0,
-    "y": 466.775242796835,
-    "z": 1000,
-    "height": 207.87561420101966,
-    "width": 1235.9150153406076,
-    "tabOrder": 1000
+    "x": 620,
+    "y": 60,
+    "z": 400,
+    "height": 208,
+    "width": 644,
+    "tabOrder": 400
   },
   "visual": {
     "visualType": "clusteredBarChart",
     "query": {
       "queryState": {
+        "Category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "latency_stage"
+                    }
+                  },
+                  "Property": "stage"
+                }
+              },
+              "queryRef": "latency_stage.stage",
+              "nativeQueryRef": "stage",
+              "active": true
+            }
+          ]
+        },
         "Y": {
           "projections": [
             {
@@ -23,95 +42,11 @@
                       "Entity": "latency_waterfall"
                     }
                   },
-                  "Property": "Feed delay, median (s)"
+                  "Property": "Stage median (s)"
                 }
               },
-              "queryRef": "latency_waterfall.Feed delay, median (s)",
-              "nativeQueryRef": "Feed delay, median (s)"
-            },
-            {
-              "field": {
-                "Measure": {
-                  "Expression": {
-                    "SourceRef": {
-                      "Entity": "latency_waterfall"
-                    }
-                  },
-                  "Property": "Alert, median (s)"
-                }
-              },
-              "queryRef": "latency_waterfall.Alert, median (s)",
-              "nativeQueryRef": "Alert, median (s)"
-            },
-            {
-              "field": {
-                "Measure": {
-                  "Expression": {
-                    "SourceRef": {
-                      "Entity": "latency_waterfall"
-                    }
-                  },
-                  "Property": "Forecast, median (s)"
-                }
-              },
-              "queryRef": "latency_waterfall.Forecast, median (s)",
-              "nativeQueryRef": "Forecast, median (s)"
-            },
-            {
-              "field": {
-                "Measure": {
-                  "Expression": {
-                    "SourceRef": {
-                      "Entity": "latency_waterfall"
-                    }
-                  },
-                  "Property": "Delivery, median (s)"
-                }
-              },
-              "queryRef": "latency_waterfall.Delivery, median (s)",
-              "nativeQueryRef": "Delivery, median (s)"
-            },
-            {
-              "field": {
-                "Measure": {
-                  "Expression": {
-                    "SourceRef": {
-                      "Entity": "latency_waterfall"
-                    }
-                  },
-                  "Property": "Human approval, median (s)"
-                }
-              },
-              "queryRef": "latency_waterfall.Human approval, median (s)",
-              "nativeQueryRef": "Human approval, median (s)"
-            },
-            {
-              "field": {
-                "Measure": {
-                  "Expression": {
-                    "SourceRef": {
-                      "Entity": "latency_waterfall"
-                    }
-                  },
-                  "Property": "Ingest, median (s)"
-                }
-              },
-              "queryRef": "latency_waterfall.Ingest, median (s)",
-              "nativeQueryRef": "Ingest, median (s)"
-            },
-            {
-              "field": {
-                "Measure": {
-                  "Expression": {
-                    "SourceRef": {
-                      "Entity": "latency_waterfall"
-                    }
-                  },
-                  "Property": "Windowing, median (s)"
-                }
-              },
-              "queryRef": "latency_waterfall.Windowing, median (s)",
-              "nativeQueryRef": "Windowing, median (s)"
+              "queryRef": "latency_waterfall.Stage median (s)",
+              "nativeQueryRef": "Stage median (s)"
             }
           ]
         }
@@ -120,20 +55,42 @@
         "sort": [
           {
             "field": {
-              "Measure": {
+              "Column": {
                 "Expression": {
                   "SourceRef": {
-                    "Entity": "latency_waterfall"
+                    "Entity": "latency_stage"
                   }
                 },
-                "Property": "Feed delay, median (s)"
+                "Property": "stage"
               }
             },
-            "direction": "Descending"
+            "direction": "Ascending"
           }
         ],
         "isDefaultSort": true
       }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Median seconds per stage, instrumented traces; a stage with no measurement has no bar'"
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   },
   "filterConfig": {

@@ -2,12 +2,12 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
   "name": "1080f75c5c00d56a0309",
   "position": {
-    "x": 26.456896352857047,
-    "y": 360.94765738540684,
-    "z": 3000,
-    "height": 209.76539251193802,
-    "width": 332.60098272163145,
-    "tabOrder": 3000
+    "x": 16,
+    "y": 568,
+    "z": 400,
+    "height": 136,
+    "width": 260,
+    "tabOrder": 400
   },
   "visual": {
     "visualType": "cardVisual",
@@ -17,48 +17,20 @@
           "projections": [
             {
               "field": {
-                "Aggregation": {
+                "Measure": {
                   "Expression": {
-                    "Column": {
-                      "Expression": {
-                        "SourceRef": {
-                          "Entity": "gauge_readings"
-                        }
-                      },
-                      "Property": "ingested_at"
+                    "SourceRef": {
+                      "Entity": "gauge_readings"
                     }
                   },
-                  "Function": 4
+                  "Property": "Newest reading (local time)"
                 }
               },
-              "queryRef": "Min(gauge_readings.ingested_at)",
-              "nativeQueryRef": "Latest ingested_at"
+              "queryRef": "gauge_readings.Newest reading (local time)",
+              "nativeQueryRef": "Newest reading (local time)"
             }
           ]
         }
-      },
-      "sortDefinition": {
-        "sort": [
-          {
-            "field": {
-              "Aggregation": {
-                "Expression": {
-                  "Column": {
-                    "Expression": {
-                      "SourceRef": {
-                        "Entity": "gauge_readings"
-                      }
-                    },
-                    "Property": "ingested_at"
-                  }
-                },
-                "Function": 4
-              }
-            },
-            "direction": "Ascending"
-          }
-        ],
-        "isDefaultSort": true
       }
     }
   }

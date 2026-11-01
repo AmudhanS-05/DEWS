@@ -1,6 +1,10 @@
 table latency_waterfall
 	lineageTag: a6cd24d6-27a7-50a0-82b1-6e440b0e12cc
 
+	measure 'Stage median (s)' = SWITCH(SELECTEDVALUE(latency_stage[stage]), "Feed delay", [Feed delay, median (s)], "Ingest", [Ingest, median (s)], "Windowing", [Windowing, median (s)], "Forecast", [Forecast, median (s)], "Alert", [Alert, median (s)], "Human approval", [Human approval, median (s)], "Delivery", [Delivery, median (s)])
+		formatString: 0.000
+		lineageTag: 69401609-c06b-5f13-b71c-2249bee5d190
+
 	measure 'Feed delay, median (s)' = MEDIAN(latency_waterfall[feed_delay_s])
 		formatString: 0.000
 		lineageTag: 7036679c-26e0-5dbe-9fc5-be24c73e5864

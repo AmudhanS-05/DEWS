@@ -2,12 +2,12 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
   "name": "9d0732ca69564c0a3308",
   "position": {
-    "x": 583.94149807377335,
-    "y": 472.44457772959009,
-    "z": 6000,
-    "height": 247.56095873030523,
-    "width": 651.97351726683439,
-    "tabOrder": 6000
+    "x": 504,
+    "y": 168,
+    "z": 410,
+    "height": 240,
+    "width": 760,
+    "tabOrder": 410
   },
   "visual": {
     "visualType": "lineChart",
@@ -78,25 +78,42 @@
         "sort": [
           {
             "field": {
-              "Aggregation": {
+              "Column": {
                 "Expression": {
-                  "Column": {
-                    "Expression": {
-                      "SourceRef": {
-                        "Entity": "evaluation_runs"
-                      }
-                    },
-                    "Property": "f1"
+                  "SourceRef": {
+                    "Entity": "evaluation_runs"
                   }
                 },
-                "Function": 1
+                "Property": "horizon_h"
               }
             },
-            "direction": "Descending"
+            "direction": "Ascending"
           }
         ],
         "isDefaultSort": true
       }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'POOLED: F1 by horizon, one line per model'"
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   },
   "filterConfig": {

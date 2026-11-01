@@ -2,12 +2,12 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
   "name": "515a096a9da57ac969a7",
   "position": {
-    "x": 599.05972456112022,
-    "y": 151.18226487346882,
-    "z": 9000,
-    "height": 150,
-    "width": 250,
-    "tabOrder": 9000
+    "x": 1080,
+    "y": 60,
+    "z": 310,
+    "height": 100,
+    "width": 184,
+    "tabOrder": 310
   },
   "visual": {
     "visualType": "cardVisual",
@@ -31,25 +31,65 @@
             }
           ]
         }
-      },
-      "sortDefinition": {
-        "sort": [
-          {
-            "field": {
-              "Measure": {
-                "Expression": {
-                  "SourceRef": {
-                    "Entity": "evaluation_runs"
-                  }
-                },
-                "Property": "Lead time, median of rows (h)"
-              }
-            },
-            "direction": "Descending"
-          }
-        ],
-        "isDefaultSort": true
       }
     }
+  },
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "a3f0000000000000003",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "evaluation_runs"
+              }
+            },
+            "Property": "site_no"
+          }
+        },
+        "type": "Categorical",
+        "filter": {
+          "Version": 2,
+          "From": [
+            {
+              "Name": "t",
+              "Entity": "evaluation_runs",
+              "Type": 0
+            }
+          ],
+          "Where": [
+            {
+              "Condition": {
+                "In": {
+                  "Expressions": [
+                    {
+                      "Column": {
+                        "Expression": {
+                          "SourceRef": {
+                            "Source": "t"
+                          }
+                        },
+                        "Property": "site_no"
+                      }
+                    }
+                  ],
+                  "Values": [
+                    [
+                      {
+                        "Literal": {
+                          "Value": "'POOLED'"
+                        }
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "howCreated": "User"
+      }
+    ]
   }
 }

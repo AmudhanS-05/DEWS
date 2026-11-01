@@ -2,12 +2,12 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
   "name": "8ed7acfd2532d4d80a5e",
   "position": {
-    "x": 589.61083300652842,
-    "y": 234.33251055387669,
-    "z": 5000,
-    "height": 211.65517082285638,
-    "width": 538.58681861173272,
-    "tabOrder": 5000
+    "x": 16,
+    "y": 168,
+    "z": 500,
+    "height": 102,
+    "width": 824,
+    "tabOrder": 500
   },
   "visual": {
     "visualType": "tableEx",
@@ -117,10 +117,60 @@
               },
               "queryRef": "agent_run_metrics.disagreements",
               "nativeQueryRef": "disagreements"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "agent_run_summary"
+                    }
+                  },
+                  "Property": "last_verdict"
+                }
+              },
+              "queryRef": "agent_run_summary.last_verdict",
+              "nativeQueryRef": "last_verdict"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "agent_run_summary"
+                    }
+                  },
+                  "Property": "review_rounds"
+                }
+              },
+              "queryRef": "agent_run_summary.review_rounds",
+              "nativeQueryRef": "review_rounds"
             }
           ]
         }
       }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Runs'"
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

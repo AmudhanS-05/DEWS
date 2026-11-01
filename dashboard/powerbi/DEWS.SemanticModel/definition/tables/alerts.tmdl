@@ -85,20 +85,13 @@ table alerts
 		summarizeBy: none
 		sourceColumn: channel
 
-	column details
-		dataType: string
-		lineageTag: 447aed0f-28d2-45a3-8bf4-7a4316bf5ae8
-		summarizeBy: none
-		sourceColumn: details
-
-		annotation SummarizationSetBy = Automatic
-
 	partition alerts = m
 		mode: directQuery
 		source =
 				let
 					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
-					Data = Source{[Schema="public",Item="alerts"]}[Data]
+					Data = Source{[Schema="public",Item="alerts"]}[Data],
+					NoJson = Table.RemoveColumns(Data, {"details"})
 				in
-					Data
+					NoJson
 

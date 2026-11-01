@@ -37,20 +37,13 @@ table agent_events
 		summarizeBy: none
 		sourceColumn: ts
 
-	column detail
-		dataType: string
-		lineageTag: 90306463-80fa-475a-a2c7-43a33980fd66
-		summarizeBy: none
-		sourceColumn: detail
-
-		annotation SummarizationSetBy = Automatic
-
 	partition agent_events = m
 		mode: directQuery
 		source =
 				let
 					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
-					Data = Source{[Schema="public",Item="agent_events"]}[Data]
+					Data = Source{[Schema="public",Item="agent_events"]}[Data],
+					NoJson = Table.RemoveColumns(Data, {"detail"})
 				in
-					Data
+					NoJson
 

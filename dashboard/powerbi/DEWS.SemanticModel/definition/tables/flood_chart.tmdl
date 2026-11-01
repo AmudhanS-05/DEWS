@@ -1,0 +1,55 @@
+table flood_chart
+	lineageTag: d0da531a-143c-5680-8034-edcc6aa4ea1a
+
+	column site_no
+		dataType: string
+		lineageTag: 508e3aa5-dd7c-57b1-b56b-be07a5d64da5
+		summarizeBy: none
+		sourceColumn: site_no
+
+	column mode
+		dataType: string
+		lineageTag: bce85aaf-f0e0-50a0-8e0d-8869112007aa
+		summarizeBy: none
+		sourceColumn: mode
+
+	column window_start
+		dataType: dateTime
+		lineageTag: 66792a9d-18c9-5d1f-b46e-80983fc1ef71
+		summarizeBy: none
+		sourceColumn: window_start
+
+	column stage_last
+		dataType: double
+		lineageTag: 5a76f392-874c-5f89-acd7-aa386774130e
+		summarizeBy: none
+		sourceColumn: stage_last
+
+	column forecast_stage
+		dataType: double
+		lineageTag: f01a48b4-bf6d-534e-9834-313cf0c7cb7e
+		summarizeBy: none
+		sourceColumn: forecast_stage
+
+	column model
+		dataType: string
+		lineageTag: d6f11c42-414c-5b08-8c8f-51f8e9a083fd
+		summarizeBy: none
+		sourceColumn: model
+
+	column horizon_h
+		dataType: double
+		lineageTag: 1f3f36be-3156-53bf-9d9e-585c89abb4fe
+		summarizeBy: none
+		sourceColumn: horizon_h
+
+	partition flood_chart = m
+		mode: directQuery
+		source =
+				let
+					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
+					Data = Value.NativeQuery(Source, "SELECT COALESCE(w.site_no, r.site_no) AS site_no, COALESCE(w.mode, r.mode) AS mode, COALESCE(w.window_start, r.window_start) AS window_start, w.stage_last, r.forecast_stage, r.model, r.horizon_h FROM windowed_aggregates w FULL JOIN (SELECT DISTINCT ON (site_no, window_start, mode) site_no, window_start, mode, forecast_stage, model, horizon_h FROM risk_scores ORDER BY site_no, window_start, mode, computed_at DESC) r ON w.site_no = r.site_no AND w.window_start = r.window_start AND w.mode = r.mode", null, [EnableFolding=true])
+				in
+					Data
+
+	annotation PBI_ResultType = Table

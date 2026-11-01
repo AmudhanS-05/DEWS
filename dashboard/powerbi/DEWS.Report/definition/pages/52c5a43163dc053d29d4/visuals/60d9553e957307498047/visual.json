@@ -2,12 +2,12 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
   "name": "60d9553e957307498047",
   "position": {
-    "x": 9.4488915545918015,
-    "y": 317.48275623428458,
-    "z": 7000,
-    "height": 149.29248656255047,
-    "width": 1269.9310249371383,
-    "tabOrder": 7000
+    "x": 16,
+    "y": 536,
+    "z": 510,
+    "height": 168,
+    "width": 1248,
+    "tabOrder": 510
   },
   "visual": {
     "visualType": "tableEx",
@@ -144,6 +144,28 @@
           ]
         }
       }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'By gauge (replay test rows)'"
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   },
   "filterConfig": {

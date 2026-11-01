@@ -58,3 +58,46 @@ relationship 064f401a-17af-5360-ad33-8a334f3dfbb8
 	fromColumn: agent_events.alert_id
 	toColumn: alerts.alert_id
 
+relationship 9ca9a63b-f55d-50b9-ab57-8d466e49c487
+	fromColumn: flood_chart.mode
+	toColumn: mode_list.mode
+
+relationship 0f4e0e8b-8a88-5ef9-ba32-b70f581e4d7e
+	fromColumn: gauge_readings.mode
+	toColumn: mode_list.mode
+
+relationship c0d18a96-9f94-538e-b9a1-fec3ee144689
+	fromColumn: alert_overview.mode
+	toColumn: mode_list.mode
+
+relationship dba114f7-d042-5160-99db-d4f1c792aa93
+	fromColumn: latency_trace.mode
+	toColumn: mode_list.mode
+
+relationship 568bd4a5-cc16-5dfb-b45e-2bd508f21e07
+	fromColumn: latency_waterfall.mode
+	toColumn: mode_list.mode
+
+relationship 351be1ec-6efe-50c4-b28f-d91b5c4f6be0
+	fromColumn: agent_run_metrics.mode
+	toColumn: mode_list.mode
+
+relationship a7ff092c-57b0-56f1-b96a-0568258c19b9
+	fromColumn: alerts.mode
+	toColumn: mode_list.mode
+
+relationship b0f960bb-21ac-5488-8f56-2064e6da909a
+	fromColumn: flood_chart.site_no
+	toColumn: gauge_levels.site_no
+
+relationship e2b9163f-e15e-541b-b3ab-189ba0498df6
+	fromColumn: gauge_readings.site_no
+	toColumn: gauge_levels.site_no
+
+relationship 2e953ade-18c2-5c24-b0de-a3f2f7ac50ee
+	fromColumn: alert_overview.site_no
+	toColumn: gauge_levels.site_no
+
+relationship 083e327a-8359-5017-b8eb-df1146cbab99
+	fromColumn: agent_run_metrics.run_id
+	toColumn: agent_run_summary.run_id
