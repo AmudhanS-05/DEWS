@@ -18,6 +18,8 @@ def test_every_check_has_a_requirement():
     ids |= {i for i, _ in advisory.requirements(advisory.build_facts(HIGHER, EV, NO_RAIN, 1), "normal")}
     ids |= {i for i, _ in advisory.requirements(advisory.build_facts(HIGHER, EV, {**NO_RAIN, "kind": "supporting"}, 1),
                                                 "normal")}
+    sus = {**advisory.build_facts(ALERT, EV, CX, 2), "data_quality": "stuck readings"}
+    ids |= {i for i, _ in advisory.requirements(sus, "normal")}
     assert ids == set(checks.CHECKS)
 
 

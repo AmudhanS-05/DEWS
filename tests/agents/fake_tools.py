@@ -14,6 +14,8 @@ class FakeTools(Tools):
         self.alerts = {a["alert_id"]: a for a in d["alerts"]}
         self.advisories, self.events, self.runs = [], [], []
         self.impacts: list[str] = []
+        self.edits: list[dict] = []                       # officer edits (A3.3 memory)
+        self.quality = {"suspect": None, "reasons": [], "source": "fake: not checked"}
         if not rain:
             for w in self.windows:
                 w["rain_1h"] = w["rain_3h"] = w["rain_6h"] = None
@@ -64,6 +66,12 @@ class FakeTools(Tools):
 
     def get_past_floods(self, site):
         return {"n": 0, "median_rise_h": 10.9, "recent": []}
+
+    def get_edit_examples(self, site=None, mode=None, limit=2):
+        return [dict(e) for e in self.edits][:limit]
+
+    def get_data_quality(self, site, until=None, mode=None, hours=48):
+        return dict(self.quality)
 
     def get_impacts(self, site, level):
         return list(self.impacts)

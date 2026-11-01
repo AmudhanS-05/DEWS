@@ -14,12 +14,18 @@ coordinator -> [evidence || context] -> reconcile -> writer -> reviewer --pass--
 
 | Agent | Does | Tools (PostgreSQL, `tools.py`) |
 |---|---|---|
-| coordinator | loads the alert, drops duplicates and retractions, counts the update number in the episode, plans | get_alert, get_episode_history |
-| evidence | the gauge's own windows and forecast, official levels; direction rising / not rising | get_recent_windows, get_forecast, get_official_levels, get_past_floods |
+| coordinator | loads the alert, drops duplicates and retractions, counts the update number in the episode, reads the episodic memory (earlier alerts of the episode, officer edits), plans | get_alert, get_episode_history, get_edit_examples |
+| evidence | the gauge's own windows and forecast (p_minor from s3_v0), official levels, sensor-fault flag; direction rising / not rising | get_recent_windows, get_forecast, get_official_levels, get_past_floods, get_data_quality |
 | context | radar rain, upstream/downstream/nearby gauges, NWS impact statements; direction, signal kind (LEADING / SUPPORTING) or `unknown` | get_rain, get_neighbours, get_gauge_info, get_impacts |
 | reconcile | evidence and context disagree -> advisory marked UNCERTAIN, both signals stated | (pure rules, `rules.py`) |
 | writer | LLM draft from the facts (or the deterministic template when there is no LLM or it fails) | `llm.py`, `advisory.py` |
 | reviewer | deterministic checks first (`checks.py`), then an LLM judgement on a draft that passed them | `checks.py`, `llm.py` |
+
+**Tools over MCP (A4.1).** The agents reach their tools through the Model Context Protocol: `run_alert` wraps the
+database `Tools` in `mcp_client.McpTools`, which starts `python -m agentic_ai.mcp_server` (stdio) with the same
+database and calls each tool there; if the server cannot start, a call errors or times out (10 s), the same call is
+made directly (`via: direct (mcp failed: ...)` in the event). The run log (`agent_events`, `agent_runs`) is written
+directly, not as an MCP tool. The CLI's last line says how many calls went via MCP.
 
 Every step writes `agent_events` (drives the console's Agents tab) and `agent_runs`; the result is a row in
 `advisories`. Any failure (tool crash, LLM down, reviewer still failing) leaves template v1 in place.
@@ -59,12 +65,38 @@ true/false; downstream/nearby gauges only as a supporting signal; no Markdown; S
 never on live data); "provisional" for provisional data; UNCERTAIN with both signals when they disagree; no
 certainty language; at most 900 characters.
 
+**Episodic memory (A3.3).** The coordinator reads the flood episode (same gauge, same episode start): a repeat alert
+gets "Update n:" (and "(upgraded from MINOR)" when the category rose); the facts carry an `episode` section in words
+only (earlier categories, earlier advisories and whether the officer edited them). Duty-officer edits (`edited_text`
+that the console stores on approval, same mode, this gauge first) go to the writer as WORDING EXAMPLES with every
+number replaced by `#`. Guard: the reviewer's number check skips the `episode` section, so a number from an earlier
+alert is rejected; numbers come only from the current evidence. Deterministic check `update`: "Update n" exactly on
+repeat alerts, never on a first alert.
+
+**s3_v0 probabilities and the sensor-fault flag.** ml's active model `s3_v0` (3 h) gives `p_minor` only. When the
+alert's own category has no probability (e.g. a MAJOR alert) the text says "probability of reaching MAJOR: not
+available" and adds "probability of reaching MINOR: 97%" (model named "trained S3 model v0", never the raw id).
+`get_data_quality` runs `ml.fault_rules.check_gauge` (shipped rules no_readings / stuck / step, docs/CONTRACTS.md) on
+the last 48 h of raw readings in `gauge_readings` with neighbour windows as context; if the alert itself carries
+`data_quality` (core may add it) that is used instead. A flagged gauge -> "readings at this gauge look like a sensor
+fault (...); the data are questionable" (deterministic check `suspect_data`). No raw readings stored -> not checked,
+nothing said. A flag never blocks or changes the alert.
+
+**Reviewer checks added in A3.1** (each also a writer requirement): `category_stage` (a category paired with another
+category's stage), `threshold` (danger/warning levels or made-up categories instead of the official NWPS stages),
+`cause` (no "caused by / due to / dam release" outside data notes), `context_kind` on every alert, `update`,
+`suspect_data`. Seeded-error suite: `python -m agentic_ai.eval.catch_rate` -> `agentic_ai/eval/reviewer_catch_rate.md`.
+
 ## Files
 
 | File | |
 |---|---|
 | `graph.py` | the LangGraph graph, event log, `run_alert()` (never raises) |
 | `tools.py` | read tools, `anchor_window`, writes (`save_advisory`, `log_agent_run`, `log_agent_event`) |
+| `mcp_server.py` | stdio MCP server (`python -m agentic_ai.mcp_server`) wrapping the 12 read tools + `save_advisory` |
+| `mcp_client.py` | the graph's MCP client (`AGENT_TOOLS=mcp`, default) with a direct-call fallback per call |
+| `drill.py` | C4.3 fault drill "LLM down" for core's tools/fault_drill.py: `python -m agentic_ai.drill [--alert-id ID] [--no-key]` or `llm_down(tools, alert_id)` |
+| `eval/` | A3.1 seeded-error catch rate, A4.2 evaluation on replayed alerts, A5.1 ablation (tables in `eval/`) |
 | `advisory.py` | facts in report precision, the template writer, writer prompt + requirements |
 | `checks.py` | deterministic reviewer checks (`CHECKS`), Unicode -> ASCII normalisation |
 | `rules.py` | official category helpers, direction and disagreement rules, thresholds, forbidden phrases |
@@ -95,9 +127,11 @@ python -m pytest -q tests/agents             # always LLM_PROVIDER=none, no netw
 | `LLM_PROVIDER` | `groq` (default model `GROQ_MODEL=openai/gpt-oss-120b`, key `GROQ_API_KEY`), `gemini` (`GEMINI_API_KEY` from Google AI Studio, starts with `AIza`; `GEMINI_MODEL` default gemini-3.5-flash-lite; gemini-2.5-flash is closed to new keys, gemini-3.5-flash timed out at 30 s once), `ollama` (local `qwen2.5:7b`, `OLLAMA_HOST`), `none` (template only) |
 | `GROQ_REASONING_EFFORT` | `low` (default) / `medium` / `high`, sent only for `openai/gpt-oss-*`. Measured 31 Oct, 5 runs each: low 2.0-3.1 s, 3.0-3.3k tokens, 5/5 on attempt 1; not set (Groq default, round 4) 4.2-11.0 s, 4.0-8.4k tokens, 4/5 on attempt 1 |
 | Groq 429 | waits once for the reset hint (`retry-after`, else `x-ratelimit-reset-*`) when it is at most 20 s, shown as a progress line, then retries Groq; a longer hint goes straight to `LLM_FALLBACK` |
+| `LLM_FORCE_DOWN=1` | every LLM call fails at once (fault drill). Any LLM failure (no key, provider error, timeout, forced) keeps template v1: no agents draft, no judge call, outcome `v1_kept` with reason "LLM unavailable: ..." (since 1 Nov; before, the template text was saved again as v2) |
 | `LLM_FALLBACK` | `gemini` / `groq` / `none`: a failed call is retried once there, then the template text is used |
 | `LANGSMITH_TRACING=true` + `LANGSMITH_API_KEY` | optional tracing; the CLI prints the trace link |
 | `PG_DSN` | PostgreSQL (default the docker one) |
+| `AGENT_TOOLS` | `mcp` (default: the agents' tool calls go through the stdio MCP server, started once per process, about 1 s) or `direct` (plain Python calls). Any MCP failure falls back to the direct call for that call; each tool_call event says `via` |
 
 The seed: `python -m agentic_ai.seed` writes the measured USGS gauge-height record for DRWT2 (Onion Creek near
 Driftwood, 08158700), the downstream gauge 08159000 and nearby 08158840, 2019-05-02..05, as core's own windowing

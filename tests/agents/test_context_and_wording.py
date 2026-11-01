@@ -154,13 +154,13 @@ def test_supporting_context_may_not_be_called_a_cause_or_predictor():
 
 def test_reviewer_llm_sees_the_replay_statement(monkeypatch):
     prompts = []
-    t = FakeTools()   # scripted: the writer call fails (template text is used), the judge says PASS
+    t = FakeTools()   # scripted: the writer returns the template text, the judge says PASS
 
     def fake(system, user, timeout_s=20, **k):
         prompts.append((system, user))
         if system.startswith("You review"):
             return llm.LlmReply(text="PASS", tokens=5, provider="groq")
-        return llm.LlmReply(text=None, provider="groq", error="scripted: use template")
+        return llm.LlmReply(text=None, provider="none")      # writer: deterministic text, judge still runs
     monkeypatch.setattr(llm, "provider", lambda: "groq")
     monkeypatch.setattr(llm, "complete", fake)
     assert graph.run_alert(t, ALERT)["outcome"] == "saved"

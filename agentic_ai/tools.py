@@ -1,7 +1,8 @@
 """Agent tools as plain functions on PostgreSQL (docs/CONTRACTS.md, "Agent tools").
 
 Read-only: get_alert, get_recent_windows, get_forecast, get_official_levels, get_past_floods, get_rain,
-get_neighbours, get_gauge_info, get_impacts, get_episode_history. Write (agents only): save_advisory,
+get_neighbours, get_gauge_info, get_impacts, get_episode_history, get_edit_examples (A3.3), get_data_quality (sensor-fault
+flag). Write (agents only): save_advisory,
 log_agent_run, log_agent_event. Nothing here touches Kafka or sends email.
 
 Every read takes optional `until` (ISO string or datetime) and `mode`. For a replayed flood "now" is the alert's
@@ -224,6 +225,46 @@ class Tools:
                        "edited_text, created_at FROM advisories WHERE alert_id = ANY(%s) ORDER BY created_at, version",
                        (ids,)) if ids else []
         return {"alerts": [_row(a) for a in alerts], "advisories": [_row(a) for a in advs]}
+
+    def get_edit_examples(self, site: str | None = None, mode: str | None = None, limit: int = 2) -> list[dict]:
+        """Episodic memory (A3.3): duty-officer edits of earlier advisories (`edited_text` differs from `text`, set by
+        the console on approval), same mode, this gauge first, newest first. Wording examples only: the writer
+        prompt masks every number in them."""
+        rows = self._q(
+            "SELECT a.advisory_id, a.text, a.edited_text, l.site_no, l.mode FROM advisories a "
+            "JOIN alerts l ON l.alert_id = a.alert_id WHERE a.edited_text IS NOT NULL AND a.edited_text <> a.text "
+            "AND a.status IN ('approved', 'sent') AND (%s::text IS NULL OR l.mode = %s) "
+            "ORDER BY (l.site_no = %s) DESC, a.approved_at DESC NULLS LAST, a.created_at DESC LIMIT %s",
+            (mode, mode, site, int(limit)))
+        return [_row(r) for r in rows]
+
+    def get_data_quality(self, site: str, until=None, mode: str | None = None, hours: int = 48) -> dict:
+        """Sensor-fault flag for the gauge (ml.fault_rules.check_gauge, docs/CONTRACTS.md "Sensor-fault flag") on
+        the last `hours` of raw 00065 readings up to `until`, with neighbour windows as independent evidence.
+        {suspect: True/False/None, reasons, source}; suspect None = not checked (no raw readings stored, or ml not
+        installed). Never raises."""
+        try:
+            u = _ts(until) or datetime.now(timezone.utc)
+            rows = self._q("SELECT reading_time, value FROM gauge_readings WHERE site_no = %s AND parameter = '00065' "
+                           "AND reading_time > %s AND reading_time <= %s AND (%s::text IS NULL OR mode = %s) "
+                           "ORDER BY reading_time", (site, u - timedelta(hours=hours), u, mode, mode))
+            if not rows:
+                return {"suspect": None, "reasons": [], "source": "no raw readings stored for this window"}
+            from ml import fault_rules
+            readings = [{"reading_ts": r["reading_time"].timestamp(), "value": r["value"]} for r in rows]
+            nb = fault_rules.neighbors(str(GAUGE_CSV))
+            wins = {}
+            for s in [site] + nb.get(site, []):
+                wins[s] = [{"stage_last": w["stage_last"], "window_start_ts": _ts(w["window_start"]).timestamp()}
+                           for w in self.get_recent_windows(s, hours, u, mode)]
+            ctx = fault_rules.Context.from_windows(wins, None, nb)
+            res = fault_rules.check_gauge(readings, site, ctx)
+            if res.get("reasons") == ["unavailable"]:
+                return {"suspect": None, "reasons": [], "source": "ml.fault_rules unavailable"}
+            return {"suspect": bool(res["suspect"]), "reasons": list(res["reasons"]),
+                    "source": f"ml.fault_rules.check_gauge on {len(readings)} readings"}
+        except Exception as e:  # noqa: BLE001 - a quality check must never stop the advisory
+            return {"suspect": None, "reasons": [], "source": f"not checked ({type(e).__name__})"}
 
     # ------------------------------------------------------------------ writes (agents only)
     def save_advisory(self, alert_id: str, text: str, confidence: str = "normal",

@@ -17,7 +17,7 @@ from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from agentic_ai import advisory, checks, llm, rules, tracing
+from agentic_ai import advisory, checks, llm, mcp_client, rules, tracing
 
 
 class State(TypedDict, total=False):
@@ -30,6 +30,9 @@ class State(TypedDict, total=False):
     urgent: bool
     plan: list[str]
     update_n: int
+    episode: dict
+    examples: list[dict]
+    data_quality: dict
     evidence: dict
     context: dict
     disagreement: dict | None
@@ -43,6 +46,8 @@ class State(TypedDict, total=False):
     version: int
     tokens: int
     llm_error: str | None
+    llm_down: str | None
+    facts: dict
 
 
 class Run:
@@ -85,7 +90,7 @@ class Run:
         res = getattr(self.tools, name)(*args, **kwargs)
         info = {"tool": name, "args": [str(a) for a in args] + [f"{k}={v}" for k, v in kwargs.items()],
                 "rows": len(res) if isinstance(res, (list, dict)) else (0 if res is None else 1),
-                "ms": round((time.monotonic() - t0) * 1000)}
+                "ms": round((time.monotonic() - t0) * 1000), "via": getattr(self.tools, "last_via", "direct")}
         self.tool_calls.setdefault(agent, []).append(info)
         self.event(agent, "tool_call", info)
         return res
@@ -97,6 +102,11 @@ class Run:
 
 def _now():
     return datetime.now(timezone.utc)
+
+
+def _facts(s: State) -> dict:
+    return advisory.build_facts(s["alert"], s["evidence"], s["context"], s["update_n"], s.get("episode"),
+                                s["evidence"].get("data_quality"))
 
 
 def build_graph(tools, run: Run):
@@ -122,15 +132,22 @@ def build_graph(tools, run: Run):
         if existing and not s.get("force"):
             adv = existing[-1]["advisory_id"]
             return _drop(s, t0, f"duplicate: v{adv.rsplit('|', 1)[-1]} exists ({adv}), use --force to re-run")
-        hist = run.call("coordinator", "get_episode_history", s["alert_id"])["alerts"]
+        history = run.call("coordinator", "get_episode_history", s["alert_id"])
+        hist = history["alerts"]
         update_n = 1 + sum(1 for h in hist if h["raised_at"] < alert["raised_at"])
+        episode = advisory.episode_summary(history, s["alert_id"], alert["raised_at"], update_n)
+        try:   # episodic memory: officer edits as wording examples (numbers masked in the prompt)
+            examples = run.call("coordinator", "get_edit_examples", alert["site_no"], alert["mode"], 2)
+        except Exception:  # noqa: BLE001 - memory is optional
+            examples = []
         urgent = alert["category"] == "major"
         plan = ["evidence", "context", "writer", "reviewer"]
-        run.event("coordinator", "end", {"plan": plan, "urgent": urgent, "update_n": update_n, "mode": alert["mode"]})
+        run.event("coordinator", "end", {"plan": plan, "urgent": urgent, "update_n": update_n, "mode": alert["mode"],
+                                         "earlier": episode["earlier_alert_categories"], "edit_examples": len(examples)})
         run.row("coordinator", t0, f"alert {s['alert_id']} ({alert['category']}, {alert['mode']})",
-                {"plan": plan, "urgent": urgent, "update_n": update_n})
-        return {"alert": alert, "urgent": urgent, "plan": plan, "update_n": update_n, "attempt": 0, "feedback": [],
-                "tokens": 0, "outcome": "pending"}
+                {"plan": plan, "urgent": urgent, "update_n": update_n, "episode": episode, "edit_examples": len(examples)})
+        return {"alert": alert, "urgent": urgent, "plan": plan, "update_n": update_n, "episode": episode,
+                "examples": examples, "attempt": 0, "feedback": [], "tokens": 0, "outcome": "pending"}
 
     def _drop(s: State, t0, reason: str) -> dict:
         run.event("coordinator", "end", {"dropped": reason})
@@ -148,6 +165,10 @@ def build_graph(tools, run: Run):
         fc = run.call("evidence", "get_forecast", site, until=until, mode=mode, horizon_h=a.get("horizon_h"))
         lv = run.call("evidence", "get_official_levels", site)
         pf = run.call("evidence", "get_past_floods", site)
+        dq = a.get("data_quality")            # core may put the sensor-fault flag on the alert; else check here
+        if not isinstance(dq, dict):
+            dq = run.call("evidence", "get_data_quality", site, until=until, mode=mode) \
+                if hasattr(tools, "get_data_quality") else {"suspect": None, "reasons": []}
         stages = [x["stage_last"] for x in w if x.get("stage_last") is not None]
         last = w[-1] if w else {}
         rate = last.get("rise_rate_ft_per_h")
@@ -158,9 +179,10 @@ def build_graph(tools, run: Run):
               "p_action": fc and fc["p_action"], "p_minor": fc and fc["p_minor"], "p_moderate": fc and fc["p_moderate"],
               "p_major": fc and fc["p_major"], "model": fc["model"] if fc else a.get("model"),
               "official_levels": lv, "past_floods_n": pf["n"], "median_rise_h": pf["median_rise_h"],
-              "direction": rules.evidence_direction(rate, fstage, level)}
+              "direction": rules.evidence_direction(rate, fstage, level), "data_quality": dq}
         run.event("evidence", "end", {"direction": ev["direction"], "stage_last": ev["stage_last"], "rise_rate_ft_per_h": rate,
-                                      "forecast_stage": fstage})
+                                      "forecast_stage": fstage, "p_minor": ev["p_minor"], "model": ev["model"],
+                                      "suspect": dq.get("suspect"), "suspect_reasons": dq.get("reasons")})
         run.row("evidence", t0, f"gauge {site} up to {until}", ev)
         return {"evidence": ev}
 
@@ -205,17 +227,20 @@ def build_graph(tools, run: Run):
         run.event("writer", "start", {"attempt": attempt})
         if s["feedback"]:
             run.event("writer", "revision", {"attempt": attempt, "feedback": s["feedback"]})
-        facts = advisory.build_facts(a, s["evidence"], s["context"], s["update_n"])
-        fallback = advisory.template_text(a, s["evidence"], s["context"], s["confidence"], s["update_n"], s["disagreement"])
-        reply = llm.complete(advisory.SYSTEM_PROMPT, advisory.llm_user_prompt(facts, s["confidence"], s["disagreement"], s["feedback"]),
+        facts = _facts(s)
+        fallback = advisory.template_text(a, s["evidence"], s["context"], s["confidence"], s["update_n"], s["disagreement"],
+                                          s.get("episode"), s["evidence"].get("data_quality"))
+        reply = llm.complete(advisory.SYSTEM_PROMPT, advisory.llm_user_prompt(facts, s["confidence"], s["disagreement"],
+                                                                              s["feedback"], s.get("examples")),
                              on_wait=waiter("writer"))
         text, err = (reply.text, None) if reply.text else (fallback, reply.error)
         text = checks.normalize(text)   # plain ASCII dashes/spaces in what is reviewed, saved and shown
         if reply.fallback_from:
             run.event("writer", "revision", {"llm_fallback": reply.provider, "primary": reply.fallback_from,
                                              "primary_error": reply.primary_error, "ok": bool(reply.text)})
-        if reply.provider != "none" and not reply.text:
-            run.event("writer", "revision", {"llm_failed": reply.error, "using": "deterministic template text"})
+        down = reply.provider != "none" and not reply.text
+        if down:   # C4.3: LLM down (no key, provider error, timeout, forced): template v1 stays, no v2 duplicate
+            run.event("writer", "revision", {"llm_failed": reply.error, "using": "template v1 stays (no agents draft)"})
         for line in text.splitlines():
             run.event("writer", "token_chunk", {"text": line, "llm": bool(reply.text)})
         run.event("writer", "end", {"attempt": attempt, "max_attempts": rules.MAX_REVISIONS + 1, "chars": len(text),
@@ -225,12 +250,16 @@ def build_graph(tools, run: Run):
                                     "waited_s": reply.waited_s, "latency_s": reply.latency_s,
                                     "fallback_from": reply.fallback_from})
         run.row("writer", t0, f"attempt {attempt}, confidence {s['confidence']}", {"text": text, "llm": bool(reply.text)}, reply.tokens)
-        return {"draft": text, "attempt": attempt, "tokens": s["tokens"] + reply.tokens, "llm_error": err or s.get("llm_error")}
+        return {"draft": text, "attempt": attempt, "tokens": s["tokens"] + reply.tokens, "llm_error": err or s.get("llm_error"),
+                "llm_down": (reply.error or "LLM unavailable") if down else None, "facts": facts}
+
+    def route_after_writer(s: State):
+        return "keep_v1" if s.get("llm_down") else "reviewer"
 
     def reviewer(s: State) -> dict:
         t0, a = _now(), s["alert"]
         run.event("reviewer", "start", {"attempt": s["attempt"]})
-        facts = advisory.build_facts(a, s["evidence"], s["context"], s["update_n"])
+        facts = _facts(s)
         reasons = checks.review(s["draft"], a, facts, s["confidence"])
         tokens, judge = 0, None
         if not reasons and llm.provider() != "none":   # LLM judgement second, only on a draft that passed the rules
@@ -267,6 +296,11 @@ def build_graph(tools, run: Run):
         return {"outcome": "saved", "advisory_id": res["advisory_id"], "version": res.get("version")}
 
     def keep_v1(s: State) -> dict:
+        if s.get("llm_down"):
+            reasons = [f"LLM unavailable: {s['llm_down']}"]
+            run.event("coordinator", "end", {"kept": "template v1", "reasons": reasons, "llm_down": True})
+            run.row("coordinator", _now(), "LLM unavailable: template v1 stays", {"reasons": reasons}, verdict="llm_down")
+            return {"outcome": "v1_kept", "reasons": reasons}
         run.event("coordinator", "end", {"kept": "template v1", "reasons": s["reasons"]})
         run.row("coordinator", _now(), "reviewer failed after max revisions", {"reasons": s["reasons"]}, verdict="fail")
         return {"outcome": "v1_kept"}
@@ -279,7 +313,7 @@ def build_graph(tools, run: Run):
     g.add_conditional_edges("coordinator", route_after_coordinator, ["evidence", "context", END])
     g.add_edge(["evidence", "context"], "reconcile")
     g.add_edge("reconcile", "writer")
-    g.add_edge("writer", "reviewer")
+    g.add_conditional_edges("writer", route_after_writer, ["reviewer", "keep_v1"])
     g.add_conditional_edges("reviewer", route_after_reviewer, ["save_advisory", "writer", "keep_v1"])
     g.add_edge("save_advisory", END)
     g.add_edge("keep_v1", END)
@@ -290,11 +324,12 @@ def run_alert(tools, alert_id: str, force: bool = False, on_event=None) -> dict:
     """Run the graph on one alert. Never raises: any failure leaves template v1 (outcome `v1_kept`, error logged).
     `on_event(row)` is called for every agent event as it happens (CLI progress)."""
     tr = tracing.configure()
+    tools = mcp_client.wrap(tools)      # A4.1: tools over MCP (stdio server) by default, direct-call fallback
     run = Run(tools, uuid.uuid4().hex[:12], alert_id, on_event)
     app = build_graph(tools, run)
     trace_id = uuid.uuid4()   # LangChain uses it as the root run id, so the LangSmith trace can be linked
     base = {"run_id": run.run_id, "alert_id": alert_id, "trace_run_id": str(trace_id) if tr["enabled"] else None,
-            "trace_project": tr["project"]}
+            "trace_project": tr["project"], "tools_via": getattr(tools, "calls", None) or "direct"}
     try:
         a = tools.get_alert(alert_id)
         cfg = {**tracing.run_config(run.run_id, alert_id, a and a["mode"]), "run_id": trace_id}
@@ -308,4 +343,6 @@ def run_alert(tools, alert_id: str, force: bool = False, on_event=None) -> dict:
             "advisory_id": final.get("advisory_id"), "confidence": final.get("confidence"),
             "verdict": final.get("verdict"), "reasons": final.get("reasons", []), "drop_reason": final.get("drop_reason"),
             "attempts": final.get("attempt"), "tokens": final.get("tokens", 0), "draft": final.get("draft"),
+            "llm_down": final.get("llm_down"), "disagreement": final.get("disagreement"),
+            "update_n": final.get("update_n"), "facts": final.get("facts"),
             "events": run.events}

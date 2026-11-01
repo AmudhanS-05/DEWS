@@ -18,9 +18,10 @@ _NUM = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)(\s*%)?")
 _ANY_NUM = re.compile(r"\d+(?:\.\d+)?")
 
 # Check ids, in the order the reviewer reports them.
-CHECKS = ("numbers", "precision", "category", "official_stage", "forecast_category", "certainty", "probability",
-          "horizon", "lead_time", "rain", "missing_value", "raw_field", "abbreviation", "context_kind", "markdown", "simulation", "live_label", "provisional",
-          "uncertain", "length")
+CHECKS = ("numbers", "precision", "category", "official_stage", "category_stage", "threshold", "forecast_category",
+          "certainty", "cause", "probability", "horizon", "lead_time", "rain", "missing_value", "raw_field",
+          "abbreviation", "context_kind", "markdown", "simulation", "live_label", "provisional", "uncertain",
+          "suspect_data", "update", "length")
 
 _PRECISION = re.compile(r"(?<![\w.])\d+\.\d{2,}\s*(?:ft|feet|foot|mm)\b|(?<![\w.])\d+\.\d{3,}")
 _MISSING = re.compile(r"\b(?:null|None|NaN|nan|undefined)\b|(?:^|(?<=[\s:=(]))\?(?=[\s,.;)]|$)", re.M)
@@ -53,6 +54,22 @@ def allowed_abbreviations(facts: dict) -> set[str]:
 # A downstream/nearby gauge is SUPPORTING context: never a cause or predictor of the rise at this gauge.
 _CAUSAL = re.compile(r"\b(?:downstream|nearby|neighbou?ring)\b[^.\n]{0,100}?\b(?:caus\w*|predict\w*|lead(?:s|ing)?\s+to|"
                      r"drive[sn]?|driving|leading\s+(?:signal|indicator)|will\s+(?:push|raise|bring))\b", re.I)
+# A3.1: a category named next to a stage must use that category's official stage ("MAJOR flood stage (7.0 ft)" with
+# MAJOR = 13.0 ft is wrong even though 7.0 is a real number from the facts).
+_CAT_STAGE = re.compile(r"\b(action|minor|moderate|major)\b(?:\s+flood)?(?:\s+(?:stage|level|category))?"
+                        r"\s*(?:\(|:|=|at|of|is)?\s*(\d+(?:\.\d+)?)\s*(?:ft|feet|foot)\b", re.I)
+# Thresholds other than the official NWPS stages (danger/warning level, "flood threshold", made-up category names).
+_THRESHOLD = re.compile(r"\b(?:threshold|danger\s+(?:level|mark|line)|warning\s+(?:level|mark|line)|alert\s+level|"
+                        r"critical\s+(?:level|stage)|evacuation\s+(?:level|stage)|safe\s+level|bankfull)\b"
+                        r"[^.\n\d]{0,30}(\d+(?:\.\d+)?)\s*(?:ft|feet|foot)?", re.I)
+_FAKE_CATEGORY = re.compile(r"\b(?:severe|extreme|critical|catastrophic|red|orange|yellow|amber|danger)\s+"
+                            r"(?:flood\s+)?(?:category|stage|level|threshold|alert\s+level)\b", re.I)
+# The advisory forecasts a crossing; it never asserts why the water rises (no cause in the facts).
+_CAUSE = re.compile(r"\b(?:caused\s+by|causing|due\s+to|because\s+of|as\s+a\s+result\s+of|triggered\s+by|"
+                    r"result(?:ed|s|ing)?\s+from|dam\s+(?:release|failure|break))\b", re.I)
+_CAUSE_OK = re.compile(r"archive|rain\s+data|radar|not\s+available|data\s+(?:are|is)|provisional|revis", re.I)
+_SUSPECT = re.compile(r"sensor\s+fault|questionable|suspect|unreliable|may\s+be\s+(?:wrong|faulty|in\s+error)", re.I)
+_UPDATE = re.compile(r"\bUpdate\s+(\d+)\b", re.I)
 _MARKDOWN = re.compile(r"\*\*|__|^\s*#{1,6}\s", re.M)
 _NA = re.compile(r"not\s+available|unavailable", re.I)
 
@@ -92,12 +109,15 @@ def allowed_numbers(facts: dict) -> tuple[list[float], list[float]]:
             plain.extend(float(x) for x in _ANY_NUM.findall(normalize(v)))
         elif isinstance(v, dict):
             for k, x in v.items():
+                if k == "episode":     # A3.3 guard: earlier alerts are wording only, never a source of numbers
+                    continue
                 walk(x, k, is_pct or key.endswith("_pct"))
         elif isinstance(v, (list, tuple)):
             for x in v:
                 walk(x, key, is_pct)
 
     walk(facts)
+    plain.extend([abs(x) for x in plain if x < 0])   # "-0.5 ft/h": the draft's number token is 0.5 (sign is text)
     plain.extend([1, 2, 3, 4, 5, 6])   # list numbering / "Update n" are checked separately by wording
     return plain, pct
 
@@ -153,10 +173,28 @@ def review_detailed(draft: str, alert: dict, facts: dict, confidence: str = "nor
     level = (alert.get("official_levels") or {}).get(cat)
     if level is not None and not any(abs(n - level) <= 0.06 for n in _nums(draft)):
         out.append(("official_stage", f"official {cat} stage {level} ft is not stated"))
+    lv = alert.get("official_levels") or {}
+    off = [float(v) for c, v in lv.items() if c in rules.CATEGORIES and v is not None]
+    for m in _CAT_STAGE.finditer(draft):
+        c, v = m.group(1).lower(), float(m.group(2))
+        if lv.get(c) is not None and abs(v - float(lv[c])) > 0.06:
+            out.append(("category_stage", f"{c.upper()} is given as {m.group(2)} ft but the official {c.upper()} "
+                                          f"stage is {float(lv[c]):.1f} ft"))
+            break
+    thr = [m.group(0).strip() for m in _THRESHOLD.finditer(draft) if not any(abs(float(m.group(1)) - o) <= 0.06 for o in off)]
+    thr += [m.group(0) for m in _FAKE_CATEGORY.finditer(draft)]
+    if thr:
+        out.append(("threshold", f"threshold that is not an official NWPS stage: {', '.join(repr(t) for t in thr)} "
+                                 "(use only the official ACTION/MINOR/MODERATE/MAJOR stages)"))
     out += _forecast_category(draft, alert)
     for ph in rules.FORBIDDEN_PHRASES:
         if ph in low:
             out.append(("certainty", f"certainty language: '{ph}'"))
+    causes = [m.group(0) for line in re.split(r"(?<=[.!?])\s+|\n", draft) if not _CAUSE_OK.search(line)
+              for m in _CAUSE.finditer(line)]
+    if causes:
+        out.append(("cause", f"cause claim not in the facts: {', '.join(repr(c) for c in causes)} (state the forecast "
+                             "and the signals; do not say why the water rises)"))
     p = alert.get("probability")
     if p is not None and not states_probability(draft, p):
         out.append(("probability", f"probability not stated (write it as a percentage: {round(p * 100)}%)"))
@@ -168,6 +206,10 @@ def review_detailed(draft: str, alert: dict, facts: dict, confidence: str = "nor
     if isinstance(lt, (int, float)):
         if not _near(draft, r"lead[\s-]*time", re.compile(rf"(?<![\d.]){lt:.1f}(?![\d])")):
             out.append(("lead_time", f"lead time not stated (write: Lead time to {cat.upper()}: about {lt:.1f} h)"))
+    elif isinstance(lt, str) and lt.startswith("within"):
+        h = re.escape(lt.split()[1])
+        if not _near(draft, r"lead[\s-]*time", re.compile(rf"within\s+{h}\s*(?:h|hours?)\b")):
+            out.append(("lead_time", f"lead time must follow the forecast (write: Lead time to {cat.upper()}: {lt})"))
     elif not _near(draft, r"lead[\s-]*time", _NA):
         out.append(("lead_time", f"lead time must say 'not available' (write: Lead time to {cat.upper()}: not available)"))
     if (facts.get("context") or {}).get("rain") == "rain data not available" and "rain data not available" not in low:
@@ -185,11 +227,10 @@ def review_detailed(draft: str, alert: dict, facts: dict, confidence: str = "nor
     if unknown:
         out.append(("abbreviation", "unknown abbreviation " + ", ".join(unknown) + " (use only: "
                                     + ", ".join(sorted(ABBREVIATIONS)) + ", or names exactly as in FACTS)"))
-    if (facts.get("context") or {}).get("signal_kind") == "supporting":
-        m = _CAUSAL.search(draft)
-        if m:
-            out.append(("context_kind", f"downstream/nearby gauges are SUPPORTING context only, not a cause or "
-                                        f"predictor: '{m.group(0)}'"))
+    m = _CAUSAL.search(draft)          # A3.1: on every alert, not only when the context kind is supporting
+    if m:
+        out.append(("context_kind", f"downstream/nearby gauges are SUPPORTING context only, not a cause or "
+                                    f"predictor: '{m.group(0)}'"))
     if _MARKDOWN.search(draft):
         out.append(("markdown", "Markdown in a plain-text advisory (remove ** / __ / # headings)"))
     if alert["mode"] == "SIMULATION" and "SIMULATION" not in draft:
@@ -200,6 +241,17 @@ def review_detailed(draft: str, alert: dict, facts: dict, confidence: str = "nor
         out.append(("provisional", "provisional-data note missing (use the word 'provisional')"))
     if confidence == "uncertain" and not ("UNCERTAIN" in draft and "evidence" in low and "context" in low):
         out.append(("uncertain", "uncertain case must say UNCERTAIN and state both the evidence and the context signal"))
+    if facts.get("data_quality") and not _SUSPECT.search(draft):
+        out.append(("suspect_data", "the gauge readings are flagged as a possible sensor fault: say the data are "
+                                    "questionable (" + str(facts["data_quality"])[:120] + ")"))
+    n = facts.get("update_n") or 1
+    ups = [int(m.group(1)) for m in _UPDATE.finditer(draft)]
+    if n > 1 and n not in ups:
+        out.append(("update", f"repeat alert in the episode: start with 'Update {n}:'"))
+    elif n <= 1 and ups:
+        out.append(("update", "first alert of the episode: no 'Update n' wording"))
+    elif any(u != n for u in ups):
+        out.append(("update", f"wrong update number {ups} (this is update {n})"))
     if len(draft) > rules.MAX_ADVISORY_CHARS:
         out.append(("length", f"too long: {len(draft)} > {rules.MAX_ADVISORY_CHARS} characters"))
     return out

@@ -24,8 +24,45 @@ MODEL_NAMES = {"rise_rate": "rise-rate baseline", "persistence": "persistence ba
 
 
 def model_name(m) -> str:
-    """Model id -> plain words for the advisory (raw ids such as rise_rate must not reach the text)."""
-    return MODEL_NAMES.get(m, str(m).replace("_", " ")) if m else NA
+    """Model id -> plain words for the advisory (raw ids such as rise_rate or s3_v0 must not reach the text)."""
+    if not m:
+        return NA
+    if m in MODEL_NAMES:
+        return MODEL_NAMES[m]
+    if str(m).startswith("s3_"):     # ml's trained models (s3_v0 active at 3 h since 31 Oct): probability of MINOR only
+        return "trained S3 model " + str(m)[3:].replace("_", " ")
+    return str(m).replace("_", " ")
+
+
+FAULT_WORDS = {"no_readings": "no readings for 3 h or more", "stuck": "stuck at one value",
+               "step": "a sudden unexplained step", "spike": "a short spike"}
+
+
+def data_quality_note(dq: dict | None) -> str | None:
+    """ml.fault_rules.check_gauge result -> plain words, or None when the readings are not flagged (or not checked)."""
+    if not dq or not dq.get("suspect"):
+        return None
+    why = "; ".join(FAULT_WORDS.get(r, str(r).replace("_", " ")) for r in dq.get("reasons") or []) or "flagged"
+    return f"possible sensor fault at this gauge ({why}); readings are questionable"
+
+
+def episode_summary(history: dict | None, alert_id: str, raised_at, update_n: int) -> dict:
+    """Episodic memory for the writer (A3.3): earlier alerts and advisories of the same flood episode, as WORDS only.
+    Their numbers are deliberately left out: numbers in the advisory come only from the current evidence."""
+    hist = history or {}
+    earlier = [h for h in hist.get("alerts") or [] if h.get("alert_id") != alert_id
+               and str(h.get("raised_at")) < str(raised_at)]
+    advs = [a for a in hist.get("advisories") or [] if a.get("alert_id") != alert_id]
+    out = {"update_n": update_n,
+           "earlier_alert_categories": [str(h.get("category", "")).upper() for h in earlier],
+           "earlier_advisories": [f"{str(a.get('source'))} draft, {a.get('status')}" +
+                                  (", edited by the duty officer" if a.get("edited_text") else "") for a in advs][-3:],
+           "rule": "wording only: say 'Update n' and, if the category rose, 'upgraded from <earlier category>'; never "
+                   "copy a number from an earlier alert"}
+    prev = [c for c in out["earlier_alert_categories"] if c]
+    if prev:
+        out["upgraded_from"] = prev[-1]
+    return out
 
 
 def data_source(mode) -> str:
@@ -90,6 +127,24 @@ def lead_time_h(evidence: dict, alert: dict) -> float | None:
     return round((level - stage) / rate, 1)
 
 
+def lead_time(evidence: dict, alert: dict):
+    """Lead time to the alert's category, consistent with the forecast (replay eval 1 Nov: with s3_v0 the rise-rate
+    estimate said 20.4 h while the model forecast the crossing within 3 h, and the LLM judge rejected it):
+    - the rise-rate estimate (hours, float) when it is within the forecast horizon;
+    - "within N h (model forecast)" when the gauge is below the category, the forecast reaches it within the horizon
+      and the current rise rate alone would be slower (or is not rising);
+    - None ("not available") otherwise (e.g. the gauge is already above the category)."""
+    lt = lead_time_h(evidence, alert)
+    h = alert.get("horizon_h")
+    if lt is not None and (h is None or lt <= h):
+        return lt
+    level = (alert.get("official_levels") or {}).get(alert["category"])
+    cur, fc = alert.get("current_stage"), alert.get("forecast_stage")
+    if None not in (h, level, cur, fc) and cur < level <= fc:
+        return f"within {h:g} h (model forecast)"
+    return lt
+
+
 def forecast_category(alert: dict) -> str | None:
     """Highest official category the forecast stage reaches (may be above the alert's own category)."""
     return rules.category_of(alert.get("forecast_stage"), alert.get("official_levels"))
@@ -101,10 +156,11 @@ def higher_forecast_category(alert: dict) -> str | None:
     return fc if rules.rank(fc) > rules.rank(alert["category"]) else None
 
 
-def build_facts(alert: dict, evidence: dict, context: dict, update_n: int) -> dict:
+def build_facts(alert: dict, evidence: dict, context: dict, update_n: int, episode: dict | None = None,
+                data_quality: dict | None = None) -> dict:
     """The only facts the writer sees, already in report precision (0.1 ft, whole %), missing values spelled out."""
     lv = alert.get("official_levels") or {}
-    lt = lead_time_h(evidence, alert)
+    lt = lead_time(evidence, alert)
     fc_cat, cur_cat = forecast_category(alert), rules.category_of(alert.get("current_stage"), lv)
     probs = {c: pct(evidence.get(f"p_{c}")) for c in rules.CATEGORIES}
     rain = (context or {}).get("rain") or {}
@@ -143,14 +199,31 @@ def build_facts(alert: dict, evidence: dict, context: dict, update_n: int) -> di
                         **({} if rain.get("available") else {"rain_note": rain_note(as_of)}),
                         "neighbours": nb,
                         "impacts": (context or {}).get("impacts") or "no NWS impact statement loaded"},
-            "update_n": update_n, "lead_time_h": NA if lt is None else lt}
+            "update_n": update_n, "lead_time_h": NA if lt is None else lt,
+            **({"episode": episode} if episode and update_n > 1 else {}),
+            **({"data_quality": data_quality_note(data_quality)} if data_quality_note(data_quality) else {}),
+            **({"other_probability": other_probability(alert, evidence)} if other_probability(alert, evidence) else {})}
+
+
+def other_probability(alert: dict, evidence: dict) -> str | None:
+    """When the alert's own category has no probability but the model gives one for another category (s3_v0 gives
+    p_minor only), the plain sentence for it, e.g. 'probability of reaching MINOR: 97%'."""
+    if alert.get("probability") is not None:
+        return None
+    got = [(c, pct(evidence.get(f"p_{c}"))) for c in rules.CATEGORIES
+           if c != alert["category"] and evidence.get(f"p_{c}") is not None]
+    if not got:
+        return None
+    return "; ".join(f"probability of reaching {c.upper()}: {v}%" for c, v in got) + \
+        " (the model gives this category only)"
 
 
 def _num(x) -> str:
     return "not available" if x is None else f"{x:.1f}"
 
 
-def template_text(alert: dict, evidence: dict, context: dict, confidence: str, update_n: int, disagreement: dict | None) -> str:
+def template_text(alert: dict, evidence: dict, context: dict, confidence: str, update_n: int, disagreement: dict | None,
+                  episode: dict | None = None, data_quality: dict | None = None) -> str:
     cat = alert["category"]
     lv = alert["official_levels"]
     name = alert.get("site_name") or alert["site_no"]
@@ -163,7 +236,9 @@ def template_text(alert: dict, evidence: dict, context: dict, confidence: str, u
     head = f"Update {update_n}: " if update_n > 1 else ""
     if sim:
         lines.append("SIMULATION: replay of a historical USGS gauge record, not a real-time event.")
-    lines.append(f"{head}{name}: forecast to reach {reach.upper()} flood stage ({lv[reach]:.1f} ft){within}.")
+    up = (episode or {}).get("upgraded_from") if update_n > 1 else None
+    up_txt = f" (upgraded from {up})" if up and up.lower() in rules.CATEGORIES and rules.rank(up.lower()) < rules.rank(cat) else ""
+    lines.append(f"{head}{name}: forecast to reach {reach.upper()} flood stage ({lv[reach]:.1f} ft){within}{up_txt}.")
     if higher:
         lines.append(f"Alert category: {cat.upper()} ({lv[cat]:.1f} ft); the forecast stage is above the official "
                      f"{higher.upper()} stage, the highest official category it crosses.")
@@ -178,9 +253,13 @@ def template_text(alert: dict, evidence: dict, context: dict, confidence: str, u
     lines.append(f"Forecast: {_num(ft(alert['forecast_stage']))} ft{' in ' + format(h, 'g') + ' h' if h is not None else ''}; "
                  f"probability of reaching {cat.upper()}: {p_txt}. Official stages: action {lv['action']:.1f}, "
                  f"minor {lv['minor']:.1f}, moderate {lv['moderate']:.1f}, major {lv['major']:.1f} ft.")
-    lt = lead_time_h(evidence, alert)
+    op = other_probability(alert, evidence)
+    if op:
+        lines.append(op[0].upper() + op[1:] + ".")
+    lt = lead_time(evidence, alert)
     lines.append(f"Lead time to {cat.upper()}: about {lt:.1f} h at the current rise rate (an estimate)."
-                 if lt is not None else f"Lead time to {cat.upper()}: {NA}.")
+                 if isinstance(lt, float) else f"Lead time to {cat.upper()}: {lt}." if isinstance(lt, str)
+                 else f"Lead time to {cat.upper()}: {NA}.")
     rain = context.get("rain") or {}
     if rain.get("available"):
         lines.append(f"Radar rain over the catchment: {_num(ft(rain['rain_3h']))} mm in 3 h, "
@@ -197,12 +276,37 @@ def template_text(alert: dict, evidence: dict, context: dict, confidence: str, u
                      f"Context: {disagreement['context']}. Re-check at the next window.")
     else:
         lines.append(_context_line(context))
+    dq = data_quality_note(data_quality)
+    if dq:
+        lines.append(f"Data quality: {dq}.")
     if alert.get("provisional_data"):
         lines.append("Data are provisional USGS readings and may be revised.")
     elif alert.get("provisional_data") is False:
         lines.append("Data: approved USGS record.")
     lines.append("Draft: not sent until a duty officer approves it.")
-    return "\n".join(lines)
+    return _fit("\n".join(lines))
+
+
+def _fit(text: str, limit: int = rules.MAX_ADVISORY_CHARS - 20) -> str:
+    """Keep the template under the length limit (s3_v0 probability and sensor-fault lines make it longer): drop the
+    optional parts first, in this order; the checked facts (category, stages, probability, lead time) always stay."""
+    import re
+    steps = (lambda t: re.sub(r" Official stages: action [^\n]*? ft\.", "", t),
+             lambda t: t.replace("\nImpacts: no NWS impact statement loaded.", ""),
+             lambda t: re.sub(r"\nContext: supporting signal only: [^\n]*", "\nContext: supporting signal only "
+                              "(downstream/nearby gauges also rising). No leading signal.", t),
+             lambda t: t.replace("\nDraft: not sent until a duty officer approves it.", ""),
+             lambda t: t.replace(" (radar archive starts Oct 2020)", "").replace("\nData: approved USGS record.", ""),
+             lambda t: t.replace(" at the current rise rate (an estimate)", " (an estimate)")
+             .replace("SIMULATION: replay of a historical USGS gauge record, not a real-time event.",
+                      "SIMULATION: replay of a historical USGS record."),
+             lambda t: re.sub(r"\nImpacts at this level \(NWS\): [^\n]*", "\nImpacts: see the NWS impact statements "
+                              "for this gauge.", t))
+    for f in steps:
+        if len(text) <= limit:
+            break
+        text = f(text)
+    return text
 
 
 def _name(n: dict) -> str:
@@ -236,6 +340,10 @@ def requirements(facts: dict, confidence: str) -> list[tuple[str, str]]:
            ("category", f"Name the alert's official category in capital letters: {cat.upper()}.")]
     if level is not None:
         req.append(("official_stage", f"State the official {cat.upper()} flood stage: {level:.1f} ft."))
+    req.append(("category_stage", "When you give a category's stage, use its official stage exactly: "
+                + ", ".join(f"{c.upper()} {v:.1f} ft" for c, v in lv.items() if v is not None) + "."))
+    req.append(("threshold", "Use no threshold other than these official NWS categories (no 'danger level', "
+                             "'warning level', 'flood threshold' or made-up categories such as 'severe')."))
     fc = facts.get("highest_category_forecast", "")
     if fc.lower() in rules.CATEGORIES and rules.rank(fc.lower()) > rules.rank(cat):
         req.append(("forecast_category",
@@ -245,7 +353,12 @@ def requirements(facts: dict, confidence: str) -> list[tuple[str, str]]:
                     f"forecast reaches {cat.upper()}."))
     req.append(("certainty", "No certainty language (never: " + ", ".join(f"'{p}'" for p in rules.FORBIDDEN_PHRASES)
                 + "); say 'forecast to reach'."))
-    if a.get("probability_pct") == "not available":
+    req.append(("cause", "Do not say why the water rises (no 'caused by', 'due to', 'because of', dam release): "
+                         "the facts give signals, not causes."))
+    if a.get("probability_pct") == "not available" and facts.get("other_probability"):
+        req.append(("probability", f"Write 'probability of reaching {cat.upper()}: not available' and add exactly: "
+                                   f"{facts['other_probability'].split(' (')[0]} (no other percentage)."))
+    elif a.get("probability_pct") == "not available":
         req.append(("probability", "Write 'probability: not available' (the model gives none); write no percentage."))
     else:
         req.append(("probability", f"State the probability as a whole percentage with the % sign: "
@@ -254,6 +367,8 @@ def requirements(facts: dict, confidence: str) -> list[tuple[str, str]]:
         req.append(("horizon", f"State the forecast horizon in hours: within {a['horizon_h']:g} h."))
     lt = facts.get("lead_time_h")
     req.append(("lead_time", f"Write 'Lead time to {cat.upper()}: about {lt:.1f} h' (an estimate)." if isinstance(lt, float)
+                else f"Write 'Lead time to {cat.upper()}: {lt}' (the current rise rate alone is slower; do not "
+                     f"give a rise-rate number)." if isinstance(lt, str) and lt.startswith("within")
                 else f"Write 'Lead time to {cat.upper()}: not available'."))
     if facts["context"].get("rain") == RAIN_NA:
         req.append(("rain", f"Write 'rain data not available' for the radar rain (reason you may add: "
@@ -265,9 +380,9 @@ def requirements(facts: dict, confidence: str) -> list[tuple[str, str]]:
     req.append(("abbreviation", "Capitalised abbreviations only from: " + ", ".join(sorted(ABBREVIATIONS))
                 + " (and gauge names exactly as in FACTS); no other all-caps words."))
     kind = facts["context"].get("signal_kind")
-    if kind == "supporting":
-        req.append(("context_kind", "Context: say the downstream/nearby gauges are a SUPPORTING signal (also rising in "
-                                    "the same window); never say they cause, lead or predict the rise at this gauge."))
+    req.append(("context_kind", ("Context: say the downstream/nearby gauges are a SUPPORTING signal (also rising in "
+                                 "the same window); n" if kind == "supporting" else "N")
+                + "ever say a downstream or nearby gauge causes, leads or predicts the rise at this gauge."))
     req.append(("markdown", "Plain text only: no Markdown (no ** or __, no # headings)."))
     if a.get("mode") == "SIMULATION":
         req.append(("simulation", "Start with the word SIMULATION in capital letters and say it is a replay of a "
@@ -279,11 +394,25 @@ def requirements(facts: dict, confidence: str) -> list[tuple[str, str]]:
     if confidence == "uncertain":
         req.append(("uncertain", "Write UNCERTAIN, then state the gauge evidence signal and the context signal using the "
                                  "words 'evidence' and 'context', and ask for a re-check at the next window."))
+    if facts.get("data_quality"):
+        req.append(("suspect_data", "The gauge readings are flagged as a possible sensor fault ("
+                    + str(facts["data_quality"]) + "): say the data are questionable."))
+    n = facts.get("update_n") or 1
+    req.append(("update", f"Start with 'Update {n}:' (after the SIMULATION label if there is one); this is update {n} "
+                          "of the same flood episode." if n > 1 else "This is the first alert of the episode: no "
+                          "'Update n' wording."))
     req.append(("length", f"At most {rules.MAX_ADVISORY_CHARS - 100} characters in total."))
     return req
 
 
-def llm_user_prompt(facts: dict, confidence: str, disagreement: dict | None, feedback: list[str]) -> str:
+def mask_numbers(text: str) -> str:
+    """Officer-edit examples are wording examples only: every number becomes '#', so none can be copied."""
+    import re
+    return re.sub(r"\d+(?:[.,]\d+)?", "#", text)
+
+
+def llm_user_prompt(facts: dict, confidence: str, disagreement: dict | None, feedback: list[str],
+                    examples: list[dict] | None = None) -> str:
     parts = [f"FACTS (JSON):\n{json.dumps(facts, default=str)}", f"Confidence: {confidence}."]
     if disagreement:
         parts.append(f"The signals disagree. Evidence: {disagreement['evidence']}. Context: {disagreement['context']}.")
@@ -292,6 +421,11 @@ def llm_user_prompt(facts: dict, confidence: str, disagreement: dict | None, fee
                      "(after the SIMULATION label if there is one).")
     parts.append("REQUIREMENTS (each one is checked):\n" +
                  "\n".join(f"{i}. {text}" for i, (_, text) in enumerate(requirements(facts, confidence), 1)))
+    if examples:
+        parts.append("WORDING EXAMPLES from duty-officer edits of earlier advisories (style only; every number is "
+                     "replaced by #; take numbers ONLY from FACTS):\n" +
+                     "\n".join(f"- before: {mask_numbers(e['text'])[:400]}\n  officer's version: "
+                                f"{mask_numbers(e['edited_text'])[:400]}" for e in examples[:2]))
     if feedback:
         parts.append("REVISION FEEDBACK (the reviewer rejected the last draft; fix these): " + " | ".join(feedback))
     return "\n\n".join(parts)
