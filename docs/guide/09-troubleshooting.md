@@ -61,8 +61,9 @@ the console's terminal too.
 (`python -m storage.sink`), or the database volume predates the views and they were never applied (see
 [02 Setup](02-setup.md#2-start-kafka-and-postgresql)).
 
-**`scripts\start_demo.ps1` cannot find Python or Faust.** The script looks for the team's venv at `..\spaenv` next to
-the repo folder. Create the venv there, or start the components by hand ([03](03-run-a-demo.md#1-start-the-pipeline)).
+**`scripts\start_demo.ps1` says `no Python in ...`.** It looks for `.venv` in the repo, then `..\spaenv`. Pass
+`-Venv C:\path\to\venv` or set `$env:DEWS_VENV`, or start the components by hand
+([03](03-run-a-demo.md#1-start-the-pipeline)).
 Its logs are in `gate_output\<name>.log` and `.err`.
 
 **Nodes show "not running".** Expected for components you have not started or that are not built yet (MRMS producer,

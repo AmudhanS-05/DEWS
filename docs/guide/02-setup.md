@@ -126,9 +126,10 @@ into `SMTP_PASSWORD`. Revoke it there when the project ends. Test without sendin
 | `LLM_PROVIDER` | `groq` | `groq`, `gemini`, `ollama`, or `none`. `none` means no LLM: deterministic text, used by all tests |
 | `GROQ_API_KEY` | | free key from <https://console.groq.com> (API Keys) |
 | `GROQ_MODEL` | `openai/gpt-oss-120b` | any chat model your Groq account lists. See [Troubleshooting](09-troubleshooting.md#groq-model-choice) |
+| `GROQ_REASONING_EFFORT` | `low` | `low`, `medium` or `high`; only sent to `openai/gpt-oss-*` models. In the team's runs, `low` about halved time and tokens with no extra revisions |
 | `LLM_FALLBACK` | `gemini` | tried once if the primary call fails, times out or is rate limited: `gemini`, `groq` or `none`. If that also fails, the template advisory (v1) stays |
 | `GEMINI_API_KEY` | | free key from Google AI Studio (<https://aistudio.google.com/apikey>) |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | |
+| `GEMINI_MODEL` | `gemini-3.5-flash-lite` | `gemini-2.5-flash` is closed to new keys (404) |
 | `OLLAMA_MODEL` | `qwen2.5:7b` | only with `LLM_PROVIDER=ollama`: install Ollama, then `ollama pull qwen2.5:7b` |
 | `OLLAMA_HOST` | `http://127.0.0.1:11434` | not in `.env.example`; add it only if Ollama runs elsewhere |
 
@@ -173,9 +174,8 @@ To see the console without Docker: `python -m dashboard.flow_monitor --demo` (sc
 
 **One-command start (Windows):** `powershell -ExecutionPolicy Bypass -File scripts\start_demo.ps1` starts the Docker
 stack, three Faust workers, the sink, forecaster, notifier, live producer and console in the background, with logs in
-`gate_output\`. `scripts\stop_demo.ps1` stops them (`-KeepDocker`, `-KeepConsole`). **Note:** the scripts currently
-look for the team's venv at `..\spaenv` (next to the repo folder), not `.venv`. Until that is configurable, create the
-venv there or start the parts by hand as in [03](03-run-a-demo.md).
+`gate_output\`. `scripts\stop_demo.ps1` stops them (`-KeepDocker`, `-KeepConsole`). The script uses `.venv` in
+the repo if it exists, otherwise `..\spaenv`; pass `-Venv C:\path\to\venv` (or set `DEWS_VENV`) for anything else.
 
 ## Linux and macOS
 
