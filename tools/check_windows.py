@@ -17,7 +17,10 @@ from collections import Counter, defaultdict
 from common import config
 
 
-def summarise(msgs: list[dict]) -> dict:
+def summarise(msgs: list[dict], resets: dict | None = None) -> dict:
+    """`resets` (tools/reset_replay.py) leaves out replay windows older than their gauge's reset: those dates were cleared to run again."""
+    from tools.reset_replay import superseded
+    msgs = [m for m in msgs if m.get("type") != "reset" and not (resets and superseded(m.get("site_no"), m.get("mode"), m.get("_ts", 0), resets))]
     firsts: Counter = Counter()
     revisions = zero = 0
     starts = defaultdict(set)
@@ -59,13 +62,14 @@ def main(argv=None):
                 break
             if m.error():
                 continue
-            d = json.loads(m.value())
+            d = {**json.loads(m.value()), "_ts": m.timestamp()[1] / 1000}
             if (a.mode and d.get("mode") != a.mode) or (a.site and d.get("site_no") != a.site):
                 continue
             msgs.append(d)
     finally:
         c.close()
-    r = summarise(msgs)
+    from tools.reset_replay import load_resets
+    r = summarise(msgs, load_resets())
     print(f"{r['messages']} messages · {r['windows']} distinct windows · {r['series']} gauge series · "
           f"{r['revisions']} revisions · {r['zero_filled']} zero-filled · {r['gaps']} gaps")
     if r["duplicates"]:

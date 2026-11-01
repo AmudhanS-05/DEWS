@@ -24,6 +24,7 @@ from confluent_kafka import OFFSET_BEGINNING, Consumer, TopicPartition
 from common import config
 from common.progress import Task
 from common.timeutil import to_epoch
+from tools.reset_replay import load_resets, superseded
 
 
 def read_topic(topic: str, stall_s: float = 20.0) -> list[dict]:
@@ -49,7 +50,7 @@ def read_topic(topic: str, stall_s: float = 20.0) -> list[dict]:
             last = time.monotonic()
             if m.error():
                 continue
-            out.append(json.loads(m.value()))
+            out.append({**json.loads(m.value()), "_ts": m.timestamp()[1] / 1000})
             if m.offset() + 1 >= end.get(m.partition(), 0):
                 end.pop(m.partition(), None)
     finally:
@@ -98,10 +99,13 @@ def main():
     bad = 0
     with Task("check_sink: topics vs PostgreSQL", total=len(CHECKS), unit=" tables") as t:
         conn = psycopg2.connect(config.PG_DSN, connect_timeout=5)
+        resets = load_resets()
         for i, (table, (topics, keyf, sql, mode_idx)) in enumerate(CHECKS.items(), 1):
             tk = set()
             for tp in topics:
                 for m in read_topic(tp):
+                    if superseded(m.get("site_no"), m.get("mode"), m["_ts"], resets):
+                        continue
                     try:
                         k = keyf(m)
                     except (KeyError, ValueError, TypeError):
