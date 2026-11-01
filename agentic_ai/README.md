@@ -21,6 +21,12 @@ coordinator -> [evidence || context] -> reconcile -> writer -> reviewer --pass--
 | writer | LLM draft from the facts (or the deterministic template when there is no LLM or it fails) | `llm.py`, `advisory.py` |
 | reviewer | deterministic checks first (`checks.py`), then an LLM judgement on a draft that passed them | `checks.py`, `llm.py` |
 
+**Tools over MCP (A4.1).** The agents reach their tools through the Model Context Protocol: `run_alert` wraps the
+database `Tools` in `mcp_client.McpTools`, which starts `python -m agentic_ai.mcp_server` (stdio) with the same
+database and calls each tool there; if the server cannot start, a call errors or times out (10 s), the same call is
+made directly (`via: direct (mcp failed: ...)` in the event). The run log (`agent_events`, `agent_runs`) is written
+directly, not as an MCP tool. The CLI's last line says how many calls went via MCP.
+
 Every step writes `agent_events` (drives the console's Agents tab) and `agent_runs`; the result is a row in
 `advisories`. Any failure (tool crash, LLM down, reviewer still failing) leaves template v1 in place.
 
@@ -87,6 +93,9 @@ category's stage), `threshold` (danger/warning levels or made-up categories inst
 |---|---|
 | `graph.py` | the LangGraph graph, event log, `run_alert()` (never raises) |
 | `tools.py` | read tools, `anchor_window`, writes (`save_advisory`, `log_agent_run`, `log_agent_event`) |
+| `mcp_server.py` | stdio MCP server (`python -m agentic_ai.mcp_server`) wrapping the 12 read tools + `save_advisory` |
+| `mcp_client.py` | the graph's MCP client (`AGENT_TOOLS=mcp`, default) with a direct-call fallback per call |
+| `eval/` | A3.1 seeded-error catch rate, A4.2 evaluation on replayed alerts, A5.1 ablation (tables in `eval/`) |
 | `advisory.py` | facts in report precision, the template writer, writer prompt + requirements |
 | `checks.py` | deterministic reviewer checks (`CHECKS`), Unicode -> ASCII normalisation |
 | `rules.py` | official category helpers, direction and disagreement rules, thresholds, forbidden phrases |
@@ -120,6 +129,7 @@ python -m pytest -q tests/agents             # always LLM_PROVIDER=none, no netw
 | `LLM_FALLBACK` | `gemini` / `groq` / `none`: a failed call is retried once there, then the template text is used |
 | `LANGSMITH_TRACING=true` + `LANGSMITH_API_KEY` | optional tracing; the CLI prints the trace link |
 | `PG_DSN` | PostgreSQL (default the docker one) |
+| `AGENT_TOOLS` | `mcp` (default: the agents' tool calls go through the stdio MCP server, started once per process, about 1 s) or `direct` (plain Python calls). Any MCP failure falls back to the direct call for that call; each tool_call event says `via` |
 
 The seed: `python -m agentic_ai.seed` writes the measured USGS gauge-height record for DRWT2 (Onion Creek near
 Driftwood, 08158700), the downstream gauge 08159000 and nearby 08158840, 2019-05-02..05, as core's own windowing

@@ -7,3 +7,4 @@ langchain-google-genai==4.4.2  # LLM_PROVIDER=gemini / LLM_FALLBACK=gemini (Goog
 langchain-ollama==1.1.0      # LLM_PROVIDER=ollama (qwen2.5:7b, optional local provider)
 langsmith==0.14.16           # optional tracing: LANGSMITH_TRACING=true + LANGSMITH_API_KEY in .env
 psycopg2-binary==2.9.9        # same pin as requirements.txt (Python 3.12); on Python 3.13 use 2.9.10 or later (no 2.9.9 wheel)
+mcp==2.3.0                   # A4.1 stdio MCP server/client for the agent tools (2.x API: mcp.server.mcpserver.MCPServer)

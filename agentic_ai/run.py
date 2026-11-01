@@ -180,6 +180,12 @@ def main(argv=None) -> int:
         if res.get("draft") and res["outcome"] != "dropped":
             print("\n" + res["draft"] + "\n")
         print(final_line(res, tracing.trace_url(res.get("trace_run_id"), res.get("trace_project"))), flush=True)
+        tv = res.get("tools_via")
+        if isinstance(tv, dict):
+            print(f"tools via MCP (agentic_ai.mcp_server, stdio): {tv['mcp']} call(s), direct fallback {tv['fallback']}",
+                  flush=True)
+        else:
+            print("tools: direct Python calls (AGENT_TOOLS=direct)", flush=True)
         return 0 if res["outcome"] in ("saved", "dropped") else 1
     consume(tools, args.force)
     return 0

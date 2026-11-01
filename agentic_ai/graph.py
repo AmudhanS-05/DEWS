@@ -17,7 +17,7 @@ from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from agentic_ai import advisory, checks, llm, rules, tracing
+from agentic_ai import advisory, checks, llm, mcp_client, rules, tracing
 
 
 class State(TypedDict, total=False):
@@ -88,7 +88,7 @@ class Run:
         res = getattr(self.tools, name)(*args, **kwargs)
         info = {"tool": name, "args": [str(a) for a in args] + [f"{k}={v}" for k, v in kwargs.items()],
                 "rows": len(res) if isinstance(res, (list, dict)) else (0 if res is None else 1),
-                "ms": round((time.monotonic() - t0) * 1000)}
+                "ms": round((time.monotonic() - t0) * 1000), "via": getattr(self.tools, "last_via", "direct")}
         self.tool_calls.setdefault(agent, []).append(info)
         self.event(agent, "tool_call", info)
         return res
@@ -312,11 +312,12 @@ def run_alert(tools, alert_id: str, force: bool = False, on_event=None) -> dict:
     """Run the graph on one alert. Never raises: any failure leaves template v1 (outcome `v1_kept`, error logged).
     `on_event(row)` is called for every agent event as it happens (CLI progress)."""
     tr = tracing.configure()
+    tools = mcp_client.wrap(tools)      # A4.1: tools over MCP (stdio server) by default, direct-call fallback
     run = Run(tools, uuid.uuid4().hex[:12], alert_id, on_event)
     app = build_graph(tools, run)
     trace_id = uuid.uuid4()   # LangChain uses it as the root run id, so the LangSmith trace can be linked
     base = {"run_id": run.run_id, "alert_id": alert_id, "trace_run_id": str(trace_id) if tr["enabled"] else None,
-            "trace_project": tr["project"]}
+            "trace_project": tr["project"], "tools_via": getattr(tools, "calls", None) or "direct"}
     try:
         a = tools.get_alert(alert_id)
         cfg = {**tracing.run_config(run.run_id, alert_id, a and a["mode"]), "run_id": trace_id}
