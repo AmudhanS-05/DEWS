@@ -105,6 +105,23 @@ windows flagged** (first feature set: 30 %) and 10.4 flag episodes per gauge-yea
 gaps and flat runs are common in normal data while floods are rare, so a rarity detector flags floods. The physical
 rules above use the readings and independent evidence instead.
 
+## Results for the paper (one paragraph each, measured numbers only)
+**Forecaster.** On the 2024-2026 test period (63 official minor-stage crossings at 38 gauges, 23 storms), the pooled
+stage-only model s3_v0 at a 3 h horizon detected 29 crossings with 150 false alarms, against 33 with 224 for the
+rise-rate rule: comparable detection with about a third fewer false alarms. It gave no extra warning (median 0.42 h
+vs 0.50 h before the crossing) and did not improve on rise-rate at the other horizons. Adding MRMS radar rain (v1)
+did not help on the rain-era rows (3 h F1 0.24 vs 0.31 for v0), and the rain radius (5, 10, 25 km) made no consistent
+difference. The model is active at 3 h only; every other horizon uses the rise-rate rule.
+
+**Sensor faults.** Physical rules on the raw readings, with neighbouring gauges and radar rain as independent
+evidence, caught 100 % of injected dropouts, 81 % of step offsets and 30 % of stuck sensors while flagging at most
+0.49 % of real flood windows; a spike rule caught every injected spike but flagged 1.07 % of flood windows and was
+not shipped. An Isolation Forest on hourly features flagged 11 % of flood windows and is reported as a negative
+result. Slow drift was not detectable from stage alone.
+
+**Earlier baseline correction.** The 3 h rise-rate F1 values first quoted (0.65 / 0.26 / 0.64 / 0.41) contained a 1 h
+look-ahead; the bar used throughout is the harness value, pooled F1 0.28 over 2015-2025 (ml/REFERENCE_BASELINES.md).
+
 ## Files and rebuild
 Committed (3.5 MB, `git add -f`): `ml/models/s3_v0_h{1..6}.joblib`, `ml/models/s3_v1_r10_h{1..6}.joblib`,
 `ml/models/anomaly_if.joblib` (negative result, kept for reproduction), `ml/models/fault_rules.json`, checksums in
