@@ -26,8 +26,9 @@ only, null for SIMULATION). Heartbeat (live only, every poll): `site_no`, `now`/
 **`aggregates.window`** (built): `site_no`, `series`, `mode`, `window_start`, `window_end`, `window_start_ts`,
 `n_readings` (0 = zero-filled), `revision`, `stage_last`, `stage_max`, `stage_min`, `rise_rate_ft_per_h`,
 `carried_forward`, `provisional`, `last_reading_ts`, `fetched_ts`, `ingest_ts` (when the windowing worker read that
-last reading; added 31 Oct, null in a zero-filled window), `window_close_time`; from S2 also `rain_1h`, `rain_3h`,
-`rain_6h`. Source of truth: `streams/windowing.py`.
+last reading; added 31 Oct, null in a zero-filled window), `window_close_time`; from S2 (built 1 Nov) also `rain_1h`, `rain_3h`,
+`rain_6h`, `rain_24h` (mm, sum of the 10 km hourly means for the hours ENDING in (window_end - N h, window_end]; null
+unless every one of the N hours is known, never 0 for unknown) and `rain_product`. Late rain never re-emits a window. Source of truth: `streams/windowing.py`.
 
 **`forecasts.stage`** (S1): one record per gauge per window.
 `site_no`, `mode`, `window_start`, `model` (`rise_rate` | `persistence` | model name), `horizon_h`, `forecast_stage`,

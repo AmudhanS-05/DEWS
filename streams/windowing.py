@@ -19,6 +19,19 @@ series_state = {"cur_start": float|None, "cur": [[ts, value, provisional, fetche
                 "closed": {"<start>": [[ts, value, provisional, fetched_ts, ingest_ts], ...]},
                 "last_stage": float|None, "mode": "LIVE"|"SIMULATION"}
 fetched_ts and ingest_ts are the latency trace of a reading. State saved before they existed holds 3-item readings.
+
+Rain (C2.2): the same site state holds one extra entry, RAIN_KEY = "_rain" (never a USGS series id):
+    {"hours": {"<hour_end_ts>": rain_mm_10km | None}, "mode": ..., "late": n, "product": ...}
+filled by on_rain() from rain.mrms / replay.rain (same key = site_no, so the same partition and the same state).
+attach_rain() adds rain_1h, rain_3h, rain_6h, rain_24h to a window when it is emitted. Rule:
+  - event time: window [ws, ws + w) gets the hours ENDING in (end - N h, end], end = ws + w (an MRMS file is valid at
+    the end of its accumulation hour). rain_Nh = sum when all N hours are present, else None (never a 0 for
+    "unknown"). An hour with no radar coverage (rain_mm null) counts as missing.
+  - late rain never re-emits a window: rain for an hour whose window was already emitted is stored (it still counts in
+    later windows' 3/6/24 h sums) and counted in "late"; the emitted window keeps what it had. So "no window emitted
+    twice" is unchanged. A window re-emitted as a revision (late gauge reading) takes the rain known at that time.
+  - live and replay never mix: the Faust app keeps them in separate tables and accepts only rain whose mode matches.
+on_reading() / aggregate() are unchanged, so ml.backtest (which calls on_reading without rain) is not affected.
 """
 from __future__ import annotations
 
@@ -125,8 +138,88 @@ def on_tick(site_no: str, site_state: dict, now_ts: float, w: int, grace_s: floa
     including empty ones (zero-fill). Returns (site_state, emitted)."""
     emitted = []
     for series, st in site_state.items():
+        if series == RAIN_KEY:
+            continue
         if st["mode"] != "LIVE" or st["cur_start"] is None:
             continue
         while st["cur_start"] + w + grace_s <= now_ts:
             emitted.append(_close_current(site_no, series, st, w, max_late_windows))
     return site_state, emitted
+
+
+# ---- rain (C2.2) --------------------------------------------------------------------------------------------------
+
+RAIN_KEY = "_rain"
+RAIN_SUMS_H = (1, 3, 6, 24)
+RAIN_KEEP_H = 24 + 6          # hours kept behind the oldest open window: 24 h sums plus late-window revisions
+RAIN_MAX_HOURS = 2000         # hard cap per site (a replay may preload rain for days ahead)
+
+
+def rain_value(r: dict) -> float | None:
+    v = r.get("rain_mm_10km", r.get("rain_mm"))
+    return None if v is None else float(v)
+
+
+def on_rain(site_state: dict, r: dict, w: int, mode: str) -> tuple[dict, bool]:
+    """Store one rain record (one gauge-hour). Returns (site_state, late) where late = the window ending at that
+    hour was already emitted (it is not re-emitted; see the module doc)."""
+    rs = site_state.setdefault(RAIN_KEY, {"hours": {}, "mode": mode, "late": 0, "product": None})
+    end = float(r["hour_end_ts"])
+    rs["hours"][str(int(end))] = rain_value(r)
+    rs["product"] = r.get("product", rs.get("product"))
+    opens = [st["cur_start"] for k, st in site_state.items() if k != RAIN_KEY and st.get("cur_start") is not None]
+    late = bool(opens) and end <= min(opens)          # window [end - w, end) closed before this rain arrived
+    if late:
+        rs["late"] = rs.get("late", 0) + 1
+    if opens:
+        keep_from = min(opens) - RAIN_KEEP_H * 3600
+        for k in [k for k in rs["hours"] if float(k) < keep_from]:
+            del rs["hours"][k]
+    if len(rs["hours"]) > RAIN_MAX_HOURS:
+        for k in sorted(rs["hours"], key=float)[:len(rs["hours"]) - RAIN_MAX_HOURS]:
+            del rs["hours"][k]
+    return site_state, late
+
+
+def rain_sums(site_state: dict, window_end_ts: float) -> dict:
+    hours = (site_state.get(RAIN_KEY) or {}).get("hours") or {}
+    end = int(window_end_ts) - int(window_end_ts) % 3600
+    out = {}
+    for n in RAIN_SUMS_H:
+        vals = [hours.get(str(end - k * 3600)) for k in range(n)]
+        out[f"rain_{n}h"] = None if any(v is None for v in vals) else round(sum(vals), 3)
+    return out
+
+
+def attach_rain(site_state: dict, agg: dict, w: int) -> dict:
+    """Add rain_1h/3h/6h/24h (and the product) to an emitted window, from the rain known now."""
+    agg.update(rain_sums(site_state, float(agg["window_start_ts"]) + w))
+    agg["rain_product"] = (site_state.get(RAIN_KEY) or {}).get("product")
+    return agg
+
+
+def on_record(state: dict, msg: dict, expected_mode: str, now: float, w: int, grace_s: float,
+              max_late_windows: int = 3) -> tuple[dict, list[dict], list[dict]]:
+    """Everything the Faust agent does for one record of its two topics (gauge + rain of ONE mode):
+    reading / gauge heartbeat / rain / rain heartbeat -> (state, emitted windows with rain, deadletter records)."""
+    site = msg.get("site_no")
+    kind = msg.get("type", "reading")
+    if kind == "rain":
+        if msg.get("mode", "LIVE") != expected_mode:
+            return state, [], [{"reason": f"mode_mismatch: {msg.get('mode')} on the {expected_mode} stream",
+                                "record": msg}]
+        state, _late = on_rain(state, msg, w, expected_mode)
+        return state, [], []
+    dlq: list[dict] = []
+    if kind == "heartbeat":
+        if "product" in msg:          # rain producer heartbeat: never closes (zero-fills) gauge windows
+            return state, [], []
+        state, emitted = on_tick(site, state, float(msg["now_ts"]), w, grace_s, max_late_windows)
+    else:
+        state, emitted, too_late = on_reading(state, {**msg, "ingest_ts": now}, w, msg.get("mode", "LIVE"),
+                                              max_late_windows)
+        if too_late:
+            dlq.append({"reason": "too_late", "record": msg})
+    for agg in emitted:
+        attach_rain(state, agg, w)
+    return state, emitted, dlq
