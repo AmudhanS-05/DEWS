@@ -130,7 +130,22 @@ python -m agentic_ai.drill [--alert-id ID] [--no-key]   # LLM down: PASS/FAIL li
 ```
 Use a scratch database for `evaluate` (it loads 8 replayed floods, mode SIMULATION, and writes agent rows). Live runs
 are spaced 65 s (`--gap`) for the Groq free tier; 28 live runs take about 30 min. Results: `eval/agent_eval.md`,
-`eval/ablation.md`; raw per-run records `eval/runs.jsonl`.
+`eval/ablation.md`; raw per-run records `eval/runs.jsonl`. Current tables: replay set rebuilt through core 6b105c1
+(alerts raised by the model's probability, `alert_by_model`): 12 floods, 9 alerts. The earlier tables (stage-forecast
+rule, 8 floods, 14 alerts) are kept in `eval/before_alert_by_model/` with run labels `agent_eval_before_alert_by_model:*`.
+
+| live Groq, replay only | multi-agent now | single agent now | multi before | single before |
+|---|---|---|---|---|
+| alerts | 9 | 9 | 14 | 14 |
+| pass all deterministic checks | 9/9 | 6/9 | 14/14 | 7/14 |
+| saved on attempt 1 | 8/9 | - | 14/14 | - |
+| numbers in the evidence | 142/142 | 70/70 | 176/176 | 124/125 |
+| UNCERTAIN where needed | 8 of 8 | 8 of 8 | 2 of 2 | 0 of 2 |
+| tokens median / time median | 3376 / 2.7 s | 2731 / 1.86 s | 3056 / 2.38 s | 2514 / 1.67 s |
+
+What changed between the two: the alert rule (model probability instead of stage forecast; alerts MINOR only, 8 of 9
+with the stage forecast below MINOR, so UNCERTAIN), 4 more floods, and the single agent's rules gained the
+model-probability rule.
 
 ## Set up and run (Windows laptop, PowerShell, repo folder)
 

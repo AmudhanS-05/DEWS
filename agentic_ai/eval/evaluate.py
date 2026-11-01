@@ -259,6 +259,15 @@ def _med(xs):
 
 def summarise(rows: list[dict], cfg: str) -> dict:
     rs = [r for r in rows if r["config"] == cfg]
+    ref = {r["alert_id"]: r for r in rows if r.get("facts") and r.get("ref_alert")}   # same alert, any config
+
+    def fx(r):
+        return (r.get("facts") or (ref.get(r["alert_id"]) or {}).get("facts") or {})
+
+    def ra(r):
+        return (r.get("ref_alert") or (ref.get(r["alert_id"]) or {}).get("ref_alert") or {})
+    needs = [r for r in rs if fx(r).get("forecasts_disagree") or r["disagreement"]
+             or (ref.get(r["alert_id"]) or {}).get("disagreement")]
     texts = [r for r in rs if r["text"]]
     nums = sum(r["numbers"] for r in texts)
     return {"config": cfg, "alerts": len(rs), "texts": len(texts),
@@ -274,8 +283,9 @@ def summarise(rows: list[dict], cfg: str) -> dict:
             "time_max_s": max((r["elapsed_s"] or 0 for r in rs), default=None),
             "attempts_mean": round(statistics.mean([r["attempts"] or 0 for r in rs]), 2) if rs else None,
             "disagreements": sum(1 for r in rs if r["disagreement"]),
-            "model_rule": sum(1 for r in rs if (r.get("ref_alert") or {}).get("alert_rule") == "alert_by_model"),
-            "forecasts_disagree": sum(1 for r in rs if (r.get("facts") or {}).get("forecasts_disagree")),
+            "model_rule": sum(1 for r in rs if ra(r).get("alert_rule") == "alert_by_model"),
+            "forecasts_disagree": sum(1 for r in rs if fx(r).get("forecasts_disagree")),
+            "needs_uncertain": len(needs), "uncertain_where_needed": sum(1 for r in needs if r["uncertain_in_text"]),
             "uncertain_texts": sum(1 for r in rs if r["uncertain_in_text"]),
             "judge_pass": sum(1 for r in rs if (r.get("judge") or "").upper().startswith("PASS")),
             "judge_fail": sum(1 for r in rs if (r.get("judge") or "").upper().startswith("FAIL")),
@@ -356,6 +366,8 @@ def _write_md(rows, sums, cr) -> None:
     row("of these, stage forecast below the category (forecasts disagree)", lambda s: str(s["forecasts_disagree"]))
     row("disagreements (evidence vs leading context)", lambda s: str(s["disagreements"]))
     row("UNCERTAIN in the text", lambda s: str(s["uncertain_texts"]))
+    row("UNCERTAIN where needed (forecasts or signals disagree)",
+        lambda s: f"{s['uncertain_where_needed']} of {s['needs_uncertain']}")
     row("tokens per alert (median)", lambda s: str(s["tokens_median"]))
     row("tokens total", lambda s: str(s["tokens_total"]))
     row("v1 -> v2 time per alert, median s (max)", lambda s: f"{s['time_median_s']} ({s['time_max_s']})")
@@ -391,13 +403,13 @@ def _write_md(rows, sums, cr) -> None:
               f"| numbers found in the evidence | {_pct(a['numbers_ok'], a['numbers'])} | {_pct(b['numbers_ok'], b['numbers'])} |",
               f"| tokens per alert (median) | {a['tokens_median']} | {b['tokens_median']} |",
               f"| time per alert, median s (max) | {a['time_median_s']} ({a['time_max_s']}) | {b['time_median_s']} ({b['time_max_s']}) |",
-              f"| UNCERTAIN where the signals disagree | {a['uncertain_texts']} of {a['disagreements']} | "
-              f"{b['uncertain_texts']} of {a['disagreements']} |",
+              f"| UNCERTAIN where needed (forecasts or signals disagree) | {a['uncertain_where_needed']} of "
+              f"{a['needs_uncertain']} | {b['uncertain_where_needed']} of {b['needs_uncertain']} |",
               f"| checks failed (any text) | {', '.join(a['failed_checks']) or 'none'} | {', '.join(b['failed_checks']) or 'none'} |",
-              "", "Prompt correction (1 Nov): a first single-agent run told it to give the rise-rate lead time, "
+              "", "Earlier prompt correction (1 Nov, before alert_by_model): a first single-agent run told it to give the rise-rate lead time, "
               "while the checks require 'within N h (model forecast)' when the rise rate is slower than the "
               "forecast; it passed 1/14 (lead_time failed 12). That run is kept in runs_single_v1.jsonl and not "
-              "used here; the table above is the re-run with the same lead-time rule as the multi-agent writer.",
+              "used; that table was re-run with the same lead-time rule as the multi-agent writer.",
               "", "A single-agent text that fails a check would go to the officer only as an unchecked draft; in the "
               "multi-agent graph a failing draft is revised or template v1 stays.", ""]
         single_fail = {}
@@ -444,8 +456,9 @@ def _before_section(a: dict, b: dict) -> list[str]:
     return ["## Before and after core's alert_by_model rule", "",
             "Before: 8 floods, 14 alerts (7 ACTION, 7 MINOR), all raised by the stage forecast crossing a category "
             "(before_alert_by_model/). After (tables above): an alert is raised when the model's p_minor >= tau at "
-            "3 h; the replay set was rebuilt through core 6b105c1 with 4 more floods (12 floods); alerts are MINOR "
-            "only. The single agent's rules gained the model-probability rule so both systems get the same "
+            "3 h; the replay set was rebuilt through core 6b105c1 with 4 more floods (12 floods replayed; 9 raised an "
+            "alert, DRWT2 2019, KRRT2 2025 and LLAT2 2024 raised none); alerts are MINOR only, and in 8 of the 9 "
+            "the model's own stage forecast stays below MINOR (the two forecasts disagree). The single agent's rules gained the model-probability rule so both systems get the same "
             "instructions. Same LLM and checks.", "",
             "| | multi before | multi now | single before | single now |", "|---|---|---|---|---|",
             f"| alerts | {oa['alerts']} | {a['alerts']} | {ob['alerts']} | {b['alerts']} |",
@@ -457,6 +470,9 @@ def _before_section(a: dict, b: dict) -> list[str]:
             f"{_pct(ob['numbers_ok'], ob['numbers'])} | {_pct(b['numbers_ok'], b['numbers'])} |",
             f"| tokens median | {oa['tokens_median']} | {a['tokens_median']} | {ob['tokens_median']} | {b['tokens_median']} |",
             f"| time median s | {oa['time_median_s']} | {a['time_median_s']} | {ob['time_median_s']} | {b['time_median_s']} |",
+            f"| UNCERTAIN where needed | {oa['uncertain_where_needed']} of {oa['needs_uncertain']} | "
+            f"{a['uncertain_where_needed']} of {a['needs_uncertain']} | {ob['uncertain_where_needed']} of "
+            f"{ob['needs_uncertain']} | {b['uncertain_where_needed']} of {b['needs_uncertain']} |",
             ""]
 
 
