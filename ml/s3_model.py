@@ -255,6 +255,68 @@ def cmd_refit_reg(a):
     print(f"done -> {a.out}; models rewritten in {a.models_dir} in {timer.elapsed()}")
 
 
+def fit_reg_variant(df, feats: list[str], h: int, variant: str, seed: int = SEED):
+    """Stage-change regressors compared on validation (1 Nov 2026):
+    mean_uniform  mean change, uniform 15 % sample (the 1 Nov fix)
+    q90_uniform   0.9 quantile of the change, same sample
+    mean_event    mean change on the classifier's event-weighted rows (all positives and pre-crossing rows + 20 %)
+    q90_event     0.9 quantile on the event-weighted rows"""
+    from sklearn.ensemble import HistGradientBoostingRegressor
+    loss = {"loss": "quantile", "quantile": 0.9} if variant.startswith("q90") else {}
+    if variant.endswith("uniform"):
+        ok = df[f"y_stage_{h}"].notna().to_numpy()
+        rng = np.random.default_rng(seed + 100 + h)
+        d = df[ok & (rng.random(len(df)) < 0.15)]
+        w = None
+    else:
+        d = train_rows(df, h)
+        d = d[d[f"y_stage_{h}"].notna()]
+        w = d["wt"].to_numpy()
+    m = HistGradientBoostingRegressor(max_iter=300, learning_rate=0.05, max_leaf_nodes=31, random_state=SEED, **loss)
+    return m.fit(d[feats], d[f"y_stage_{h}"] - d["stage"], sample_weight=w)
+
+
+REG_VARIANTS = ("mean_uniform", "q90_uniform", "mean_event", "q90_event")
+
+
+def cmd_reg_variants(a):
+    """Choose the shipped stage regressor on VALIDATION only (fit t < 2021, validate 2021-2023; test untouched)."""
+    import joblib
+    import pandas as pd
+    from ml.progress import Timer, bar
+    timer = Timer()
+    h = a.h
+    df, info = _load()
+    fit_part = df[df.t < ts(VAL_START)]
+    val = df[(df.t >= ts(VAL_START)) & (df.t < ts(TRAIN_END)) & df[f"y_stage_{h}"].notna()]
+    m = joblib.load(os.path.join(a.models_dir, f"s3_v0_h{h}.joblib"))           # classifier fit < 2021
+    feats = m["features"]
+    p = m["clf"].predict_proba(val[feats])[:, 1]
+    cur, y, minor = val.stage.to_numpy(), val[f"y_stage_{h}"].to_numpy(), val.minor.to_numpy()
+    alert = (p >= m["tau"]) & (cur < minor)
+    rising = (val.d1h.to_numpy() > 0.5) & (cur < minor)
+    above = cur >= minor
+    rows = []
+    print(f"ml.s3_model reg-variants h={h}: fit {len(fit_part)} windows (t < {VAL_START}), validate {len(val)} "
+          f"(2021-2023): {int(alert.sum())} model-alert windows, {int(rising.sum())} rising windows below minor, "
+          f"{int(above.sum())} above minor")
+    for v in bar(REG_VARIANTS, "variants"):
+        reg = fit_reg_variant(fit_part, feats, h, v)
+        f = cur + reg.predict(val[feats])
+        e = f - y
+        rows.append({"variant": v, "horizon_h": h,
+                     "agree_on_alert_windows": round(float((f[alert] >= minor[alert]).mean()), 3) if alert.any() else None,
+                     "mae_ft": round(float(np.abs(e).mean()), 4),
+                     "mae_above_minor_ft": round(float(np.abs(e[above]).mean()), 4),
+                     "mean_underprediction_rising_ft": round(float(np.clip(y[rising] - f[rising], 0, None).mean()), 3),
+                     "median_error_rising_ft": round(float(np.median(e[rising])), 3),
+                     "n_alert": int(alert.sum()), "n_rising": int(rising.sum())})
+    pd.DataFrame(rows).to_csv(a.out, index=False)
+    for r in rows:
+        print("  " + "  ".join(f"{k}={v}" for k, v in r.items()))
+    print(f"done -> {a.out} in {timer.elapsed()}")
+
+
 # ---------------- CLI ----------------
 
 def _load():
@@ -508,8 +570,13 @@ def main(argv=None):
     rr.add_argument("--horizons", default="1,2,3,4,5,6")
     rr.add_argument("--models-dir", default="ml/models")
     rr.add_argument("--out", default="ml/figures/s3_stage_mae.csv")
+    rv = sub.add_parser("reg-variants")
+    rv.add_argument("--h", type=int, default=3)
+    rv.add_argument("--models-dir", default="ml/models")
+    rv.add_argument("--out", default="ml/figures/s3_reg_variants_validation.csv")
     a = p.parse_args(argv)
-    {"build": cmd_build, "train": cmd_train, "radius": cmd_radius, "refit-reg": cmd_refit_reg}[a.cmd](a)
+    {"build": cmd_build, "train": cmd_train, "radius": cmd_radius, "refit-reg": cmd_refit_reg,
+     "reg-variants": cmd_reg_variants}[a.cmd](a)
 
 
 if __name__ == "__main__":
