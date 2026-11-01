@@ -24,7 +24,7 @@ behind it. Numbers come only from those files (see `docs/paper/README.md` for th
 | 14 | Sensor faults | 3 rules shipped (dropout 100 %, step 81.4 %, stuck 29.5 %); spike held back at 1.07 % flood false flags; Isolation Forest flags 11.2 % of floods | `ml/figures/fault_rules_test.csv`, `ml/MODEL_CARD.md` |
 | 15 | Human approval and delivery | screenshot: approval panel; "nothing is sent unapproved" | console Readings & alerts |
 | 16 | Dashboards | console + Power BI on the same tables (DirectQuery) | `dashboard/powerbi/README.md`; TODO: Power BI screenshot once page 1 exists |
-| 17 | Why US data: India | "MANUAL-Water Level by Staff Gauge", about daily, at the stations probed; Table 1 | `india/figures/table1_us_vs_india.md` |
+| 17 | Why US data: India's pain points | CWC river stations about hourly (July 2022, 83 stations); on real US data hourly readings cut detection 0.52 → 0.17, a 1 h feed delay to 0.12; by decision a pain-point analysis, no Indian data run | `india/PAIN_POINTS.md`, `india/figures/degradation.csv` |
 | 18 | Limits and next steps | no live detection result; no claim against NWS / FLASH / GloFAS; throughput TODO | `docs/paper/03-results.md` §3.4 |
 
 ## Deck 2: agentic AI (advisory writer)

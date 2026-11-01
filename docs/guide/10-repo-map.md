@@ -15,7 +15,7 @@ parallel and each commits only its own folders (`docs/BUILD_PHASES.md`, "Who wor
 | `tools/` | core | command-line checks and data tools (table below), including `verify_slice.py` (acceptance checks per slice) and `fault_drill.py` |
 | `scripts/` | core | `start_demo.ps1` / `stop_demo.ps1`: start or stop the whole demo on Windows (`-Venv <folder>` or `DEWS_VENV`; default `.venv`, else `..\spaenv`) |
 | `ml/` | ML + India | baselines, dataset builder, evaluation harness, history fetchers, models; `MODEL_CARD.md`; `predict.py` is the pipeline's entry point |
-| `india/` | ML + India | `audit.py`, `table1.py`, `indiawris_loader.py` (Excel exports), `indiawris_api.py` (API client), `thresholds.csv` |
+| `india/` | ML + India | `PAIN_POINTS.md` (the study's result), `README.md` (paper paragraphs), `audit.py` + `table1.py` (Table 1), `degrade.py` (US data degraded to Indian-like reporting), `ideal_india.py` (requirements, synthetic replay), `indiawris_api.py` + `indiawris_loader.py` (India-WRIS access), `replay_india.py` (tool, not run by decision), `figures/` |
 | `notebooks/` | ML + India | EDA notebooks 01 to 03, self-contained (Colab/Kaggle); every cell explained in `docs/EDA_WALKTHROUGH.md` |
 | `agentic_ai/` | agents | LangGraph graph (`graph.py`), reviewer checks (`checks.py`), disagreement rules (`rules.py`), PostgreSQL tools (`tools.py`), LLM switch (`llm.py`), tracing, `seed.py`, `run.py`, `fixtures/` |
 | `config/` | core / ML | `candidate_gauges.csv` (gate-check input), `gauge_locations.csv` (38 gauges, location, official levels), `regions.json` (monitored areas on the map) |
@@ -51,7 +51,7 @@ Every command runs from the repo root with the venv active. `--help` on any of t
 | `python -m tools.staleness_logger --every-min 5 --hours 48` | measure the live feed delay |
 | `python -m tools.fetch_sample --site 08158700 --nwps DRWT2` | save real responses as test fixtures |
 | `python -m ml.fetch_history`, `ml.harness`, `ml.dataset`, `ml.mrms_history`, `ml.rain_model`, `ml.backtest` | ML; see [06](06-ml-and-evaluation.md) |
-| `python -m india.audit`, `india.table1`, `india.indiawris_loader`, `india.indiawris_api` | India study; see [08](08-india-study.md) |
+| `python -m india.audit`, `india.table1`, `india.degrade`, `india.ideal_india`, `india.indiawris_api` | India study; see [08](08-india-study.md) |
 
 ## Documents in `docs/`
 

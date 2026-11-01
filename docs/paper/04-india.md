@@ -1,43 +1,75 @@
-# 4. Why the live pipeline runs on US data, and what India would need
+# 4. Why the live pipeline runs on US data: pain points of open Indian data
 
-The team is in India, but DEWS streams Texas gauges. This section tests that choice with the same code and metrics
-instead of asserting it. Plan: `docs/INDIA_STUDY.md` (steps A to D).
+**Scope (team decision, 1 Nov 2026).** The study stops at a pain-point analysis; by decision, Indian data is not run
+through the pipeline [`india/PAIN_POINTS.md`, `india/README.md`, commit `834e50b`]. For each US source the pipeline
+uses, we chose the Indian open source that plays the same role and recorded what we met when we tried to use it. We
+then measured on real US data what each shortfall would cost.
 
-## 4.1 Table 1: the data side by side (step A)
+**Evidence and its strength.** *Observed*: India-WRIS API responses fetched from an Indian connection, including a
+station scan for July 2022, agency CWC, 41 basin/tributary and state/district combinations, 83 stations (the station
+list is not in the repository). *Measured*: a degradation experiment on 38 USGS gauges, 2024-2026, 64 official minor
+crossings. *Unverified*: statements from documentation, marked as such in `india/PAIN_POINTS.md`.
 
-Source: `india/figures/table1_us_vs_india.md` (`python -m india.audit`, `python -m india.table1`; US side measured on
-38 gauges, 2015 to 2025).
+## 4.1 Data sources and their US parallels (Table 1)
 
-| Property | US (USGS IV), measured | India, as observed or reported |
+[`india/README.md`; `india/figures/table1_us_vs_india.md`]
+
+| Role | US (used, measured) | Indian parallel (observed) |
 |---|---|---|
-| Reporting interval | median 5 min (5 to 15) | **manual staff-gauge readings at 00:00 / 08:00, about daily**, at the two stations probed: Aheri (Gudem Bridge, Pranhita, CWC) and NEELEESWARAM (Periyar) |
-| Publication delay | 24 to 69 min (one live sample) | no live feed documented; daily values |
-| Archive length | 11.0 years (9.2 to 11.0) | TODO: measured per station once fetched |
-| Missing data | median 0.8 % (0 to 36.6) | TODO |
-| Official thresholds machine-readable | yes, NWPS API, 38 of 38 gauges | warning / danger / HFL in CWC web pages and PDF bulletins; no open API found |
-| Access | REST API, no key | POST API from an Indian connection (OpenAPI spec `docs/indiawris_api.json`), or manual Excel, one year per file |
-| Free stations | all USGS IV data public | 645 of 4,824 listed gauges (Peninsular) [CAMELS-IND, ESSD 2025] |
-| Events above threshold | 310 minor crossings, median 5 per station | TODO: needs downloads + `india/thresholds.csv` |
-| Rise time resolvable (interval < median rise) | 38 of 38 | expected no with daily data. TODO: confirm |
+| River stage | USGS IV: median 5 min (5 to 15), telemetry, median 0.8 % missing, 11 years | India-WRIS River Water Level: **about 1 h at most CWC river stations in July 2022** (744 records in 31 days); dams and reservoirs every 3 to 24 h; some stations 12 to 32 records in the month; manual staff gauge on two datums (local zero, MSL) and INSAT telemetry. Off-season intervals not measured |
+| Access | REST API, no key, worldwide | POST API, undocumented response, no station catalogue, errors inside HTTP 200, reachable only from India |
+| Official levels | NWPS API, all 38 gauges | CWC warning / danger / highest flood level in web pages and daily bulletins, copied by hand |
+| Rainfall | MRMS radar, 1 km, minutes after the hour | IMD 0.25° daily; GPM IMERG 0.1° half-hourly with hours of latency (latencies not measured here) |
+| Live feed | NWIS IV, 24 to 69 min after measurement (one sample) | none found; CWC forecasts are human-readable products |
 
-The measurement method comes from India-WRIS's own `description` field, "MANUAL-Water Level by Staff Gauge", in API
-responses fetched from the user's laptop on 31 Oct 2026 [commit `9ec5a7d`, `docs/breadcrumbs/ml.md`]. **Two stations
-are not a survey**; the catalogue scan (`python -m india.indiawris_api --list-stations`) is the next step.
+## 4.2 What each shortfall costs (Table 6, real US data)
 
-## 4.2 Steps B to D
+3 h rise-rate rule; detection is the share of the 64 crossings caught [`india/figures/degradation.csv`].
 
-| Step | Question | State |
+| Scenario | Detection | False alarms per gauge-year |
 |---|---|---|
-| B: pipeline on Indian data | which stage fails, and why? | loader and API client ready (`india/indiawris_loader.py`, `india/indiawris_api.py`). **TODO: run 3 to 5 stations through replay → windows → forecaster; Table 2 failure log** |
-| C: degradation of real US data | what does each shortfall cost? | **TODO (planned S4):** F1 and net lead time against resolution (15 min → daily), delay (1 h → 24 h), gaps and missing thresholds |
-| D: synthetic "ideal India" | does the pipeline work on Indian-regime data of US quality? | **TODO (planned S5):** feasibility only, and the text must say it shows no forecast skill in India |
+| US data as recorded | **0.52** (s3_v0: 0.45) | 1.95 |
+| hourly readings | 0.17 (s3_v0: 0, no alert) | 2.08 |
+| 3-hourly | 0.14 | 2.16 |
+| daily (dams / off-season case) | 0.05 | 1.18 |
+| feed delay 1 h / 6 h / 24 h | 0.12 / 0.05 / 0.02 | 2.19 / 2.24 / 2.25 |
+| 10 % / 30 % readings missing | 0.48 / 0.39 | 1.83 / 1.47 |
+| threshold estimated from the record (99.9th / 99.5th / 99th percentile) | 0.41 / 0.23 / 0.25 | 2.82 / 5.42 / 5.56 |
 
-## 4.3 What can already be said
+The interval and the feed delay dominate; missing readings matter far less. The trained s3_v0 learned from 5 to 15 min
+windows and raises no alert at all on hourly or coarser data. A synthetic replay of one real US flood (BDAT2, 4 Jul
+2025, source SYNTHETIC) gives a rise-rate alert 1.5 h ahead at 15 min, 0.5 h at hourly, and none at daily
+[`india/figures/ideal_india_replay.csv`]. This uses a US hydrograph with Indian-like reporting: it is **not Indian data
+and not evidence of forecast skill in India**.
 
-- With US data, the stage-only forecaster's median net lead time at 3 h is already about −0.5 h (Table 3). A daily,
-  manually read series cannot resolve a rise of a few hours. TODO: replace this argument with step C's measured curve.
-- Machine-readable official thresholds exist for every US gauge used. For the Indian stations they are copied by hand
-  from bulletins (`india/thresholds.csv` is a header-only template).
+## 4.3 Pain points
 
-TODO: recommendation paragraph (an open real-time API for CWC forecast stations with machine-readable warning and
-danger levels and a sub-hourly archive), worded as a recommendation, not a finding.
+Twelve pain points, each with the observation, the US counterpart, why it is not comparable, and the effect
+[`india/PAIN_POINTS.md`]:
+
+1. no live feed;
+2. hourly-at-best interval, 3 to 24 h at dams;
+3. manual readings mixed with telemetry, with no provisional/approved flag;
+4. two vertical datums;
+5. thresholds not machine-readable;
+6. no radar-rain equivalent;
+7. no station catalogue;
+8. undocumented API with errors inside HTTP 200;
+9. geo-restricted access;
+10. regulated reservoirs among the stations;
+11. unclear licensing (unverified);
+12. gaps in the monsoon month.
+
+Points 1, 2 and 5 are binding. Points 3, 4 and 7 to 11 make the data hard to use before any forecast is made. Point 6
+limits rain-driven methods, not the stage-based ones used here: in our own US evaluation, adding radar rain did not
+improve the forecaster ([03-results](03-results.md)).
+
+## 4.4 What an Indian station would need
+
+To keep the US numbers (recall at least 90 % of the US value, false alarms at most 10 % higher), a station needs
+readings at the US interval (hourly is already too coarse), a feed delay below 1 h (the smallest delay tested already
+loses most detections), at most about 10 % missing readings, and official machine-readable thresholds
+[`india/figures/ideal_india_requirements.md`].
+
+TODO: final recommendation paragraph (an open, near-real-time API for CWC stations with machine-readable warning and
+danger levels and a sub-hourly archive), worded as a recommendation that follows from 4.2 and 4.4, not as a finding.

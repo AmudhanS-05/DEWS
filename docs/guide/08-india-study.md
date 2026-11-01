@@ -1,68 +1,79 @@
-# 08 India study: why the live pipeline runs on US data, and what India would need
+# 08 India study: why the live pipeline runs on US data
 
-The team is in India, but the live pipeline runs on Texas gauges. That is a data decision, not a preference. The
-India study tests it with the same pipeline and the same metrics, so the gap is measured and not just asserted. Full
-plan: [`docs/INDIA_STUDY.md`](../INDIA_STUDY.md). Code: `india/` (ML + India workstream).
+The team is in India, but the live pipeline streams Texas gauges. The India study explains why, with evidence. For
+each US source the pipeline uses, it finds the Indian open source that plays the same role, then documents what stands
+in the way.
 
-> **Status (1 Nov 2026):** the **US side** of the audit (Table 1) has been run on real data (38 gauges). The India-WRIS
-> API client works from an Indian connection (the user's laptop). The two stations probed so far, Aheri (Gudem Bridge,
-> Pranhita, CWC) and NEELEESWARAM (Periyar), are described by India-WRIS itself as **"MANUAL-Water Level by Staff
-> Gauge"**, with readings at 00:00 or 08:00: **manual, about daily** (`india/figures/table1_us_vs_india.md`,
-> measurement-method row). That is two stations, not a survey. **No Indian series has been run through the pipeline
-> yet, and no India result is claimed.** The console shows India as a *planned* area with no gauges.
+> **Scope (team decision, 1 Nov 2026):** the study stops at a detailed **pain-point analysis**. By decision, Indian
+> data is **not** run through the pipeline. The replay tool built for that (`india/replay_india.py`) stays in the
+> repository but has only been tested on a hand-made fixture. Full analysis: [`india/PAIN_POINTS.md`](../../india/PAIN_POINTS.md);
+> paper paragraphs: [`india/README.md`](../../india/README.md).
 
-## Why US data for the live pipeline
+## Evidence, and how strong it is
 
-Of the open sources checked, only the US provides all of the following openly, free, and with long archives:
-
-| Need | US | India (as known before the audit) |
+| Kind | What | Where |
 |---|---|---|
-| Live gauge readings every 5 to 15 min, by API | USGS Instantaneous Values | India-WRIS / CWC: mostly daily values, downloaded by hand one station-year at a time |
-| Official flood levels per gauge, machine-readable | NOAA NWPS (action/minor/moderate/major) | CWC warning, danger and highest flood levels, mostly in web pages and PDF bulletins |
-| Hourly ~1 km radar rainfall, with archive | NOAA MRMS on AWS | IMD gridded daily rainfall; NASA GPM IMERG half-hourly at 0.1° (satellite) |
-| 10+ years of history | yes | varies; CAMELS-IND is daily and ends in 2020 |
+| **Observed** | India-WRIS API responses fetched from the user's laptop on an Indian connection: `--discover` (31 Oct 2026) and `--list-stations` for **July 2022, agency CWC: 41 basin/tributary and state/district combinations, 83 stations** (1 Nov 2026) | `india/PAIN_POINTS.md`, Table 1. The station list itself stays on the laptop, not in git |
+| **Measured** | a degradation experiment on **real US data**: 38 USGS gauges, 2024-2026, 64 official minor crossings, one property changed at a time (step C) | `india/figures/degradation.csv`, `python -m india.degrade` |
+| **Unverified** | statements from documentation, marked as such | `india/PAIN_POINTS.md` |
 
-India-WRIS also publishes an API specification (`docs/indiawris_api.json`, OpenAPI 3, endpoints such as
-`/Dataset/River Water Level`), and `india/indiawris_api.py` is a client for it. It needs an Indian connection, because
-the cloud sessions could not reach the site. The first responses are the manual, about-daily staff-gauge readings
-described above. Whether any free station gives sub-daily, recent data is still part of the audit.
+## Data sources and their US parallels
 
-## The four steps
+| Role in the pipeline | US source (used) | Indian parallel | How far it is a parallel |
+|---|---|---|---|
+| River stage, live and history | USGS Instantaneous Values, 5 to 15 min, telemetry | India-WRIS "River Water Level" (CWC and state agencies) | **about hourly at most CWC river stations in July 2022** (744 records in 31 days); dams and reservoirs every 3 to 24 h; some stations only 12 to 32 records that month; manual staff gauge and INSAT telemetry mixed; two datums; history only, no live feed |
+| Data access | NWIS REST API, no key, reachable worldwide | India-WRIS POST API (OpenAPI spec, no key) | undocumented response, no station list, errors inside HTTP 200, reachable only from an Indian connection |
+| Official flood levels (the labels) | NWPS API: action, minor, moderate, major | CWC warning, danger, highest flood level | web pages and daily bulletins only, copied by hand (warning → action, danger → minor) |
+| Rainfall | MRMS radar, 1 km, hourly products minutes after the hour | IMD gridded rainfall (0.25°, daily), GPM IMERG (0.1°, half-hourly, hours of latency) | far coarser in space and time; latencies not measured here |
 
-| Step | Question | How | Output | Code |
-|---|---|---|---|---|
-| A Audit | what exists, and how does it compare? | the same script measures interval, archive length, missing data, longest gap, events and resolvable rise time for US and Indian stations | Table 1 | `india/audit.py`, `india/table1.py` |
-| B Pipeline on Indian data | which stage fails, and why? | India-WRIS exports → reading records (`mode = SIMULATION`, `source = INDIA-WRIS`) → replay → windows → forecaster → evaluation | Table 2, a failure log | `india/indiawris_loader.py`, `india/thresholds.csv` |
-| C Degradation on real US data | what does each shortfall cost? | degrade the US data one property at a time (15 min → daily, 1 h → 24 h delay, gaps, missing thresholds) and rerun the evaluation | curves of F1 and net lead time | planned (S4) |
-| D Synthetic "ideal India" | does the pipeline work with Indian-monsoon data of US quality? | real IMERG rain → simple runoff model calibrated to observed daily flow → rating curve → 15 min stage with CWC levels | feasibility figure | planned (S5) |
+Source: `india/README.md`, `india/figures/table1_us_vs_india.md`. Off-season reporting intervals were not measured.
 
-Step C carries the quantitative argument because its input is real data. Step D shows feasibility only: a model scored
-on generator output partly learns the generator, so it shows no forecast skill in India, and the paper says so.
+## What each shortfall costs (measured on real US data)
 
-Category mapping for Indian stations: CWC **warning level → action** and **danger level → minor**. Moderate and major
-stay empty. Highest flood level is kept for context.
+The share of the 64 minor crossings that the 3 h rise-rate rule detects at full US data quality is **0.52**
+(`india/figures/degradation.csv`):
+
+| Change, one at a time | Detection | Note |
+|---|---|---|
+| readings every hour (most CWC river stations, July 2022) | 0.17 | the trained s3_v0 raises **no alert** on hourly or coarser data |
+| readings every 3 h | 0.14 | |
+| one reading a day (dams / off-season case) | 0.05 | |
+| feed delay 1 h / 6 h / 24 h | 0.12 / 0.05 / 0.02 | |
+| 10 % / 30 % of readings missing | 0.48 / 0.39 | smaller than interval or delay |
+| no official threshold: 99.9th percentile of the gauge's own record instead | 0.41, with 2.82 instead of 1.95 false alarms per gauge-year | an estimate is not an official level |
+
+These are US hydrographs with Indian-like reporting, not Indian results. A synthetic replay of one real US flood
+(BDAT2, 4 Jul 2025, source SYNTHETIC) shows the same thing on one event: the rise-rate alert comes 1.5 h before the
+crossing at 15 min, 0.5 h at hourly, and not at all at one reading a day (`india/figures/ideal_india_replay.csv`).
+
+## The pain points in one line each
+
+From [`india/PAIN_POINTS.md`](../../india/PAIN_POINTS.md), where each has the observation, the US counterpart, why it
+is not comparable, and the measured or expected effect:
+
+1. no live data feed (history and PDF bulletins only);
+2. reporting interval: hourly at best, 3 to 24 h at dams, varying by station and season;
+3. manual readings mixed with telemetry, with no provisional/approved flag;
+4. two vertical datums in one dataset;
+5. flood thresholds not machine-readable;
+6. no radar-rain equivalent;
+7. no station catalogue (stations found by guessing names);
+8. API errors hidden inside HTTP 200, undocumented schema;
+9. reachable only from India;
+10. many listed stations are regulated reservoirs;
+11. licensing terms unclear (unverified);
+12. gaps in the monsoon month.
+
+**Binding ones:** 1, 2 and 5. To match the US numbers, a station would need readings as frequent as the US gauges
+(hourly is already too coarse), a feed delay under 1 h, at most about 10 % missing, and official machine-readable
+thresholds (`india/figures/ideal_india_requirements.md`).
 
 ## Run it
 
 ```powershell
-python -m india.audit --out india/figures/audit_us.csv      # US side; needs the cached USGS history (see 06)
-python -m india.table1                                     # Table 1 (CSV + Markdown); India cells say "pending" until exports exist
-python -m india.indiawris_loader data/raw/indiawris        # check downloaded India-WRIS Excel files
-python -m india.indiawris_api --probe                      # one small API request; prints status and the raw body
-python -m india.indiawris_api --list-stations              # station catalogue -> data/raw/indiawris/api/stations.csv
-python -m india.indiawris_api --fetch CW1PRA000084 --start 2015-01-01 --end 2025-12-31   # one station's history, resumable
+python -m india.audit --out india/figures/audit_us.csv   # US side of Table 1 (needs the cached USGS history)
+python -m india.table1                                  # Table 1
+python -m india.degrade                                 # step C on real US data -> india/figures/degradation.csv
+python -m india.ideal_india                             # requirements + synthetic BDAT2 replay
+python -m india.indiawris_api --list-stations           # India-WRIS catalogue scan (Indian connection only)
 ```
-
-The API client saves every raw response under `data/raw/indiawris/api/` and writes per-station CSVs that the loader and
-the audit read unchanged. Run `--probe` first: the response layout is guessed from the spec.
-
-**Manual part:** choose 3 to 5 free India-WRIS stations with known floods (for example in the Godavari, Krishna,
-Mahanadi or Periyar basins). Download 2015 to 2025, one year per Excel file, into `data/raw/indiawris/`. Copy their
-warning and danger levels from CWC bulletins into `india/thresholds.csv`, with the source and date. The loader's
-column layout is an assumption, so check it against the first real file.
-
-## What we expect to find (not yet measured)
-
-Daily data fills 23 of 24 hourly windows with zero-fill, rise times cannot be resolved, and alerts come with zero or
-negative net lead time because a daily value is published after the peak. These are hypotheses for step B to confirm
-or refute, not findings.
