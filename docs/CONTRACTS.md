@@ -11,14 +11,24 @@ JSON, keyed by `site_no` (USGS site number, text), and carry `mode` = `LIVE` or 
 provisional, `A` approved), `reading_time`/`reading_ts`, `fetched_at`/`fetched_ts`, `mode`, `revision`. Heartbeat:
 `site_no`, `now`/`now_ts`, `mode`. Source of truth: `producers/tracking.py`.
 
-**`rain.mrms`, `replay.rain`** (S2): `site_no`, `product`, `window_end`/`window_end_ts` (end of the accumulation
-hour), `accum_hours`, `rain_mm` (mean depth over the 10 km circle), `n_cells`, `file_time`, `fetched_ts`, `mode`.
+**`rain.mrms`, `replay.rain`** (S2, built 31 Oct): `type` = `rain` | `heartbeat`, keyed by `site_no`. Rain fields:
+`rain_id` (`site_no|product|hour_end_ts|mode`, the idempotent upsert key), `site_no`, `product` (bucket folder, e.g.
+`RadarOnly_QPE_01H_00.00` live, `MultiSensor_QPE_01H_Pass2_00.00` replay), `mode`, `accum_hours` (= 1),
+`hour_start`/`hour_start_ts`, `hour_end`/`hour_end_ts` (UTC; the file's valid time is the END of the hour),
+`window_end`/`window_end_ts` (= `hour_end`, the S2 name kept), `rain_mm` (= `rain_mm_10km`, the decided radius),
+`rain_mm_5km`, `rain_mm_10km`, `rain_mm_25km` (mean depth in mm over the cells whose centres are inside the circle;
+`null` when no cell is covered), `coverage_5km/10km/25km` (covered fraction; -3 no-coverage and 9999 missing cells are
+excluded from the mean), `n_cells_5km/10km/25km` (`n_cells` = 10 km), `file_time`/`file_ts` (S3 Last-Modified: when
+NOAA published the file), `fetched_at`/`fetched_ts`, `produced_ts`, `feed_delay_s` (`fetched_ts - hour_end_ts`, LIVE
+only, null for SIMULATION). Heartbeat (live only, every poll): `site_no`, `now`/`now_ts`, `mode`, `product`,
+`last_hour_end_ts`. Source of truth: `producers/mrms_qpe_producer.py` (`make_rain_record`).
 
 **`aggregates.window`** (built): `site_no`, `series`, `mode`, `window_start`, `window_end`, `window_start_ts`,
 `n_readings` (0 = zero-filled), `revision`, `stage_last`, `stage_max`, `stage_min`, `rise_rate_ft_per_h`,
 `carried_forward`, `provisional`, `last_reading_ts`, `fetched_ts`, `ingest_ts` (when the windowing worker read that
-last reading; added 31 Oct, null in a zero-filled window), `window_close_time`; from S2 also `rain_1h`, `rain_3h`,
-`rain_6h`. Source of truth: `streams/windowing.py`.
+last reading; added 31 Oct, null in a zero-filled window), `window_close_time`; from S2 (built 1 Nov) also `rain_1h`, `rain_3h`,
+`rain_6h`, `rain_24h` (mm, sum of the 10 km hourly means for the hours ENDING in (window_end - N h, window_end]; null
+unless every one of the N hours is known, never 0 for unknown) and `rain_product`. Late rain never re-emits a window. Source of truth: `streams/windowing.py`.
 
 **`forecasts.stage`** (S1): one record per gauge per window.
 `site_no`, `mode`, `window_start`, `model` (`rise_rate` | `persistence` | model name), `horizon_h`, `forecast_stage`,
@@ -58,16 +68,21 @@ Oct; for a replay this is the historical time, `raised_at` is not), `episode_sta
 windows as `history` (oldest first) and `official_levels`. Must run in under 50 ms per call on the laptop and never
 raise (return the baseline with `model = "rise_rate"` on any error).
 
-**Sensor-fault flag (S3, PROPOSED by ml, 31 Oct 2026; core and agents to accept or amend):**
-`ml/anomaly.py`: `score_window(features: dict) -> {anomaly_score, suspect, reason}`, with `features` exactly as
-for `predict()` (latest `aggregates.window` + `history`, oldest first; `site_no` used for the gauge's scale).
-`anomaly_score` float (higher = more unusual; None if the detector is unavailable), `suspect` bool, `reason` one
-of `excursion` (spike), `reversal` (up-then-down), `jump_then_flat` (step), `creep` (slow drift), `flat_h`,
-`n_ratio`, `no_readings` (>= 3 h without readings), `pattern` (unusual combination), `unavailable`, or "" when not
-suspect. Never raises; loads `ml/models/anomaly_if.joblib` once. Proposed use: core adds `suspect` and `reason` to
-the `forecasts.stage` record (or a separate `quality.flags` topic) and the console marks suspect windows; agents may
-say "readings at <gauge> look like a sensor fault (<reason>)". A suspect flag never suppresses or raises a flood
-alert by itself (measured detection and false-flag rates: ml/MODEL_CARD.md).
+**Sensor-fault flag (S3, PROPOSED by ml, revised 31 Oct 2026 after the team decision; core and agents to accept
+or amend):** `ml/fault_rules.py`: `check_gauge(readings, site_no, ctx=None) -> {suspect, reasons, flags}`.
+`readings` = the gauge's recent `gauge.usgs` / `replay.gauge` readings, oldest first (at least the last 48 h; the
+rules work on readings, not on hourly windows). `ctx` = `Context.from_windows(windows_by_site, rain_by_site)` built
+from recent `aggregates.window` records of all gauges (neighbours within 60 km) and, if available, hourly rain per
+gauge from `rain.mrms`; without `ctx` the stuck and step rules cannot find independent evidence and stay silent.
+`reasons` is a list from the SHIPPED rules only: `no_readings` (>= 3 h without readings), `stuck` (identical value
+for >= 24 h while a nearby gauge moves >= 0.1 ft or >= 5 mm of rain fell), `step` (a jump that holds flat, with no
+rain and no matching change at nearby gauges); `unavailable` on error. `flags` = {rule: [flag_ts]}. Never raises;
+settings and per-gauge scales in `ml/models/fault_rules.json`. Shipping rule (team): a rule is included only if its
+false-flag rate on real flood windows (12 h before to 6 h after a minor crossing) is <= 1 % on the 2024-2026 test
+period; measured 0.49 % (no_readings), 0 % (stuck), 0 % (step). The spike rule is implemented but NOT shipped
+(1.07 %). The Isolation Forest (`ml/anomaly.py`) is not part of the contract (measured negative result,
+ml/MODEL_CARD.md). Proposed use: core shows `suspect`/`reasons` next to the gauge in the console; agents may say
+"readings at <gauge> look like a sensor fault (<reason>)". A flag never suppresses or raises a flood alert.
 
 ## Agent tools (MCP server, S4; plain Python functions in S1)
 

@@ -20,6 +20,8 @@ read into per-station CSV files under data/raw/indiawris/api_csv/ in the layout 
 
     python -m india.indiawris_api --probe                                     # one small request, prints raw body
     python -m india.indiawris_api --discover                                  # ~11 requests: which names return data
+    python -m india.indiawris_api --list-stations                             # scan -> data/raw/indiawris/api/stations.csv
+    python -m india.indiawris_api --fetch CW1PRA000084 --start 2015-01-01 --end 2025-12-31
     python -m india.indiawris_api --basin Godavari --tributary Godavari --agency CWC \
         --start 2015-01-01 --end 2025-12-31                                   # page through and save
 """
@@ -131,23 +133,53 @@ def extract_records(doc) -> list[dict]:
     return []
 
 
+# Field names seen in real responses (user's laptop, 31 Oct 2026: Godavari/Pranhita/CWC and Kerala/Ernakulam/CWC):
+# stationCode, stationName, dataValue, dataTime, unit, datatypeCode, description ("MANUAL-Water Level by Staff
+# Gauge"), agencyName, latitude, longitude. The F_* candidates above stay as a fallback for other datasets.
+META_FIELDS = ("datatypeCode", "description", "agencyName", "latitude", "longitude", "stationCode", "stationName")
+
+
+def parse_api_time(t):
+    """India-WRIS dataTime -> aware UTC datetime. Naive times are IST (as on the portal)."""
+    from datetime import datetime, timezone
+    from india.indiawris_loader import IST, parse_time
+    if t is None:
+        return None
+    s_ = str(t).strip()
+    for cand in (s_, s_.replace("Z", "+00:00")):
+        try:
+            dt = datetime.fromisoformat(cand)
+            return (dt if dt.tzinfo else dt.replace(tzinfo=IST)).astimezone(timezone.utc)
+        except ValueError:
+            pass
+    if s_.isdigit() and len(s_) >= 12:                               # epoch milliseconds
+        return datetime.fromtimestamp(int(s_) / 1000, timezone.utc)
+    return parse_time(s_, assume_time=__import__("datetime").time(0, 0))
+
+
 def to_readings(records: list[dict], meta: dict | None = None) -> list[dict]:
-    """Records -> india/indiawris_loader reading dicts (records without code, time or numeric value are skipped)."""
-    from india.indiawris_loader import MODE, SOURCE, parse_time
+    """Records -> india/indiawris_loader reading dicts (records without code, time or numeric value are skipped).
+    Real field names first (stationCode, dataTime, dataValue, ...), then the tolerant F_* candidates."""
+    from india.indiawris_loader import MODE, SOURCE
     out = []
     for rec in records:
-        code, t, v = _pick(rec, F_CODE), _pick(rec, F_TIME), _pick(rec, F_VALUE)
-        dt = parse_time(t)
+        code = rec.get("stationCode", _pick(rec, F_CODE))
+        t = rec.get("dataTime", _pick(rec, F_TIME))
+        v = rec.get("dataValue", _pick(rec, F_VALUE))
+        dt = parse_api_time(t)
         try:
             v = float(v)
         except (TypeError, ValueError):
             continue
         if code in (None, "") or dt is None or v != v:
             continue
-        out.append({"site_no": str(code).strip(), "site_name": _pick(rec, F_NAME), "parameter": "water_level",
-                    "unit": _pick(rec, F_UNIT) or "m", "series": SOURCE, "method": "India-WRIS API", "value": v,
+        m = dict(meta or {})
+        m.update({k: rec[k] for k in META_FIELDS if k in rec})
+        out.append({"site_no": str(code).strip(), "site_name": rec.get("stationName", _pick(rec, F_NAME)),
+                    "parameter": "water_level", "unit": rec.get("unit", _pick(rec, F_UNIT)) or "m",
+                    "series": SOURCE, "method": rec.get("description") or "India-WRIS API", "value": v,
                     "qualifiers": [], "reading_time": dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    "reading_ts": dt.timestamp(), "source": SOURCE, "mode": MODE, "meta": dict(meta or {})})
+                    "reading_ts": dt.timestamp(), "source": SOURCE, "mode": MODE, "meta": m})
     return out
 
 
@@ -166,6 +198,7 @@ def write_loader_csv(readings: list[dict], out_dir: str) -> list[str]:
             w.writerow(["Station Code :", code])
             w.writerow(["Station Name :", rs[0].get("site_name") or ""])
             w.writerow(["Unit :", rs[0].get("unit") or "m"])
+            w.writerow(["Method :", rs[0].get("method") or ""])
             w.writerow([])
             w.writerow(["Data Time", "Water Level (m)"])
             for r in rs:   # times written back in IST, as the exports are
@@ -191,15 +224,31 @@ def _save_raw(resp, raw_dir: str, start: str, end: str, page: int) -> tuple[str,
 
 
 def fetch(dataset: str, scope: str, start: str, end: str, agency: str, data_dir: str, size: int = MAX_SIZE,
-          chunk_days: int = 365, session=None, progress=None, max_pages: int = 10000, **where) -> dict:
-    """Page through every chunk; save raw bodies; return {records, raw_files, pages, errors}."""
+          chunk_days: int = 365, session=None, progress=None, max_pages: int = 10000, resume: bool = True,
+          pause_s: float = 0.0, sleep=time.sleep, **where) -> dict:
+    """Page through every chunk; save raw bodies; return {records, raw_files, pages, errors, reused}.
+    resume: a page whose raw JSON file already exists is read from disk instead of requested again.
+    pause_s: politeness pause before every network request."""
     prog = progress or (lambda it, desc, total=None: it)
     scope_key = re.sub(r"[^A-Za-z0-9_-]+", "_", "_".join(str(v) for v in where.values() if v) + f"_{agency}")
     raw_dir = os.path.join(data_dir, "raw", "indiawris", "api", dataset, scope_key)
     url = endpoint(dataset, scope)
-    out = {"records": [], "raw_files": [], "pages": 0, "errors": []}
+    out = {"records": [], "raw_files": [], "pages": 0, "errors": [], "reused": 0}
     for s, e in prog(date_chunks(start, end, chunk_days), "date chunks"):
         for page in range(max_pages):
+            cached = os.path.join(raw_dir, f"{s}_{e}_p{page}.json")
+            if resume and os.path.exists(cached):
+                with open(cached, encoding="utf-8") as f:
+                    doc = json.load(f)
+                recs = extract_records(doc)
+                out["records"].extend(recs)
+                out["raw_files"].append(cached)
+                out["reused"] += 1
+                if len(recs) < size:
+                    break
+                continue
+            if pause_s and out["pages"]:
+                sleep(pause_s)
             try:
                 r = post_with_backoff(url, query(scope, s, e, page, size, agency, **where), session=session)
             except Exception as ex:  # noqa: BLE001
@@ -326,12 +375,116 @@ def discover(dataset: str = "water_level", matrix=None, size: int = 5, data_dir:
     return out
 
 
+# --list-stations scan. Tributary and district spellings are best guesses at India-WRIS names except the two
+# combinations confirmed on the user's laptop (Godavari/Pranhita/CWC, Kerala/Ernakulam/CWC).
+SCAN_BASIN = {"Godavari": ["Pranhita", "Indravati", "Sabari", "Manjira", "Wainganga", "Wardha", "Penganga"],
+              "Krishna": ["Bhima", "Tungabhadra", "Ghataprabha", "Malaprabha", "Musi", "Dindi"],
+              "Mahanadi": ["Seonath", "Hasdeo", "Mand", "Ib", "Tel", "Jonk", "Ong"]}
+SCAN_STATE = {"Kerala": ["Ernakulam", "Idukki", "Thrissur", "Alappuzha", "Pathanamthitta", "Kottayam"],
+              "Telangana": ["Jayashankar Bhupalpally", "Mulugu", "Adilabad", "Nizamabad", "Khammam"],
+              "Andhra Pradesh": ["East Godavari", "West Godavari", "Krishna", "Guntur", "Kurnool"],
+              "Odisha": ["Cuttack", "Sambalpur", "Puri", "Kendrapara", "Jharsuguda"]}
+CATALOG_COLUMNS = ["station_code", "station_name", "scope", "basin", "tributary", "state", "district", "agency",
+                   "records", "median_interval_h", "first", "last", "description", "unit", "latitude", "longitude"]
+
+
+def summarize_stations(records: list[dict], scope: str, where: dict, agency: str) -> list[dict]:
+    """One catalogue row per station code in a response: counts, typical interval, metadata."""
+    from statistics import median
+    by: dict[str, list[dict]] = {}
+    for r in to_readings(records):
+        by.setdefault(r["site_no"], []).append(r)
+    rows = []
+    for code, rs in sorted(by.items()):
+        ts_ = sorted({r["reading_ts"] for r in rs})
+        gaps = [(b - a) / 3600 for a, b in zip(ts_, ts_[1:])]
+        m = rs[0]["meta"]
+        rows.append({"station_code": code, "station_name": rs[0]["site_name"], "scope": scope,
+                     "basin": where.get("basin", ""), "tributary": where.get("tributary", ""),
+                     "state": where.get("state", ""), "district": where.get("district", ""), "agency": agency,
+                     "records": len(ts_), "median_interval_h": round(median(gaps), 2) if gaps else "",
+                     "first": rs[0]["reading_time"] if ts_ else "", "last": max(r["reading_time"] for r in rs),
+                     "description": m.get("description", ""), "unit": rs[0]["unit"],
+                     "latitude": m.get("latitude", ""), "longitude": m.get("longitude", "")})
+    return rows
+
+
+def list_stations(window=("2022-07-01", "2022-07-31"), agency: str = "CWC", data_dir: str = "data", session=None,
+                  sleep_s: float = 3.0, sleep=time.sleep, printer=print, basins=None, states=None,
+                  max_pages: int = 3) -> list[dict]:
+    """Scan tributaries and districts for one month; write data/raw/indiawris/api/stations.csv; print a table."""
+    basins = SCAN_BASIN if basins is None else basins
+    states = SCAN_STATE if states is None else states
+    combos = [("basin", {"basin": b, "tributary": t}) for b, ts_ in basins.items() for t in ts_] + \
+             [("state", {"state": st, "district": d}) for st, ds in states.items() for d in ds]
+    printer(f"india.indiawris_api --list-stations: {len(combos)} combinations, {window[0]}..{window[1]}, agency "
+            f"{agency}, {sleep_s:g} s apart (up to {max_pages} pages of 1000 each)")
+    catalog, k = [], 0
+    for scope, where in combos:
+        res = fetch("water_level", scope, window[0], window[1], agency, data_dir, size=MAX_SIZE, chunk_days=400,
+                    session=session, max_pages=max_pages, pause_s=sleep_s, sleep=sleep,
+                    **({"basin": where["basin"], "tributary": where["tributary"]} if scope == "basin"
+                       else {"state": where["state"], "district": where["district"]}))
+        if k and not res["reused"]:
+            sleep(sleep_s)
+        k += 1
+        rows = summarize_stations(res["records"], scope, where, agency)
+        label = " / ".join(where.values())
+        printer(f"  {scope:5s} {label:40s} records {len(res['records']):5d}  stations {len(rows)}"
+                + (f"  errors {res['errors'][:1]}" if res["errors"] else ""))
+        for r in rows:
+            printer(f"      {r['station_code']:22s} {str(r['station_name'])[:34]:34s} n={r['records']:4d} "
+                    f"interval~{r['median_interval_h']} h  {r['description']}")
+        catalog += rows
+    out = os.path.join(data_dir, "raw", "indiawris", "api", "stations.csv")
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    with open(out, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=CATALOG_COLUMNS)
+        w.writeheader()
+        w.writerows(catalog)
+    printer(f"list-stations done: {len(catalog)} stations -> {out}")
+    return catalog
+
+
+def fetch_stations(codes: list[str], start: str, end: str, data_dir: str = "data", session=None,
+                   sleep_s: float = 3.0, sleep=time.sleep, printer=print, progress=None) -> dict:
+    """History for chosen station codes: each code's query scope comes from stations.csv (--list-stations); the
+    scope is fetched in yearly chunks with resume and pauses, then only the chosen codes are kept and written as
+    loader CSVs (data/raw/indiawris/api_csv/<code>_api.csv)."""
+    cat_path = os.path.join(data_dir, "raw", "indiawris", "api", "stations.csv")
+    with open(cat_path, encoding="utf-8") as f:
+        cat = {r["station_code"]: r for r in csv.DictReader(f)}
+    missing = [c for c in codes if c not in cat]
+    if missing:
+        raise SystemExit(f"ERROR: not in {cat_path} (run --list-stations first): {missing}")
+    scopes: dict[tuple, list[str]] = {}
+    for c in codes:
+        r = cat[c]
+        key = (r["scope"], r["basin"], r["tributary"], r["state"], r["district"], r["agency"])
+        scopes.setdefault(key, []).append(c)
+    readings, errors = [], []
+    for (scope, basin, trib, state, dist, agency), cs in scopes.items():
+        where = {"basin": basin, "tributary": trib} if scope == "basin" else {"state": state, "district": dist}
+        printer(f"  fetching {scope} {where} agency {agency} for {cs}")
+        res = fetch("water_level", scope, start, end, agency, data_dir, session=session, pause_s=sleep_s,
+                    sleep=sleep, progress=progress, **where)
+        errors += res["errors"]
+        rs = [r for r in to_readings(res["records"], {"agency": agency, **where}) if r["site_no"] in cs]
+        printer(f"    {res['pages']} pages requested, {res['reused']} reused from disk, {len(rs)} readings kept")
+        readings += rs
+    paths = write_loader_csv(readings, os.path.join(data_dir, "raw", "indiawris", "api_csv")) if readings else []
+    return {"readings": len(readings), "paths": paths, "errors": errors}
+
+
 def main(argv=None):
     import argparse
     from ml.progress import Timer, bar
     p = argparse.ArgumentParser(description="India-WRIS API client (response layout unverified; run --probe first).")
     p.add_argument("--probe", action="store_true", help="one small request; print status, headers, raw body")
     p.add_argument("--discover", action="store_true", help="small matrix of names/agencies/windows; record counts")
+    p.add_argument("--list-stations", action="store_true", help="scan tributaries/districts; station catalogue")
+    p.add_argument("--window", default="2022-07-01:2022-07-31", help="--list-stations month START:END")
+    p.add_argument("--fetch", help="comma list of station codes from stations.csv; history --start..--end")
     p.add_argument("--sleep", type=float, default=3.0, help="seconds between --discover requests")
     p.add_argument("--dataset", default="water_level", choices=sorted(DATASETS))
     p.add_argument("--scope", default="basin", choices=["basin", "state"])
@@ -351,6 +504,19 @@ def main(argv=None):
         raise SystemExit(probe(a.dataset, a.basin, a.tributary, a.agency, a.days, None, 10, a.data_dir))
     if a.discover:
         discover(a.dataset, data_dir=a.data_dir, sleep_s=a.sleep)
+        return
+    if a.list_stations:
+        list_stations(tuple(a.window.split(":")), a.agency, a.data_dir, sleep_s=a.sleep)
+        return
+    if a.fetch:
+        timer = Timer()
+        codes = [c.strip() for c in a.fetch.split(",") if c.strip()]
+        print(f"india.indiawris_api --fetch: {codes} {a.start}..{a.end}, yearly chunks, resume on, {a.sleep:g} s apart")
+        r = fetch_stations(codes, a.start, a.end, a.data_dir, sleep_s=a.sleep, progress=bar)
+        for e in r["errors"][:20]:
+            print(f"  error {e}")
+        print(f"done: {r['readings']} readings -> {len(r['paths'])} loader CSVs in data/raw/indiawris/api_csv/, "
+              f"{len(r['errors'])} errors in {timer.elapsed()}; next: python -m india.table1")
         return
     timer = Timer()
     where = ({"basin": a.basin, "tributary": a.tributary or a.basin} if a.scope == "basin"

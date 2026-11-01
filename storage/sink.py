@@ -3,7 +3,8 @@
     python -m storage.sink                     # run until Ctrl-C
     python -m storage.sink --group sink-rerun  # a new group name re-reads every topic from the start
 
-Reads gauge.usgs + replay.gauge -> gauge_readings, aggregates.window -> windowed_aggregates,
+Reads gauge.usgs + replay.gauge -> gauge_readings, rain.mrms + replay.rain -> catchment_rain (one row per gauge-hour,
+heartbeats skipped), aggregates.window -> windowed_aggregates (with rain_1h/3h/6h/24h),
 forecasts.stage -> risk_scores (+ latency_trace), alerts.flood -> alerts.
 
 Delivery: at least once with idempotent upserts. A batch is written and committed to PostgreSQL first and only
@@ -28,7 +29,8 @@ from common import config
 
 log = logging.getLogger("sink")
 
-TOPICS = [config.TOPIC_GAUGE, config.TOPIC_REPLAY_GAUGE, config.TOPIC_AGG, config.TOPIC_FORECASTS, config.TOPIC_ALERTS]
+TOPICS = [config.TOPIC_GAUGE, config.TOPIC_REPLAY_GAUGE, config.TOPIC_RAIN, config.TOPIC_REPLAY_RAIN, config.TOPIC_AGG,
+          config.TOPIC_FORECASTS, config.TOPIC_ALERTS]
 GROUP = config.GROUP_SINK
 
 
@@ -41,10 +43,19 @@ def gauge_row(m: dict):
             list(m.get("qualifiers") or []), m.get("mode", "LIVE"), m.get("fetched_at"))
 
 
+def rain_row(m: dict):
+    """One gauge-hour of MRMS rain (producers/mrms_qpe_producer.make_rain_record); heartbeats -> None."""
+    if m.get("type") != "rain":
+        return None
+    return (m["site_no"], m["product"], m["hour_end"], int(m.get("accum_hours", 1)), m.get("rain_mm_10km", m.get("rain_mm")),
+            m.get("mode", "LIVE"), m.get("rain_mm_5km"), m.get("rain_mm_25km"), m.get("coverage_10km"),
+            m.get("n_cells_10km", m.get("n_cells")), m.get("file_time"), m.get("fetched_at"))
+
+
 def window_row(m: dict):
     return (m["site_no"], m["window_start"], m["window_end"], m.get("mode", "LIVE"), m["n_readings"],
             m.get("stage_last"), m.get("stage_max"), m.get("stage_min"), m.get("rise_rate_ft_per_h"),
-            m.get("rain_1h"), m.get("rain_3h"), m.get("rain_6h"), m.get("provisional"))
+            m.get("rain_1h"), m.get("rain_3h"), m.get("rain_6h"), m.get("rain_24h"), m.get("provisional"))
 
 
 def forecast_row(m: dict):
@@ -88,11 +99,18 @@ SQL = {
         VALUES %s ON CONFLICT (site_no, parameter, series, reading_time, mode)
         DO UPDATE SET value = EXCLUDED.value, qualifiers = EXCLUDED.qualifiers""",
     "windowed_aggregates": """INSERT INTO windowed_aggregates (site_no, window_start, window_end, mode, n_readings, stage_last,
-        stage_max, stage_min, rise_rate_ft_per_h, rain_1h, rain_3h, rain_6h, provisional) VALUES %s
+        stage_max, stage_min, rise_rate_ft_per_h, rain_1h, rain_3h, rain_6h, rain_24h, provisional) VALUES %s
         ON CONFLICT (site_no, window_start, mode) DO UPDATE SET n_readings = EXCLUDED.n_readings,
         stage_last = EXCLUDED.stage_last, stage_max = EXCLUDED.stage_max, stage_min = EXCLUDED.stage_min,
         rise_rate_ft_per_h = EXCLUDED.rise_rate_ft_per_h, rain_1h = EXCLUDED.rain_1h, rain_3h = EXCLUDED.rain_3h,
-        rain_6h = EXCLUDED.rain_6h, provisional = EXCLUDED.provisional""",
+        rain_6h = EXCLUDED.rain_6h, rain_24h = EXCLUDED.rain_24h, provisional = EXCLUDED.provisional""",
+    # the same rain_id (site, product, hour, mode) always maps to one row: a re-read or a re-published hour overwrites
+    "catchment_rain": """INSERT INTO catchment_rain (site_no, product, window_end, accum_hours, rain_mm, mode, rain_mm_5km,
+        rain_mm_25km, coverage_10km, n_cells_10km, file_time, fetched_at) VALUES %s
+        ON CONFLICT (site_no, product, window_end, accum_hours, mode) DO UPDATE SET rain_mm = EXCLUDED.rain_mm,
+        rain_mm_5km = EXCLUDED.rain_mm_5km, rain_mm_25km = EXCLUDED.rain_mm_25km, coverage_10km = EXCLUDED.coverage_10km,
+        n_cells_10km = EXCLUDED.n_cells_10km, file_time = EXCLUDED.file_time,
+        fetched_at = COALESCE(catchment_rain.fetched_at, EXCLUDED.fetched_at), computed_at = now()""",
     "risk_scores": """INSERT INTO risk_scores (site_no, window_start, mode, model, horizon_h, forecast_stage, p_action, p_minor,
         p_moderate, p_major) VALUES %s ON CONFLICT (site_no, window_start, mode, model, horizon_h) DO UPDATE SET
         forecast_stage = EXCLUDED.forecast_stage, p_action = EXCLUDED.p_action, p_minor = EXCLUDED.p_minor,
@@ -127,6 +145,10 @@ def route(topic: str, m: dict) -> list[tuple[str, tuple]]:
         r = gauge_row(m)
         if r:
             out.append(("gauge_readings", r))
+    elif topic in (config.TOPIC_RAIN, config.TOPIC_REPLAY_RAIN):
+        r = rain_row(m)
+        if r:
+            out.append(("catchment_rain", r))
     elif topic == config.TOPIC_AGG:
         out.append(("windowed_aggregates", window_row(m)))
     elif topic == config.TOPIC_FORECASTS:
@@ -152,7 +174,7 @@ def write_batch(conn, rows: dict[str, list[tuple]]) -> int:
     """Upsert all rows in one transaction. Rows within one statement are de-duplicated by the caller."""
     n = 0
     with conn.cursor() as cur:
-        for table in ("gauge_readings", "windowed_aggregates", "risk_scores", "latency_trace", "latency_trace_alert",
+        for table in ("gauge_readings", "catchment_rain", "windowed_aggregates", "risk_scores", "latency_trace", "latency_trace_alert",
                       "alerts", "advisories", "advisory_retract"):
             batch = rows.get(table)
             if batch:
@@ -164,7 +186,7 @@ def write_batch(conn, rows: dict[str, list[tuple]]) -> int:
 
 def last_wins(table: str, batch: list[tuple]) -> list[tuple]:
     """ON CONFLICT cannot touch the same key twice in one statement: keep the newest row per key."""
-    keys = {"gauge_readings": (0, 1, 2, 3, 7), "windowed_aggregates": (0, 1, 3), "risk_scores": (0, 1, 2, 3, 4),
+    keys = {"gauge_readings": (0, 1, 2, 3, 7), "catchment_rain": (0, 1, 2, 3, 5), "windowed_aggregates": (0, 1, 3), "risk_scores": (0, 1, 2, 3, 4),
             "latency_trace": (0,), "latency_trace_alert": (0,), "alerts": (0,), "advisories": (0,), "advisory_retract": (0,)}[table]
     d: dict = {}
     for r in batch:

@@ -1,7 +1,16 @@
 """ml.predict contract (docs/CONTRACTS.md): keys, baseline values, never raises, under 50 ms."""
 import time
 
+import pytest
+
 from ml import predict as P
+
+
+@pytest.fixture(autouse=True)
+def baseline_only(monkeypatch, tmp_path):
+    """These tests pin the rise-rate path; the committed ml/models/active.json is tested in test_predict_model.py."""
+    monkeypatch.setattr(P, "MODELS_DIR", str(tmp_path))
+    monkeypatch.setattr(P, "_CACHE", {})
 
 KEYS = {"forecast_stage", "p_action", "p_minor", "p_moderate", "p_major", "horizon_h", "model"}
 LEVELS = {"action": 8.0, "minor": 10.0, "moderate": 12.0, "major": 14.0}

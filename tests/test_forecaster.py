@@ -1,3 +1,11 @@
+"""Forecaster rules. The rule tests pin the rise-rate baseline (no ml/models/active.json): since ml commits
+active.json naming s3_v0 at 3 h, predict() would otherwise pick the trained model and the expected stages change.
+A separate set runs with s3_v0 active and checks the model name, p_minor and that records/state stay JSON-safe."""
+import json
+
+import pytest
+
+from ml import predict as predict_mod
 from ml.predict import predict
 from streams import forecaster
 
@@ -12,6 +20,18 @@ def window(i, stage, rate, n=12, mode="SIMULATION"):
             "window_end": epoch_to_iso(ts + 3600), "window_start_ts": ts, "n_readings": n, "revision": False,
             "stage_last": stage, "stage_max": stage, "stage_min": stage, "rise_rate_ft_per_h": rate,
             "provisional": True, "last_reading_ts": ts + 3500, "window_close_time": epoch_to_iso(ts + 3700)}
+
+
+@pytest.fixture(autouse=True)
+def baseline_model(request, monkeypatch):
+    """Rule tests: no active model -> rise_rate. Tests named test_s3_* use whatever active.json names (s3_v0)."""
+    if request.node.name.startswith("test_s3_"):
+        predict_mod._CACHE.pop("active", None)
+        yield
+        predict_mod._CACHE.pop("active", None)
+        return
+    monkeypatch.setitem(predict_mod._CACHE, "active", (None, None))
+    yield
 
 
 def run(windows):
@@ -89,3 +109,50 @@ def test_state_roundtrip_through_json(tmp_path):
 def test_load_gauges_has_official_levels():
     g = forecaster.load_gauges()
     assert g["08158700"]["levels"]["minor"] == 5.5 and len(g) >= 30
+
+
+def _s3_active():
+    predict_mod._CACHE.pop("active", None)
+    name, hs = predict_mod._active()
+    return name == "s3_v0" and predict_mod._load_model(3) is not None
+
+
+def test_s3_v0_at_3h_names_itself_gives_p_minor_and_stays_json_safe(tmp_path):
+    pytest.importorskip("joblib")
+    if not _s3_active():
+        pytest.skip("ml/models/active.json does not name s3_v0 with a 3 h model file")
+    ws = [window(i, 4.0 + 0.7 * i, 0.7) for i in range(4)]
+    fcs, alerts, st = run(ws)
+    assert {f["model"] for f in fcs} == {"s3_v0"}
+    assert all(isinstance(f["p_minor"], float) and 0.0 <= f["p_minor"] <= 1.0 for f in fcs)
+    assert all(f["p_action"] is None and f["p_major"] is None for f in fcs)    # trained for minor only
+    assert all(type(f["forecast_stage"]) is float for f in fcs)                # plain float, not numpy
+    json.dumps(fcs, allow_nan=False), json.dumps(alerts, allow_nan=False)
+    forecaster.save_state({"k": st}, tmp_path / "s.json")
+    assert forecaster.load_state(tmp_path / "s.json")["k"]["history"][-1]["stage_last"] == ws[-1]["stage_last"]
+
+
+def test_s3_v0_is_3h_only_other_horizons_use_rise_rate():
+    if not _s3_active():
+        pytest.skip("ml/models/active.json does not name s3_v0 with a 3 h model file")
+    st = forecaster.new_state()
+    fc, _ = forecaster.step(st, window(0, 4.0, 0.7), GAUGE, predict, horizon_h=1, now=T0)
+    assert fc["model"] == "rise_rate" and fc["p_minor"] is None
+
+
+def test_window_rain_fields_reach_predict():
+    """C2.2: the window handed to ml.predict carries rain_1h/3h/6h/24h (s3_v0 is stage-only; kept for display and
+    for v1 models that read rain)."""
+    seen = []
+
+    def spy(features):
+        seen.append(features)
+        return predict(features)
+
+    w = dict(window(0, 2.0, 0.0), rain_1h=1.5, rain_3h=4.0, rain_6h=6.5, rain_24h=None, rain_product="P2")
+    forecaster.step(forecaster.new_state(), w, GAUGE, spy, horizon_h=3, now=T0)
+    assert {k: seen[0][k] for k in ("rain_1h", "rain_3h", "rain_6h", "rain_24h")} == \
+        {"rain_1h": 1.5, "rain_3h": 4.0, "rain_6h": 6.5, "rain_24h": None}
+    from ml.predict import model_features
+    X = model_features(seen[0], GAUGE["levels"])
+    assert X["rain_1h"] == 1.5 and X["rain_6h"] == 6.5

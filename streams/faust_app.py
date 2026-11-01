@@ -1,10 +1,13 @@
-"""Faust stream app: gauge.usgs and replay.gauge -> event-time windows -> aggregates.window.
+"""Faust stream app: gauge.usgs + rain.mrms and replay.gauge + replay.rain -> event-time windows -> aggregates.window.
 
 - One consumer group, "flood-windowing" (Faust's app id). Run 3 workers of it, one per
   partition (see docs/BUILD_PHASES.md, Phase 3).
-- Live (gauge.usgs) and replay (replay.gauge) use separate agents and separate state
-  tables, so replayed history can never touch live window state. rain.mrms is added
-  to this group when the MRMS producer exists (phase 2b).
+- Live (gauge.usgs + rain.mrms) and replay (replay.gauge + replay.rain) use separate agents and separate state
+  tables, so replayed history can never touch live window state. Each agent reads its gauge AND rain topic (all
+  keyed by site_no, 3 partitions, so co-partitioned): a gauge's rain lands in the same per-site state as its
+  readings, and windows carry rain_1h/3h/6h/24h when they are emitted (rule: streams/windowing.py, "Rain").
+  Rain whose mode does not match the agent (LIVE vs SIMULATION) goes to deadletter.flood. Rain heartbeats are
+  ignored: only the gauge producer's heartbeats close (zero-fill) windows.
 - Window state lives in Faust Tables keyed by site_no (same key as the topics, so
   they are co-partitioned). Faust mirrors each table to a changelog topic, so a killed
   worker resumes with its window state intact (the fault-tolerance claim).
@@ -39,8 +42,8 @@ app = faust.App(
     producer_acks=-1,
 )
 
-gauge_topic = app.topic(config.TOPIC_GAUGE, key_type=str, value_serializer="json")
-replay_topic = app.topic(config.TOPIC_REPLAY_GAUGE, key_type=str, value_serializer="json")
+live_topics = app.topic(config.TOPIC_GAUGE, config.TOPIC_RAIN, key_type=str, value_serializer="json")
+replay_topics = app.topic(config.TOPIC_REPLAY_GAUGE, config.TOPIC_REPLAY_RAIN, key_type=str, value_serializer="json")
 agg_topic = app.topic(config.TOPIC_AGG, key_type=str, value_serializer="json")
 dlq_topic = app.topic(config.TOPIC_DLQ, key_type=str, value_serializer="json")
 
@@ -48,34 +51,29 @@ live_state = app.Table("window_state", default=dict, partitions=config.TOPIC_PAR
 replay_state = app.Table("window_state_replay", default=dict, partitions=config.TOPIC_PARTITIONS)
 
 
-async def _process(stream, table):
+async def _process(stream, table, expected_mode: str):
     async for key, msg in stream.items():
         site = msg.get("site_no") or key
         state = dict(table[site])
         try:
-            if msg.get("type") == "heartbeat":
-                state, emitted = windowing.on_tick(site, state, float(msg["now_ts"]),
-                                                   config.WINDOW_SECONDS, GRACE_S, MAX_LATE_WINDOWS)
-            else:
-                state, emitted, too_late = windowing.on_reading(state, {**msg, "ingest_ts": now_epoch()},
-                                                                config.WINDOW_SECONDS, msg.get("mode", "LIVE"),
-                                                                MAX_LATE_WINDOWS)
-                if too_late:
-                    await dlq_topic.send(key=site, value={"reason": "too_late", "record": msg})
+            state, emitted, dlq = windowing.on_record(state, {**msg, "site_no": site}, expected_mode, now_epoch(),
+                                                      config.WINDOW_SECONDS, GRACE_S, MAX_LATE_WINDOWS)
         except Exception as e:  # never let one bad record stop the stream
             await dlq_topic.send(key=site, value={"reason": f"error: {e}", "record": msg})
             continue
         table[site] = state
+        for d in dlq:
+            await dlq_topic.send(key=site, value=d)
         for agg in emitted:
             agg["window_close_time"] = epoch_to_iso(now_epoch())
             await agg_topic.send(key=site, value=agg)
 
 
-@app.agent(gauge_topic)
+@app.agent(live_topics)
 async def window_live(stream):
-    await _process(stream, live_state)
+    await _process(stream, live_state, "LIVE")
 
 
-@app.agent(replay_topic)
+@app.agent(replay_topics)
 async def window_replay(stream):
-    await _process(stream, replay_state)
+    await _process(stream, replay_state, "SIMULATION")

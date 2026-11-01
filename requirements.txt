@@ -7,3 +7,8 @@ faust-streaming==0.11.3
 aiokafka[lz4]==0.12.0
 cramjam==2.11.0                # lz4 codec: our producers compress with lz4; Faust/aiokafka needs it to read
 psycopg2-binary==2.9.9
+# producers/mrms_qpe_producer.py (C2.1): MRMS GRIB2 decoded in memory. eccodeslib ships the ecCodes binary as a
+# wheel (no separate ecCodes install); tested with eccodes 2.50.0 / eccodeslib 2.50.0.33 / numpy 2.5.3 (Python 3.13).
+numpy
+eccodes
+eccodeslib

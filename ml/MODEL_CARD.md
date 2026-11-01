@@ -1,7 +1,7 @@
 # Model card: workstream `ml` (31 Oct 2026)
 
-Two models: the **flood-crossing forecaster** (S3 v0 stage-only, v1 stage + rain) and the **sensor-fault detector**
-(Isolation Forest + one rule). All numbers are measured on replayed USGS history (`data_source = replay`, mode
+Two parts: the **flood-crossing forecaster** (S3 v0 stage-only, active at 3 h; v1 stage + rain) and the
+**sensor-fault rules** (physical rules; the Isolation Forest is reported as a negative result). All numbers are measured on replayed USGS history (`data_source = replay`, mode
 SIMULATION); none is a live result. **Neither forecaster beats the rise-rate rule consistently; no forecast skill is
 claimed.** The bar is defined in `ml/REFERENCE_BASELINES.md`.
 
@@ -63,44 +63,69 @@ Same v1 design and protocol at 5, 10 and 25 km, identical rows. Row-level AP at 
 at 3 h 0.25 / 0.24 / no alert. No consistent effect of the radius; 10 km stays.
 
 ### Use in the stream
-`ml/predict.py` uses a model only when `ml/models/active.json` exists (`{"name": "s3_v0"}` or `{"name": "s3_v1_r10"}`;
-see `active.json.example`). **Not activated**: the evidence does not show a clear gain over rise-rate (decision for
-the team). Measured in the cloud: 8.4 ms per call (v0), 17 ms (v1), first call ~1.5 s (file load); one OpenMP thread
-per call. Any failure returns the rise-rate record.
+**Active since 31 Oct 2026 (team decision): `s3_v0` at the 3 h horizon only** (`ml/models/active.json`:
+`{"name": "s3_v0", "horizons": [3]}`); every other horizon, and any failure, uses the rise-rate rule. The evidence
+for that choice, in the words to use: **comparable detection with about a third fewer false alarms on the 2024-26
+test period** (29 vs 33 of 63 crossings detected, 150 vs 224 false alarms, no lead-time gain). Not "better
+forecasts". `predict()` returns `model = "s3_v0"`, `p_minor`, `forecast_stage`, `horizon_h = 3`; p_action, p_moderate,
+p_major stay None. Measured in the cloud: 8.4 ms per call, first call ~1.5 s (file load), one OpenMP thread per call.
+To switch back: delete `ml/models/active.json`.
 
-## 2. Sensor-fault detector (ml/anomaly.py)
+## 2. Sensor-fault rules (ml/fault_rules.py; team decision 31 Oct 2026)
 
-`score_window(features) -> {anomaly_score, suspect, reason}` on the same inputs as `predict()`. Isolation Forest
-(200 trees, 4096 samples per tree, seed 0) on seven fault-SHAPE features (excursion, reversal, jump_then_flat, flat_h,
-n_ratio, gap_h, creep; raw rise size is not a feature), threshold = top 0.1 % of clean training windows, plus a rule:
->= 3 h without readings -> suspect ("no_readings"). Trained on 2015-2023 windows (25 % sample, 737,471 windows).
+Physical rules on raw readings, with nearby gauges (within 60 km) and MRMS rain (10 km, where known) as independent
+evidence: `no_readings` (>= 3 h without readings), `spike` (jump >= a*s returning within 1-2 readings), `stuck`
+(identical value >= N h while a nearby gauge moves >= 0.1 ft or >= 5 mm rain fell), `step` (jump >= d*s that holds
+flat, with rain < 1 mm or quiet nearby gauges as evidence). s = the gauge's 99th percentile of |hourly change|
+(2015-2023). Settings chosen on validation years 2021-2023 as the most sensitive with flood-window false flags <= 1 %
+and <= 5 clean episodes per gauge-year: a = 2, N = 24 h, d = 1 (`ml/figures/fault_rules_validation.csv`,
+`fault_rules_settings.json`). Test period 2024-2026 used once (`ml/figures/fault_rules_test.csv`; faults injected into
+real series, 10 per type per gauge, counted only while active and not flagged in the clean copy):
 
-Evaluation: faults injected into held-out real series (2024-2026, 10 per type per gauge, quiet periods below
-action stage), counted only when flagged while the fault is active and not flagged in the clean copy
-(`ml/figures/anomaly_eval.csv`, per gauge `anomaly_eval_per_gauge.csv`):
+| rule (fault) | detected | median time to flag | flood-window false flags | clean episodes / gauge-year | shipped |
+|---|---|---|---|---|---|
+| no_readings (6 h dropout) | 100 % | 2.9 h | 0.49 % (6 of 64 floods touched) | 1.19 | yes |
+| step (2 s offset) | 81.4 % | 0.33 h | 0 % | 0.10 | yes |
+| stuck (24 h flat) | 29.5 % | 23.3 h | 0 % | 1.69 | yes |
+| spike (3 s, one reading) | 100 % | 0.08 h | **1.07 %** (7 of 64 floods) | 0.36 | **no** (> 1 %) |
+| slow drift (6 s over 72 h) | 0 % | - | - | - | no rule |
 
-| fault | injected | detected | median time to flag |
-|---|---|---|---|
-| spike (one reading +-3 s, min 0.5 ft) | 370 | 17.6 % | 0.8 h |
-| step offset (2 s, min 0.3 ft, 48 h) | 370 | 82.4 % | 1.5 h |
-| dropout (6 h without readings) | 370 | 100 % (rule) | 3.4 h |
-| slow drift (6 s over 72 h) | 370 | 1.1 % | - |
-| stuck / flat-lined sensor (24 h) | 370 | 0.3 % | - |
+Stuck sensors are caught only when something independent moves (a neighbour or rain); at quiet low flow a stuck
+sensor is indistinguishable from real flat water (flat runs >= 24 h occur ~10 times per gauge-year). The spike flags
+inside flood windows may be real sensor glitches during floods or genuine one-reading jumps; they cannot be told
+apart here, so the team rule excludes it. Slow drift is not detectable from stage alone.
+Shipped through `check_gauge()` (contract proposal in docs/CONTRACTS.md), config `ml/models/fault_rules.json`.
 
-Clean test data: 10.4 flag episodes per gauge-year (1.1 of them no-readings gaps); flagged windows 3.7 % (long
-outages flag every hour). **Real flood windows (12 h before to 6 h after a minor crossing): 11.2 % flagged** (136 of
-1,211), so the detector does NOT yet meet "never flag a genuine flood rise"; a flag must never suppress or raise an
-alert by itself.
-Design history (disclosed): a first feature set (with raw change size) was evaluated on the test period and flagged
-30 % of flood windows; the redesign was then done on validation years only (fit 2015-2020, inject 2021-2023:
-`ml/figures/anomaly_validation_v2*.csv`; spike 37 %, step 15 %, flood windows 7.3 %), and the test period was used
-once for the table above. The large validation-to-test swings (spike 37 % -> 18 %, step 15 % -> 82 %) show the
-rates are not stable. Stuck sensors at low flow are not detectable from stage alone: flat runs >= 24 h occur about
-10 times per gauge-year in clean data.
+### Measured negative result: Isolation Forest (ml/anomaly.py, not shipped)
+Isolation Forest on hourly window features, trained 2015-2023, same injection protocol on 2024-2026: spike 17.6 %,
+step 82.4 %, dropout 100 % (only through the added gap rule), drift 1.1 %, stuck 0.3 %; **11.2 % of real flood
+windows flagged** (first feature set: 30 %) and 10.4 flag episodes per gauge-year (`ml/figures/anomaly_eval*.csv`,
+`anomaly_validation_v2*.csv`). Detection swung strongly between validation and test (spike 37 % -> 18 %, step
+15 % -> 82 %). Hourly aggregates hide the reading-level shape of a fault, and rarity is not the same as a fault:
+gaps and flat runs are common in normal data while floods are rare, so a rarity detector flags floods. The physical
+rules above use the readings and independent evidence instead.
+
+## Results for the paper (one paragraph each, measured numbers only)
+**Forecaster.** On the 2024-2026 test period (63 official minor-stage crossings at 38 gauges, 23 storms), the pooled
+stage-only model s3_v0 at a 3 h horizon detected 29 crossings with 150 false alarms, against 33 with 224 for the
+rise-rate rule: comparable detection with about a third fewer false alarms. It gave no extra warning (median 0.42 h
+vs 0.50 h before the crossing) and did not improve on rise-rate at the other horizons. Adding MRMS radar rain (v1)
+did not help on the rain-era rows (3 h F1 0.24 vs 0.31 for v0), and the rain radius (5, 10, 25 km) made no consistent
+difference. The model is active at 3 h only; every other horizon uses the rise-rate rule.
+
+**Sensor faults.** Physical rules on the raw readings, with neighbouring gauges and radar rain as independent
+evidence, caught 100 % of injected dropouts, 81 % of step offsets and 30 % of stuck sensors while flagging at most
+0.49 % of real flood windows; a spike rule caught every injected spike but flagged 1.07 % of flood windows and was
+not shipped. An Isolation Forest on hourly features flagged 11 % of flood windows and is reported as a negative
+result. Slow drift was not detectable from stage alone.
+
+**Earlier baseline correction.** The 3 h rise-rate F1 values first quoted (0.65 / 0.26 / 0.64 / 0.41) contained a 1 h
+look-ahead; the bar used throughout is the harness value, pooled F1 0.28 over 2015-2025 (ml/REFERENCE_BASELINES.md).
 
 ## Files and rebuild
 Committed (3.5 MB, `git add -f`): `ml/models/s3_v0_h{1..6}.joblib`, `ml/models/s3_v1_r10_h{1..6}.joblib`,
-`ml/models/anomaly_if.joblib`, checksums in `ml/models/MANIFEST.sha256`. Trained with Python 3.13.18,
+`ml/models/anomaly_if.joblib` (negative result, kept for reproduction), `ml/models/fault_rules.json`, checksums in
+`ml/models/MANIFEST.sha256`. Trained with Python 3.13.18,
 scikit-learn 1.9.1 (pinned in requirements-ml.txt), numpy 2.5.3, joblib 1.6.0, pandas 3.0.5; a different
 scikit-learn may not load them, then rebuild:
 ```
@@ -109,7 +134,11 @@ python -m ml.s3_model build --end 2026-10-31          # uses data/rain/ or the c
 python -m ml.s3_model train                           # v0 + v1, h=1..6 -> ml/models/, ml/figures/s3_eval* (8 min)
 python -m ml.s3_model radius                          # M3.3 -> ml/figures/s3_radius.csv (6 min)
 python -m ml.plot_s3                                  # ml/figures/s3_pr_3h.png
-python -m ml.anomaly train && python -m ml.anomaly evaluate          # ml/models/anomaly_if.joblib, anomaly_eval*.csv
+python -m ml.anomaly train && python -m ml.anomaly evaluate          # negative result: anomaly_if.joblib, anomaly_eval*.csv
+ANOMALY_MODEL_PATH=/tmp/if_val.joblib python -m ml.anomaly train --train-end 2021-01-01   # scales from 2015-2020
+python -m ml.fault_rules evaluate --period validation --scales-model /tmp/if_val.joblib    # grid, settings json
+python -m ml.fault_rules evaluate --period test                       # ml/figures/fault_rules_test.csv (4 min)
+python -m ml.demo_floods                                              # ml/figures/demo_flood_candidates.csv
 ```
 Evaluation rows (`evaluation_runs` shape): `python -m ml.import_runs ml/figures/s3_eval.csv ml/figures/s3_radius.csv`.
 

@@ -64,3 +64,38 @@ def test_last_wins_keeps_newest_row_per_key():
 
 def test_compare_reports_gaps_duplicates_extra():
     assert compare({1, 2, 3}, [1, 2, 2, 4]) == {"topic": 3, "table": 3, "gaps": 1, "duplicates": 1, "extra": 1}
+
+
+RAIN = {"type": "rain", "rain_id": "08158700|MultiSensor_QPE_01H_Pass2_00.00|1717221600|SIMULATION",
+        "site_no": "08158700", "product": "MultiSensor_QPE_01H_Pass2_00.00", "mode": "SIMULATION", "accum_hours": 1,
+        "hour_start": "2024-06-01T05:00:00Z", "hour_end": "2024-06-01T06:00:00Z", "hour_end_ts": 1717221600.0,
+        "rain_mm": 7.561, "rain_mm_5km": 9.132, "rain_mm_10km": 7.561, "rain_mm_25km": 2.852, "coverage_10km": 1.0,
+        "n_cells_10km": 294, "file_time": "2024-06-01T06:58:39Z", "fetched_at": "2026-11-01T01:00:00Z"}
+
+
+def test_rain_routes_to_catchment_rain_and_heartbeat_is_skipped():
+    (t, row), = sink.route(config.TOPIC_REPLAY_RAIN, RAIN)
+    assert t == "catchment_rain"
+    assert row[:6] == ("08158700", "MultiSensor_QPE_01H_Pass2_00.00", "2024-06-01T06:00:00Z", 1, 7.561, "SIMULATION")
+    assert row[6:10] == (9.132, 2.852, 1.0, 294)
+    assert sink.route(config.TOPIC_RAIN, {"type": "heartbeat", "site_no": "x", "mode": "LIVE", "product": "p"}) == []
+    assert config.TOPIC_RAIN in sink.TOPICS and config.TOPIC_REPLAY_RAIN in sink.TOPICS
+
+
+def test_rain_keys_dedupe_per_mode_and_window_row_carries_rain_24h():
+    a = sink.rain_row(RAIN)
+    b = sink.rain_row(dict(RAIN, rain_mm_10km=8.0))
+    c = sink.rain_row(dict(RAIN, mode="LIVE"))
+    kept = sink.last_wins("catchment_rain", [a, b, c])
+    assert len(kept) == 2 and {r[5] for r in kept} == {"SIMULATION", "LIVE"}
+    assert [r for r in kept if r[5] == "SIMULATION"][0][4] == 8.0
+    row = sink.window_row(dict(AGG, rain_1h=1.0, rain_3h=2.0, rain_6h=3.0, rain_24h=4.0))
+    assert row[9:13] == (1.0, 2.0, 3.0, 4.0)
+
+
+def test_check_sink_covers_the_rain_topics():
+    from tools.check_sink import CHECKS
+    topics, keyf, sql, _ = CHECKS["catchment_rain"]
+    assert topics == [config.TOPIC_RAIN, config.TOPIC_REPLAY_RAIN]
+    assert keyf(RAIN) == ("08158700", "MultiSensor_QPE_01H_Pass2_00.00", 1717221600, 1, "SIMULATION")
+    assert keyf({"type": "heartbeat"}) is None
