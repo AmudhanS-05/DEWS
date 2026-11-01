@@ -23,7 +23,7 @@ PROCESSES = {
     "sink": {"label": "Postgres sink", "module": "storage.sink"},
     "forecaster": {"label": "Forecaster", "module": "streams.forecaster"},
     "notifier": {"label": "Notifier", "module": "alerting.notifier"},
-    "agents": {"label": "Agents (calls the LLM on each alert)", "module": "agentic_ai.run"},
+    "agents": {"label": "Agents consumer (from now on, calls the LLM on each new alert)", "module": "agentic_ai.run"},
     "usgs": {"label": "USGS live producer", "module": "producers.usgs_iv_producer"},
     "mrms": {"label": "MRMS live rain producer", "module": "producers.mrms_qpe_producer"},
 }
@@ -34,7 +34,8 @@ FLOODS = {
 DRILLS = {"faust": "Kill a Faust worker", "broker": "Stop a Kafka broker", "sink": "Kill the sink", "postgres": "Stop PostgreSQL",
           "notifier": "Kill the notifier", "producer": "Kill the live producer", "llm": "LLM down"}
 RAIN_HEAD_S = 15     # a window takes only the rain already in when it closes; the rain producer starts slower, so it goes first
-ACTIONS = {"start": PROCESSES, "stop": PROCESSES, "replay": FLOODS, "reset": FLOODS, "drill": DRILLS}
+SLICES = {f"S{n}": f"verify_slice S{n}" for n in range(1, 6)}
+ACTIONS = {"start": PROCESSES, "stop": PROCESSES, "replay": FLOODS, "reset": FLOODS, "agents": FLOODS, "drill": DRILLS, "verify": SLICES}
 
 
 def allowed(action, target) -> str | None:
@@ -58,6 +59,8 @@ def job_commands(action: str, target: str, py: str) -> list[list[str]]:
     """The argument lists for a replay, reset or drill. Every value comes from the tables above."""
     if action == "drill":
         return [[py, "-m", "tools.fault_drill", "--scenario", target]]
+    if action == "verify":
+        return [[py, "-m", "tools.verify_slice", target]]
     f = FLOODS[target]
     if action == "reset":
         return [[py, "-m", "tools.reset_replay", "--site", ",".join(f["sites"]), "--start", f["start"], "--end", f["end"], "--yes"]]
@@ -65,6 +68,15 @@ def job_commands(action: str, target: str, py: str) -> list[list[str]]:
     if f["rain"]:
         cmds.insert(0, [py, "-m", "producers.mrms_qpe_producer", "--replay", "--start", f["start"], "--end", f["end"], "--speed", str(f["speed"])])
     return cmds
+
+
+def _last_line(path: Path) -> str:
+    """The closing line of a job's log: its summary."""
+    try:
+        lines = [ln.strip() for ln in path.read_text(encoding="utf-8", errors="ignore").splitlines() if ln.strip()]
+    except OSError:
+        return ""
+    return lines[-1][:400] if lines else ""
 
 
 def _running_lines() -> list[str]:
@@ -76,6 +88,35 @@ def is_running(spec: dict, lines: list[str]) -> bool:
     if "port" in spec:
         return any("faust_app" in ln and f"web-port {spec['port']}" in ln for ln in lines)
     return any(re.search(rf"-m {re.escape(spec['module'])}(\s|$)", ln) for ln in lines)
+
+
+def _flood_alerts(flood: dict) -> list[str]:
+    """Standing alerts of this flood's gauges and dates."""
+    import psycopg2
+
+    from common import config
+    with psycopg2.connect(config.PG_DSN, connect_timeout=5) as conn, conn.cursor() as cur:
+        cur.execute("SELECT alert_id FROM alerts WHERE site_no = ANY(%s) AND mode = 'SIMULATION' AND status = 'draft' AND split_part(alert_id, '|', 3) >= %s "
+                    "AND split_part(alert_id, '|', 3) < %s ORDER BY 1", (flood["sites"], flood["start"], flood["end"] + "T99"))
+        return [r[0] for r in cur.fetchall()]
+
+
+def _agents_from_now() -> None:
+    """The agent consumer would start at the earliest alert on the topic and call the LLM for each one. First start: from now on."""
+    from confluent_kafka import Consumer, TopicPartition
+
+    from common import config
+    c = Consumer({"bootstrap.servers": config.KAFKA_BOOTSTRAP, "group.id": config.GROUP_AGENT, "enable.auto.commit": False})
+    try:
+        t = config.TOPIC_ALERTS
+        tps = [TopicPartition(t, p) for p in c.list_topics(t, timeout=10).topics[t].partitions]
+        fresh = [tp for tp in c.committed(tps, timeout=10) if tp.offset < 0]
+        for tp in fresh:
+            tp.offset = c.get_watermark_offsets(TopicPartition(t, tp.partition), timeout=10)[1]
+        if fresh:
+            c.commit(offsets=fresh, asynchronous=False)
+    finally:
+        c.close()
 
 
 class Control:
@@ -90,14 +131,14 @@ class Control:
         except (OSError, subprocess.SubprocessError):
             lines = []
         return {"ok": True, "processes": [{"id": k, "label": v["label"], "running": is_running(v, lines)} for k, v in PROCESSES.items()],
-                "floods": [{"id": k, "label": v["label"]} for k, v in FLOODS.items()], "drills": [{"id": k, "label": v} for k, v in DRILLS.items()], "job": self._job_view()}
+                "floods": [{"id": k, "label": v["label"]} for k, v in FLOODS.items()], "drills": [{"id": k, "label": v} for k, v in DRILLS.items()], "slices": list(SLICES), "job": self._job_view()}
 
     def _job_view(self):
         j = self.job
         if not j:
             return None
         codes = [p.poll() for p in j["procs"]]
-        return {"label": j["label"], "running": any(c is None for c in codes), "ok": all(c == 0 for c in codes), "started": j["started"], "elapsed_s": round((j.get("ended") or time.time()) - j["started"], 1), "log": j["log"]}
+        return {"label": j["label"], "running": any(c is None for c in codes), "ok": all(c == 0 for c in codes), "started": j["started"], "elapsed_s": round((j.get("ended") or time.time()) - j["started"], 1), "log": j["log"], "result": _last_line(ROOT / j["log"])}
 
     def act(self, action, target) -> tuple[int, dict]:
         why = allowed(action, target)
@@ -115,6 +156,8 @@ class Control:
             if running:
                 kill(find_pids(spec["port"]) if "port" in spec else module_pids(spec["module"]))
         elif not running:
+            if target == "agents":
+                _agents_from_now()
             log = LOGS / f"{target}.log"
             start_worker(spec["port"], log) if "port" in spec else start_module(spec["module"], log)
         changed = running == (action == "stop")
@@ -130,8 +173,20 @@ class Control:
             if v and v["running"]:
                 return 409, {"error": f"still running: {v['label']}"}
             name = f"{action}_{target}"
-            label = f"{action} {ACTIONS[action][target]['label'] if action != 'drill' else DRILLS[target]}"
-            cmds = job_commands(action, target, sys.executable)
+            spec = ACTIONS[action][target]
+            label = f"{action} {spec['label'] if isinstance(spec, dict) else spec}"
+            if action == "replay":
+                from producers.replay_producer import already_replayed
+                done = [s for s in spec["sites"] if already_replayed(s, spec["start"], spec["end"])]
+                if done:
+                    return 409, {"error": f"{', '.join(done)} already replayed since the last reset: press Reset first, or these readings go to the dead-letter topic"}
+            if action == "agents":
+                ids = _flood_alerts(spec)
+                if not ids:
+                    return 409, {"error": "no standing alert for this flood: replay it first"}
+                cmds = [[sys.executable, "-m", "agentic_ai.run", "--alert-id", i] for i in ids]
+            else:
+                cmds = job_commands(action, target, sys.executable)
             first = 1 if action == "replay" and FLOODS[target]["rain"] else len(cmds)
             self.job = {"label": label, "started": time.time(), "log": f"gate_output/control_{name}_0.log",
                         "procs": [spawn(c, LOGS / f"control_{name}_{i}.log") for i, c in enumerate(cmds[:first])]}

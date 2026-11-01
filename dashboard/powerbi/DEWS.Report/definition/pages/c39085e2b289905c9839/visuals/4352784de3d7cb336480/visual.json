@@ -1,0 +1,197 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "4352784de3d7cb336480",
+  "position": {
+    "x": 0,
+    "y": 466.775242796835,
+    "z": 1000,
+    "height": 207.87561420101966,
+    "width": 1235.9150153406076,
+    "tabOrder": 1000
+  },
+  "visual": {
+    "visualType": "clusteredBarChart",
+    "query": {
+      "queryState": {
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "latency_waterfall"
+                    }
+                  },
+                  "Property": "Feed delay, median (s)"
+                }
+              },
+              "queryRef": "latency_waterfall.Feed delay, median (s)",
+              "nativeQueryRef": "Feed delay, median (s)"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "latency_waterfall"
+                    }
+                  },
+                  "Property": "Alert, median (s)"
+                }
+              },
+              "queryRef": "latency_waterfall.Alert, median (s)",
+              "nativeQueryRef": "Alert, median (s)"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "latency_waterfall"
+                    }
+                  },
+                  "Property": "Forecast, median (s)"
+                }
+              },
+              "queryRef": "latency_waterfall.Forecast, median (s)",
+              "nativeQueryRef": "Forecast, median (s)"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "latency_waterfall"
+                    }
+                  },
+                  "Property": "Delivery, median (s)"
+                }
+              },
+              "queryRef": "latency_waterfall.Delivery, median (s)",
+              "nativeQueryRef": "Delivery, median (s)"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "latency_waterfall"
+                    }
+                  },
+                  "Property": "Human approval, median (s)"
+                }
+              },
+              "queryRef": "latency_waterfall.Human approval, median (s)",
+              "nativeQueryRef": "Human approval, median (s)"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "latency_waterfall"
+                    }
+                  },
+                  "Property": "Ingest, median (s)"
+                }
+              },
+              "queryRef": "latency_waterfall.Ingest, median (s)",
+              "nativeQueryRef": "Ingest, median (s)"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "latency_waterfall"
+                    }
+                  },
+                  "Property": "Windowing, median (s)"
+                }
+              },
+              "queryRef": "latency_waterfall.Windowing, median (s)",
+              "nativeQueryRef": "Windowing, median (s)"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Measure": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "latency_waterfall"
+                  }
+                },
+                "Property": "Feed delay, median (s)"
+              }
+            },
+            "direction": "Descending"
+          }
+        ],
+        "isDefaultSort": true
+      }
+    }
+  },
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "024379d05de855c6bbc0",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "latency_waterfall"
+              }
+            },
+            "Property": "instrumented"
+          }
+        },
+        "type": "Categorical",
+        "filter": {
+          "Version": 2,
+          "From": [
+            {
+              "Name": "l",
+              "Entity": "latency_waterfall",
+              "Type": 0
+            }
+          ],
+          "Where": [
+            {
+              "Condition": {
+                "In": {
+                  "Expressions": [
+                    {
+                      "Column": {
+                        "Expression": {
+                          "SourceRef": {
+                            "Source": "l"
+                          }
+                        },
+                        "Property": "instrumented"
+                      }
+                    }
+                  ],
+                  "Values": [
+                    [
+                      {
+                        "Literal": {
+                          "Value": "true"
+                        }
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "howCreated": "User"
+      }
+    ]
+  }
+}

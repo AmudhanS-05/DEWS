@@ -1,0 +1,58 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "b5d35bd36479ca242046",
+  "position": {
+    "x": 583.94149807377335,
+    "y": 20.787561420101966,
+    "z": 3000,
+    "height": 103.93780710050983,
+    "width": 279.68719001591734,
+    "tabOrder": 3000
+  },
+  "visual": {
+    "visualType": "slicer",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "evaluation_runs"
+                    }
+                  },
+                  "Property": "horizon_h"
+                }
+              },
+              "queryRef": "evaluation_runs.horizon_h",
+              "nativeQueryRef": "horizon_h",
+              "active": true
+            }
+          ]
+        }
+      }
+    },
+    "objects": {
+      "data": [
+        {
+          "properties": {
+            "mode": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Between'"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "general": [
+        {
+          "properties": {}
+        }
+      ]
+    }
+  }
+}

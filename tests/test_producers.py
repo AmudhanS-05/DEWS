@@ -103,3 +103,12 @@ def test_topic_list_matches_compose():
             text = f.read()
         line = next(l for l in text.splitlines() if "for t in " in l)
         assert line.split("for t in ")[1].split(";")[0].split() == config.ALL_TOPICS
+
+
+def test_replay_refuses_dates_already_replayed_and_sends_nothing(monkeypatch, capsys):
+    from producers import replay_producer as rp
+    sent = []
+    monkeypatch.setattr(rp, "already_replayed", lambda site, start, end: 119)
+    monkeypatch.setattr(rp, "JsonProducer", lambda name: sent.append(name))
+    assert rp.main(["--site", "s", "--start", "2019-05-02", "--end", "2019-05-06"]) == 1
+    assert sent == [] and "reset_replay" in capsys.readouterr().out

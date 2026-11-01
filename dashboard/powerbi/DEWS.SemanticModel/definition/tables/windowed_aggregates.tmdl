@@ -99,3 +99,4 @@ table windowed_aggregates
 					Data = Source{[Schema="public",Item="windowed_aggregates"]}[Data]
 				in
 					Data
+

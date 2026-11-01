@@ -57,3 +57,4 @@ relationship 468fe111-ab4a-5721-9a36-36d6381100d0
 relationship 064f401a-17af-5360-ad33-8a334f3dfbb8
 	fromColumn: agent_events.alert_id
 	toColumn: alerts.alert_id
+

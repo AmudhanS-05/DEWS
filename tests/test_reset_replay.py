@@ -100,3 +100,25 @@ def test_delete_touches_only_that_site_mode_and_range_and_saves_alerts(conn, tmp
         assert [r[0] for r in cur.fetchall()] == ["a|minor|2019-05-05T00:00:00Z", "a|minor|2019-05-08T00:00:00Z"]
         cur.execute("SELECT count(*) FROM evaluation_runs")
         assert cur.fetchone()[0] == 1
+
+
+def test_replay_guard_sees_windows_since_the_reset_only(conn, tmp_path, monkeypatch):
+    """The real query on the real schema: a bad column here would read as "not replayed" if only mocked."""
+    import json
+
+    import psycopg2
+
+    from common import config
+    from producers import replay_producer as rp
+    with conn.cursor() as cur:
+        cur.execute("SELECT current_schema()")
+        sp = cur.fetchone()[0]
+    sink.write_batch(conn, {"windowed_aggregates": [_window("a", "2019-05-04T00:00:00Z", "SIMULATION"), _window("a", "2019-05-04T00:00:00Z", "LIVE")]})
+    real = psycopg2.connect
+    monkeypatch.setattr(psycopg2, "connect", lambda *a, **k: real(os.environ["AGENTS_TEST_DSN"], options=f"-c search_path={sp}", connect_timeout=5))
+    monkeypatch.setattr(config, "STATE_DIR", str(tmp_path))
+    assert rp.already_replayed("a", "2019-05-02", "2019-05-06") == 1
+    assert rp.already_replayed("b", "2019-05-02", "2019-05-06") == 0
+    assert rp.already_replayed("a", "2019-06-01", "2019-06-02") == 0                       # later dates are fine, Faust moves forward
+    (tmp_path / "replay_resets.json").write_text(json.dumps({"a": 4102444800.0}), encoding="utf-8")   # a reset after the window was written
+    assert rp.already_replayed("a", "2019-05-02", "2019-05-06") == 0

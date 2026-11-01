@@ -1,0 +1,55 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "e29bfe06c6dae57c3693",
+  "position": {
+    "x": 304.254308057856,
+    "y": 187.08805278091768,
+    "z": 8000,
+    "height": 94.488915545918019,
+    "width": 279.68719001591734,
+    "tabOrder": 8000
+  },
+  "visual": {
+    "visualType": "cardVisual",
+    "query": {
+      "queryState": {
+        "Data": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "evaluation_runs"
+                    }
+                  },
+                  "Property": "False alarms"
+                }
+              },
+              "queryRef": "evaluation_runs.False alarms",
+              "nativeQueryRef": "False alarms"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Measure": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "evaluation_runs"
+                  }
+                },
+                "Property": "False alarms"
+              }
+            },
+            "direction": "Descending"
+          }
+        ],
+        "isDefaultSort": true
+      }
+    }
+  }
+}

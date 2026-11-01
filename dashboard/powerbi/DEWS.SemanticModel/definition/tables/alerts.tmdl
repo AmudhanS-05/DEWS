@@ -85,6 +85,14 @@ table alerts
 		summarizeBy: none
 		sourceColumn: channel
 
+	column details
+		dataType: string
+		lineageTag: 447aed0f-28d2-45a3-8bf4-7a4316bf5ae8
+		summarizeBy: none
+		sourceColumn: details
+
+		annotation SummarizationSetBy = Automatic
+
 	partition alerts = m
 		mode: directQuery
 		source =
@@ -93,3 +101,4 @@ table alerts
 					Data = Source{[Schema="public",Item="alerts"]}[Data]
 				in
 					Data
+

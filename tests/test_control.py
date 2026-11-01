@@ -31,6 +31,19 @@ def test_commands_are_built_from_the_tables_and_rain_only_where_it_exists():
     assert ctl.job_commands("drill", "llm", "py") == [["py", "-m", "tools.fault_drill", "--scenario", "llm"]]
 
 
+def test_verify_and_agents_are_fixed_actions_too():
+    assert ctl.allowed("verify", "S3") is None and ctl.allowed("agents", "oct_2023") is None
+    assert ctl.allowed("verify", "S9") and ctl.allowed("agents", "x; rm")
+    assert ctl.job_commands("verify", "S2", "py") == [["py", "-m", "tools.verify_slice", "S2"]]
+
+
+def test_a_replay_of_dates_already_replayed_is_refused(monkeypatch):
+    import producers.replay_producer as rp
+    monkeypatch.setattr(rp, "already_replayed", lambda s, a, b: 5)
+    code, out = ctl.Control().act("replay", "drwt2_2019")
+    assert code == 409 and "Reset" in out["error"]
+
+
 def test_process_detection_reads_the_right_command_line():
     lines = ["python -m storage.sink", "faust.exe -A streams.faust_app worker -l info --web-port 6067"]
     assert ctl.is_running(ctl.PROCESSES["sink"], lines) and ctl.is_running(ctl.PROCESSES["faust_6067"], lines)

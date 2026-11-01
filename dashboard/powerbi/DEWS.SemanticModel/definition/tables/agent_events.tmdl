@@ -37,6 +37,14 @@ table agent_events
 		summarizeBy: none
 		sourceColumn: ts
 
+	column detail
+		dataType: string
+		lineageTag: 90306463-80fa-475a-a2c7-43a33980fd66
+		summarizeBy: none
+		sourceColumn: detail
+
+		annotation SummarizationSetBy = Automatic
+
 	partition agent_events = m
 		mode: directQuery
 		source =
@@ -45,3 +53,4 @@ table agent_events
 					Data = Source{[Schema="public",Item="agent_events"]}[Data]
 				in
 					Data
+

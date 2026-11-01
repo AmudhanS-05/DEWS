@@ -19,12 +19,24 @@ def render_v1(alert: dict) -> str:
     if alert.get("mode") == "SIMULATION":
         lines.append("SIMULATION: replayed historical data, not a real event.")
     head = "UPGRADE: " if alert.get("kind") == "upgrade" else ""
-    lines.append(f"{head}{alert.get('site_name') or alert['site_no']}: forecast to reach {cat.upper()} flood stage "
-                 f"({_ft(levels.get(cat))} ft) within {h} h.")
+    by_model = alert.get("alert_rule") == "alert_by_model"
+    p = alert.get("probability")
+    if by_model:      # the probability raised this alert, not the stage forecast (wording as agentic_ai/advisory.py)
+        pct = f"{p * 100:.0f}%" if isinstance(p, (int, float)) else "n/a"
+        tau = alert.get("tau")
+        thr = f" (model alert threshold {tau * 100:.0f}%)" if isinstance(tau, (int, float)) else ""
+        lines.append(f"{head}{alert.get('site_name') or alert['site_no']}: probability of crossing {cat.upper()} flood stage "
+                     f"({_ft(levels.get(cat))} ft) within {h} h: {pct}{thr}.")
+    else:
+        lines.append(f"{head}{alert.get('site_name') or alert['site_no']}: forecast to reach {cat.upper()} flood stage "
+                     f"({_ft(levels.get(cat))} ft) within {h} h.")
     cur = alert.get("current_stage")
     now_cat = category_of(cur, levels) if isinstance(cur, (int, float)) and levels else None
     lines.append(f"Gauge now: {_ft(cur)} ft" + (f" (already at {now_cat.upper()})." if now_cat else "."))
-    p = alert.get("probability")
+    fc, lv = alert.get("forecast_stage"), levels.get(cat)
+    if by_model and isinstance(fc, (int, float)) and isinstance(lv, (int, float)) and fc < lv:
+        lines.append(f"UNCERTAIN: the two forecasts disagree. The model's probability of crossing {cat.upper()} within {h} h is {pct}, "
+                     f"but its stage forecast is {_ft(fc)} ft, below the {cat.upper()} stage ({_ft(lv)} ft). Treat as uncertain and re-check at the next window.")
     prob = (f"probability of reaching {cat.upper()}: {p * 100:.0f}%" if isinstance(p, (int, float))
             else "no probability from this model")
     lines.append(f"Forecast: {_ft(alert.get('forecast_stage'))} ft in {h} h; {prob} ({alert.get('model')} model).")

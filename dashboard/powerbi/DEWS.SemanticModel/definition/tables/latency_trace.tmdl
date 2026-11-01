@@ -75,3 +75,4 @@ table latency_trace
 					Data = Source{[Schema="public",Item="latency_trace"]}[Data]
 				in
 					Data
+

@@ -105,3 +105,4 @@ table alert_overview
 					Data = Source{[Schema="public",Item="alert_overview"]}[Data]
 				in
 					Data
+

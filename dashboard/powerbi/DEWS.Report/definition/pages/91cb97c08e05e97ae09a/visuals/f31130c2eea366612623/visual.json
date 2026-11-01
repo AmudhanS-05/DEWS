@@ -1,0 +1,107 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "f31130c2eea366612623",
+  "position": {
+    "x": 9.9848320693391113,
+    "y": 48.260021668472369,
+    "z": 0,
+    "height": 654.00650054171172,
+    "width": 1269.7378114842902,
+    "tabOrder": 0
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "table1_us_vs_india"
+                    }
+                  },
+                  "Property": "Column2"
+                }
+              },
+              "queryRef": "table1_us_vs_india.Column2",
+              "nativeQueryRef": "Column2"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "table1_us_vs_india"
+                    }
+                  },
+                  "Property": "Column1"
+                }
+              },
+              "queryRef": "table1_us_vs_india.Column1",
+              "nativeQueryRef": "Column1"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "table1_us_vs_india"
+                    }
+                  },
+                  "Property": "Column3"
+                }
+              },
+              "queryRef": "table1_us_vs_india.Column3",
+              "nativeQueryRef": "Column3"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "table1_us_vs_india"
+                    }
+                  },
+                  "Property": "Column4"
+                }
+              },
+              "queryRef": "table1_us_vs_india.Column4",
+              "nativeQueryRef": "Column4"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "table1_us_vs_india"
+                    }
+                  },
+                  "Property": "Column5"
+                }
+              },
+              "queryRef": "table1_us_vs_india.Column5",
+              "nativeQueryRef": "Column5"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "table1_us_vs_india"
+                    }
+                  },
+                  "Property": "Column6"
+                }
+              },
+              "queryRef": "table1_us_vs_india.Column6",
+              "nativeQueryRef": "Column6"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

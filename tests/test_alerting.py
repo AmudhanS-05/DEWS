@@ -73,6 +73,43 @@ def test_bulletin_formats_numbers_and_rounds_long_decimals_in_the_advice():
     assert "action 5.5 ft, minor 5.5 ft, moderate 7.0 ft, major 13.0 ft (NWS)" in t
 
 
+MODEL_DETAILS = {"kind": "new", "site_name": "Llano River at Llano", "site_no": "08151500", "category": "minor", "current_stage": 8.38, "forecast_stage": 5.42, "model": "s3_v0", "horizon_h": 3.0,
+                 "official_levels": {"action": 10.0, "minor": 10.0, "moderate": 12.0, "major": 23.0}, "alert_rule": "alert_by_model", "tau": 0.827, "probability": 0.895}
+MODEL_ROW = {"site_no": "08151500", "mode": "SIMULATION", "category": "minor", "probability": 0.895, "horizon_h": 3, "provisional_data": False, "details": MODEL_DETAILS}
+MODEL_REC = dict(REC, alert_id="08151500|minor|2023-10-26T07:00:00Z", advisory_id="08151500|minor|2023-10-26T07:00:00Z|1")
+
+
+def test_model_alert_bulletin_leads_with_the_probability_and_never_says_forecast_to_reach():
+    f = bulletin.facts(MODEL_REC, MODEL_ROW, None)
+    text, html = bulletin.render_text(f), bulletin.render_html(f)
+    for out in (text, html):
+        assert "probability of crossing MINOR flood stage (10.0 ft) within 3 h: 90%" in out and "forecast to reach" not in out.lower()
+        assert "UNCERTAIN: the two forecasts disagree" in out and "5.4 ft" in out
+
+
+def test_model_alert_with_the_stage_forecast_at_the_category_has_no_uncertain_sentence():
+    row = dict(MODEL_ROW, details=dict(MODEL_DETAILS, forecast_stage=10.5))
+    text = bulletin.render_text(bulletin.facts(MODEL_REC, row, None))
+    assert "probability of crossing MINOR" in text and "UNCERTAIN" not in text
+
+
+def test_rise_rate_alert_keeps_the_stage_forecast_headline():
+    assert "forecast to reach the MINOR" in bulletin.render_text(bulletin.facts(REC, ALERT_ROW, None)).replace("The stage is forecast", "forecast")
+
+
+def test_v1_draft_under_the_model_rule_uses_the_same_wording():
+    t = template.render_v1({**MODEL_DETAILS, "mode": "SIMULATION", "alert_id": "x"})
+    assert "probability of crossing MINOR" in t and "forecast to reach" not in t and "UNCERTAIN" in t and "83%" in t
+
+
+def test_advisories_carry_the_time_they_arrived_newest_first(conn):
+    with conn, conn.cursor() as cur:
+        cur.execute("INSERT INTO alerts (alert_id, site_no, mode, category, raised_at) VALUES ('new|minor|2019-05-05T00:00:00Z','new','SIMULATION','minor',now())")
+        cur.execute("INSERT INTO advisories (advisory_id, alert_id, version, source, text, created_at) VALUES ('new|minor|2019-05-05T00:00:00Z|1','new|minor|2019-05-05T00:00:00Z',1,'template','x', now() + interval '1 hour')")
+    out = approval.list_advisories(conn)
+    assert out[0]["advisory_id"].startswith("new|") and out[0]["created_at"] and out[1]["created_at"]
+
+
 def test_v1_template_text_is_not_repeated_in_the_bulletin():
     f = bulletin.facts(dict(REC, version=1, text="TEMPLATE TEXT"), ALERT_ROW, None)
     assert "TEMPLATE TEXT" not in bulletin.render_text(f) and "Approved advisory" not in bulletin.render_text(f)

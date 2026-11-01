@@ -61,6 +61,16 @@ table agent_run_metrics
 		summarizeBy: none
 		sourceColumn: disagreements
 
+	column tool_calls
+		dataType: int64
+		formatString: 0
+		sourceProviderType: bigint
+		lineageTag: 6ec74ab3-bc75-4a8c-b443-ad4746dcb3a3
+		summarizeBy: sum
+		sourceColumn: tool_calls
+
+		annotation SummarizationSetBy = Automatic
+
 	partition agent_run_metrics = m
 		mode: directQuery
 		source =
@@ -69,3 +79,4 @@ table agent_run_metrics
 					Data = Value.NativeQuery(Source, "SELECT e.run_id, e.alert_id, COALESCE(a.mode, 'no alert row') AS mode, a.site_no, EXTRACT(EPOCH FROM (max(e.ts) - min(e.ts)))::float8 AS duration_s, COALESCE(sum((e.detail->>'tokens')::numeric) FILTER (WHERE e.kind = 'end'), 0)::float8 AS tokens, count(*) FILTER (WHERE e.kind = 'tool_call') AS tool_calls, count(*) FILTER (WHERE e.kind = 'revision') AS revisions, count(*) FILTER (WHERE e.kind = 'disagreement') AS disagreements FROM agent_events e LEFT JOIN alerts a USING (alert_id) GROUP BY 1, 2, 3, 4", null, [EnableFolding=true])
 				in
 					Data
+

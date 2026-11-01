@@ -87,3 +87,4 @@ table advisories
 					Data = Source{[Schema="public",Item="advisories"]}[Data]
 				in
 					Data
+

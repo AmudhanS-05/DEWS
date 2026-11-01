@@ -188,9 +188,11 @@
     <table><thead><tr><th>Process</th><th>State</th><th></th></tr></thead><tbody id="ct-procs"></tbody></table>
     <h2>Replay a flood</h2>
     <table><tbody id="ct-floods"></tbody></table>
-    <div class="note" style="margin-top:6px">A date range already replayed goes to the dead-letter topic: reset it first. Reset stops Faust and the forecaster for 1.5 to 5 minutes and deletes that flood's SIMULATION rows, a sent alert's record included (saved to gate_output).</div>
+    <div class="note" style="margin-top:6px">Replay refuses dates already replayed since the last reset: press Reset first. Replay sends rain first and the gauges 15 s later. Reset stops Faust and the forecaster for 1.5 to 5 minutes and deletes that flood's SIMULATION rows, a sent alert's record included (saved to gate_output).</div>
     <h2>Fault drills</h2>
     <table><tbody id="ct-drills"></tbody></table>
+    <h2>Verify a slice</h2>
+    <table><tbody id="ct-verify"></tbody></table>
   </section>
   <div class="fineprint">Prototype, not an official warning</div>
 </main>
@@ -350,7 +352,7 @@ async function loadAdvisories(){
     box.innerHTML = d.advisories.length ? d.advisories.map(a=>{
       const pending=a.status==="draft", text=a.edited_text||a.text;
       return `<div class="adv glass">
-        <div class="advhead"><b style="color:var(--s-${esc(a.category)})">${esc(a.category)} flood category</b> · ${esc(a.site_no)} · ${a.mode==="SIMULATION"?"<b>SIMULATION</b>":esc(a.mode)} · v${esc(a.version)} (${esc(a.source)}) · <b>${esc(a.status)}</b>
+        <div class="advhead"><b>Arrived ${fmtDT(a.created_at)}</b> · <b style="color:var(--s-${esc(a.category)})">${esc(a.category)} flood category</b> · ${esc(a.site_no)} · ${a.mode==="SIMULATION"?"<b>SIMULATION</b>":esc(a.mode)} · v${esc(a.version)} (${esc(a.source)}) · <b>${esc(a.status)}</b>
           ${a.confidence==="uncertain"?"· <b>uncertain</b>":""}${a.reviewer_verdict?" · reviewer: "+esc(a.reviewer_verdict):""}
           ${a.delivered_at?" · delivered "+fmtDT(a.delivered_at):""}</div>
         ${pending?`<textarea id="ta-${esc(a.advisory_id)}" rows="7" onfocus="advEditing=true">${esc(text)}</textarea>
@@ -390,7 +392,7 @@ setInterval(()=>{ if(!document.getElementById("tab-data").hidden) loadAdvisories
       const pend=d.advisories.filter(a=>a.status==="draft");
       if(!pend.length){ bar.hidden=true; document.title=base; return; }
       const top=focus=pend[0], sim=pend.every(a=>a.mode==="SIMULATION");
-      txt.textContent=`${pend.length} ${pend.length>1?"advisories":"advisory"} awaiting approval · ${top.category} flood category forecast · ${top.site_no}`+(sim?" · SIMULATION":"");
+      txt.textContent=`${pend.length} ${pend.length>1?"advisories":"advisory"} awaiting approval · latest ${new Date(top.created_at).toLocaleTimeString([], {hour12:false})} · ${top.category} flood category forecast · ${top.site_no}`+(sim?" · SIMULATION":"");
       document.getElementById("alert-dot").style.background=`var(--s-${top.category})`;
       bar.hidden=false; document.title="("+pend.length+") "+base;
     }catch(e){}

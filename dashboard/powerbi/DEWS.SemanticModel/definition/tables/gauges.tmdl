@@ -69,3 +69,4 @@ table gauges
 					Data = Source{[Schema="public",Item="gauges"]}[Data]
 				in
 					Data
+

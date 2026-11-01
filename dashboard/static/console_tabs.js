@@ -144,10 +144,11 @@ async function loadControl(){
     const d=await (await fetch("/api/control")).json();
     if(!d.ok){ $("ct-note").textContent=d.error||"not available"; return; }
     const busy=d.job&&d.job.running, j=$("ct-job"); j.hidden=!d.job;
-    if(d.job) j.innerHTML=`<b>${esc(d.job.label)}</b> · ${d.job.running?"running":(d.job.ok?"finished":"failed")} · ${d.job.elapsed_s} s · <span class="note">${esc(d.job.log)}</span>`;
+    if(d.job) j.innerHTML=`<b>${esc(d.job.label)}</b> · ${d.job.running?"running":(d.job.ok?"finished":"failed")} · ${d.job.elapsed_s} s · <span class="note">${esc(d.job.log)}</span>${d.job.result?`<div class="note" style="margin-top:4px">${esc(d.job.result)}</div>`:""}`;
     const b=(a,t,txt,conf,dis)=>`<button class="btn ct-btn" data-a="${a}" data-t="${esc(t)}" data-c="${conf?1:""}"${dis?" disabled":""}>${esc(txt)}</button>`;
     setHtml("ct-procs",d.processes.map(p=>`<tr><td>${esc(p.label)}</td><td class="${p.running?"tag-ok":"note"}">${p.running?"running":"stopped"}</td><td class="r">${p.running?b("stop",p.id,"Stop",false):b("start",p.id,"Start",false)}</td></tr>`).join(""));
-    setHtml("ct-floods",d.floods.map(f=>`<tr><td>${esc(f.label)}</td><td class="r">${b("replay",f.id,"Replay",false,busy)}${b("reset",f.id,"Reset",true,busy)}</td></tr>`).join(""));
+    setHtml("ct-floods",d.floods.map(f=>`<tr><td>${esc(f.label)}</td><td class="r">${b("replay",f.id,"Replay",false,busy)}${b("agents",f.id,"Run agents",true,busy)}${b("reset",f.id,"Reset",true,busy)}</td></tr>`).join(""));
+    setHtml("ct-verify",(d.slices||[]).map(s=>`<tr><td>verify_slice ${esc(s)}</td><td class="r">${b("verify",s,"Verify",false,busy)}</td></tr>`).join(""));
     setHtml("ct-drills",d.drills.map(x=>`<tr><td>${esc(x.label)}</td><td class="r">${b("drill",x.id,"Run drill",true,busy)}</td></tr>`).join(""));
   }catch(e){ $("ct-note").textContent="cannot reach the console server"; }
 }

@@ -39,3 +39,4 @@ table past_floods
 					Data = Source{[Schema="public",Item="past_floods"]}[Data]
 				in
 					Data
+

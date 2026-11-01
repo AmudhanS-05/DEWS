@@ -39,3 +39,4 @@ table feed_staleness
 					Data = Source{[Schema="public",Item="feed_staleness"]}[Data]
 				in
 					Data
+

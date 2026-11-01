@@ -198,3 +198,10 @@ def test_model_alert_stands_for_its_horizon_then_is_withdrawn_and_cools_down():
 def test_model_alert_reached_is_not_withdrawn():
     al = _run_model([True, False, False, False, False], [4.0, 6.0, 6.0, 4.0, 4.0])
     assert [a["kind"] for a in al] == ["new"]
+
+
+def test_model_cooldown_is_six_hours_from_when_the_alert_fired_as_the_harness():
+    al = _run_model([True] * 7)                                              # still firing: nothing new until 6 h after the first
+    assert [a["kind"] for a in al] == ["new", "new"] and al[0]["alert_id"] != al[1]["alert_id"]
+    assert [a["window_start_ts"] for a in al] == [T0, T0 + 6 * 3600]
+    assert len(_run_model([True] * 6)) == 1

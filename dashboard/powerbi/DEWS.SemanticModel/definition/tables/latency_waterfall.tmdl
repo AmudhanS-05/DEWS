@@ -129,3 +129,4 @@ table latency_waterfall
 					Data = Source{[Schema="public",Item="latency_waterfall"]}[Data]
 				in
 					Data
+

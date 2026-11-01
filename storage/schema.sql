@@ -79,6 +79,8 @@ CREATE TABLE IF NOT EXISTS windowed_aggregates (
     emitted_at          TIMESTAMPTZ DEFAULT now(),
     PRIMARY KEY (site_no, window_start, mode)
 );
+-- When a window was written: tells a replay since the last reset from an older one
+ALTER TABLE windowed_aggregates ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
 
 CREATE TABLE IF NOT EXISTS risk_scores (
     id                  BIGSERIAL PRIMARY KEY,
