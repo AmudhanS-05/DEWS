@@ -54,6 +54,13 @@ hour), `accum_hours`, `rain_mm` (mean depth over the 10 km circle), `n_cells`, `
 `p_major`, `horizon_h`, `model`. `features` = the latest `aggregates.window` record for the gauge plus the previous
 windows as `history` (oldest first) and `official_levels`. Must run in under 50 ms per call on the laptop and never
 raise (return the baseline with `model = "rise_rate"` on any error).
+Added 1 Nov 2026 [ml][core]: two more keys. `tau` (the model's alert threshold, chosen on validation years) and
+`alert_by_model` (true when `p_minor >= tau` while `stage_last` is below the official minor stage; null for the
+rise-rate record). **The forecaster should raise a minor alert on `alert_by_model` when it is not null, and use the
+rise-rate rule (`forecast_stage` reaching minor) only when it is null.** The evaluated detection numbers of `s3_v0`
+(ml/MODEL_CARD.md) were measured with this rule; an alert from `forecast_stage` crossing minor is a different rule
+and is not covered by them. `forecast_stage` is in feet (current stage + predicted change); `p_minor` is meaningful
+only while the stage is below minor.
 
 **Sensor-fault flag (S3, PROPOSED by ml, revised 31 Oct 2026 after the team decision; core and agents to accept
 or amend):** `ml/fault_rules.py`: `check_gauge(readings, site_no, ctx=None) -> {suspect, reasons, flags}`.

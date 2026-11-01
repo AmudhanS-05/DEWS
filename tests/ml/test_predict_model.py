@@ -116,3 +116,58 @@ def test_real_model_at_3h_and_fallback_elsewhere(monkeypatch):
     assert out["model"] == "s3_v0" and 0 <= out["p_minor"] <= 1 and out["horizon_h"] == 3.0
     assert P.predict({**f, "horizon_h": 1})["model"] == "rise_rate"
     assert P.predict({**f, "stage_last": None})["model"] == "rise_rate"
+
+
+def _windows(stages, t0=1_700_006_400.0):
+    """Hourly aggregates.window-like records (as streams/windowing.py emits) for a list of hourly stages."""
+    out, prev = [], None
+    for k, s in enumerate(stages):
+        rr = 0.0 if prev is None else s - prev
+        out.append({"window_start_ts": t0 + k * 3600, "stage_last": s, "stage_max": max(s, prev or s),
+                    "stage_min": min(s, prev or s), "rise_rate_ft_per_h": rr, "n_readings": 4})
+        prev = s
+    return out
+
+
+def _real(monkeypatch):
+    import os
+    d = os.path.join(os.path.dirname(P.__file__), "models")
+    if not os.path.exists(os.path.join(d, "s3_v0_h3.joblib")):
+        pytest.skip("model files not present")
+    monkeypatch.setattr(P, "MODELS_DIR", d)
+    monkeypatch.setattr(P, "_CACHE", {})
+
+
+DRW = {"action": 5.5, "minor": 5.5, "moderate": 7.0, "major": 13.0}       # DRWT2 official levels
+
+
+def test_forecast_stage_is_feet_near_current_when_steady(monkeypatch):
+    _real(monkeypatch)
+    w = _windows([3.0] * 26)
+    out = P.predict({**w[-1], "history": w[-25:-1], "official_levels": DRW})
+    assert out["model"] == "s3_v0" and abs(out["forecast_stage"] - 3.0) < 0.5
+
+
+def test_forecast_stage_rises_for_a_rising_river(monkeypatch):
+    _real(monkeypatch)
+    w = _windows([2.0] * 20 + [2.0 + 0.4 * k for k in range(1, 7)])
+    out = P.predict({**w[-1], "history": w[-25:-1], "official_levels": DRW})
+    assert out["forecast_stage"] > w[-1]["stage_last"]
+
+
+def test_forecast_stage_stays_near_flood_level_far_above_minor(monkeypatch):
+    """Regression test for the 1 Nov 2026 bug: 25.67 ft now gave a 4.21 ft forecast."""
+    _real(monkeypatch)
+    w = _windows([3.0] * 20 + [8.0, 14.0, 20.0, 24.0, 25.5, 25.67])
+    out = P.predict({**w[-1], "history": w[-25:-1], "official_levels": DRW})
+    assert abs(out["forecast_stage"] - 25.67) < 5.0
+    assert out["alert_by_model"] is False                              # already above minor: no new alert
+
+
+def test_alert_by_model_matches_tau_below_minor(monkeypatch):
+    _real(monkeypatch)
+    w = _windows([2.0] * 20 + [2.5, 3.2, 4.0, 4.6, 5.0, 5.3])
+    out = P.predict({**w[-1], "history": w[-25:-1], "official_levels": DRW})
+    assert out["tau"] is not None and out["alert_by_model"] == (out["p_minor"] >= out["tau"])
+    rr = P.predict({**w[-1], "history": w[-25:-1], "official_levels": DRW, "horizon_h": 1})
+    assert rr["model"] == "rise_rate" and rr["tau"] is None and rr["alert_by_model"] is None

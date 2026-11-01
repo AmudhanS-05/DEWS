@@ -202,6 +202,59 @@ def rain_cols(radius: float) -> list[str]:
     return [f"{k}_r{int(radius)}" for k in RAIN3]
 
 
+def fit_reg_delta(df, feats: list[str], h: int, frac: float = 0.15, seed: int = SEED):
+    """Stage regressor (fix of 1 Nov 2026): target = stage at t + h minus the current stage, fitted on a uniform
+    random sample of ALL windows without event weights, so it is valid above minor stage too. The first version
+    (fit_reg: target relative to minor, trained on the classifier's event-weighted rows, which are below minor)
+    pulled every forecast towards the minor stage (DRWT2, 2019-05: 22.7 ft now -> about 5.4 ft forecast)."""
+    from sklearn.ensemble import HistGradientBoostingRegressor
+    ok = df[f"y_stage_{h}"].notna().to_numpy()
+    rng = np.random.default_rng(seed + 100 + h)
+    pick = ok & (rng.random(len(df)) < frac)
+    d = df[pick]
+    m = HistGradientBoostingRegressor(max_iter=300, learning_rate=0.05, max_leaf_nodes=31, random_state=SEED)
+    return m.fit(d[feats], d[f"y_stage_{h}"] - d["stage"])
+
+
+def cmd_refit_reg(a):
+    """Refit only the stage regressors of the committed s3_v0 models (classifiers, tau and p_minor untouched) and
+    report stage MAE / RMSE on the test period against persistence and the rise-rate extrapolation."""
+    import joblib
+    import pandas as pd
+    from ml.progress import Timer, bar
+    timer = Timer()
+    horizons = [int(x) for x in a.horizons.split(",")]
+    df, info = _load()
+    fit_part = df[df.t < ts(VAL_START)]
+    test = df[df.t >= ts(TRAIN_END)]
+    rows = []
+    print(f"ml.s3_model refit-reg: delta-stage regressors on a {0.15:.0%} uniform sample of {len(fit_part)} windows "
+          f"(t < {VAL_START}); test {len(test)} windows")
+    for h in bar(horizons, "horizons"):
+        path = os.path.join(a.models_dir, f"s3_v0_h{h}.joblib")
+        m = joblib.load(path)
+        reg = fit_reg_delta(fit_part, m["features"], h)
+        m["reg"], m["reg_target"] = reg, "delta"
+        joblib.dump(m, path, compress=3)
+        t = test[test[f"y_stage_{h}"].notna()]
+        y = t[f"y_stage_{h}"].to_numpy()
+        cur = t.stage.to_numpy()
+        f_model = cur + reg.predict(t[m["features"]])
+        f_rr = cur + np.nan_to_num(t.rise_rate.to_numpy(), nan=0.0).clip(min=0) * h
+        above = (cur >= t.minor.to_numpy())
+        for name, f in (("s3_v0_reg", f_model), ("persistence", cur), ("rise_rate", f_rr)):
+            e = f - y
+            rows.append({"horizon_h": h, "model": name, "mae_ft": round(float(np.abs(e).mean()), 4),
+                         "rmse_ft": round(float(np.sqrt((e * e).mean())), 4),
+                         "mae_above_minor_ft": round(float(np.abs(e[above]).mean()), 4) if above.any() else None,
+                         "n": int(len(e)), "n_above_minor": int(above.sum())})
+    pd.DataFrame(rows).to_csv(a.out, index=False)
+    for r in rows:
+        print(f"  h={r['horizon_h']} {r['model']:12s} MAE {r['mae_ft']} ft RMSE {r['rmse_ft']} ft "
+              f"MAE above minor {r['mae_above_minor_ft']} ft (n {r['n_above_minor']})")
+    print(f"done -> {a.out}; models rewritten in {a.models_dir} in {timer.elapsed()}")
+
+
 # ---------------- CLI ----------------
 
 def _load():
@@ -451,8 +504,12 @@ def main(argv=None):
     r.add_argument("--radii", default="5,10,25")
     r.add_argument("--horizons", default="1,2,3,4,5,6")
     r.add_argument("--out", default="ml/figures/s3_radius.csv")
+    rr = sub.add_parser("refit-reg")
+    rr.add_argument("--horizons", default="1,2,3,4,5,6")
+    rr.add_argument("--models-dir", default="ml/models")
+    rr.add_argument("--out", default="ml/figures/s3_stage_mae.csv")
     a = p.parse_args(argv)
-    {"build": cmd_build, "train": cmd_train, "radius": cmd_radius}[a.cmd](a)
+    {"build": cmd_build, "train": cmd_train, "radius": cmd_radius, "refit-reg": cmd_refit_reg}[a.cmd](a)
 
 
 if __name__ == "__main__":
