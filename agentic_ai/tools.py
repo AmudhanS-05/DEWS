@@ -286,11 +286,15 @@ class Tools:
 
     def log_agent_run(self, run_id: str, alert_id: str, agent: str, input_summary: str = "", output=None,
                       tool_calls=None, started_at=None, ended_at=None, tokens: int | None = None,
-                      verdict: str | None = None) -> None:
+                      verdict: str | None = None, trace_run_id: str | None = None) -> None:
         self._x("INSERT INTO agent_runs (run_id, alert_id, agent, input_summary, output, tool_calls, started_at, "
-                "ended_at, tokens, verdict) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                "ended_at, tokens, verdict, trace_run_id) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                 (run_id, alert_id, agent, input_summary, Json(output), Json(tool_calls), started_at, ended_at,
-                 tokens, verdict))
+                 tokens, verdict, trace_run_id))
+
+    def set_trace_url(self, run_id: str, trace_url: str | None) -> None:
+        """The LangSmith URL of the run's trace, on every agent_runs row of the run (known only after the run)."""
+        self._x("UPDATE agent_runs SET trace_url = %s WHERE run_id = %s", (trace_url, run_id))
 
     def log_agent_event(self, run_id: str, alert_id: str, agent: str, kind: str, detail: dict | None = None,
                         ts: datetime | None = None) -> None:

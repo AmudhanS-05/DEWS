@@ -140,6 +140,22 @@ def drop_illustrative(conn) -> dict:
     return n
 
 
+def neighbour_alert_ids() -> list[str]:
+    """Alert ids of the two neighbour gauges in the measured fixture (written by seed.load before 1 Nov)."""
+    return sorted({a["alert_id"] for a in build_replay()["alerts"] if a["site_no"] != SITE})
+
+
+def drop_neighbour_alerts(conn) -> int:
+    """Delete exactly those neighbour alerts (and their advisories / agent rows). Their windows and forecasts stay:
+    the context worker reads them for the DRWT2 alert. Returns the number of alerts deleted."""
+    ids = neighbour_alert_ids()
+    with conn.cursor() as cur:
+        for t in ("agent_events", "agent_runs", "advisories"):
+            cur.execute(f"DELETE FROM {t} WHERE alert_id = ANY(%s)", (ids,))
+        cur.execute("DELETE FROM alerts WHERE alert_id = ANY(%s) AND mode = 'SIMULATION'", (ids,))
+        return cur.rowcount
+
+
 def _replay_rows_present(conn) -> bool:
     """True when the database holds windows for the seed gauge that differ from the illustrative shape."""
     ill = {(w["window_start"], w["stage_last"]) for w in build()["windows"] if w["site_no"] == SITE}
@@ -170,7 +186,8 @@ def load(conn, illustrative: bool = False) -> str:
                 cur.execute(_R_SQL + "ON CONFLICT (site_no, window_start, mode, model, horizon_h) DO UPDATE SET "
                             "forecast_stage = EXCLUDED.forecast_stage", r)
             for a in d["alerts"]:
-                cur.execute(_A_SQL, a)
+                if a["site_no"] == SITE:   # 1 Nov: neighbour gauges give context windows only, never alerts
+                    cur.execute(_A_SQL, a)
         return d["primary_alert_id"]
     if _replay_rows_present(conn):
         raise RuntimeError("replay rows for 08158700 are in this database: the illustrative seed would mix with them")
@@ -209,8 +226,15 @@ def main() -> None:
     ap.add_argument("--drop-illustrative", action="store_true",
                     help="only delete what the earlier illustrative seed wrote (alerts 08158700|minor|... and "
                          "|moderate|..., their advisories and agent rows), then stop")
+    ap.add_argument("--drop-neighbour-alerts", action="store_true",
+                    help="only delete the 5 alerts of 08159000 / 08158840 that the seed wrote before 1 Nov "
+                         "(their windows and forecasts are kept as context), then stop")
     args = ap.parse_args()
     conn = connect(args.dsn)
+    if args.drop_neighbour_alerts:
+        ensure_schema(conn)
+        print(f"removed {drop_neighbour_alerts(conn)} neighbour alert(s): {', '.join(neighbour_alert_ids())}")
+        return
     if args.drop_illustrative:
         ensure_schema(conn)
         print(f"removed illustrative seed rows: {drop_illustrative(conn)}")

@@ -59,6 +59,7 @@ class Run:
         self.tool_calls: dict[str, list[dict]] = {}
         self.on_event = on_event          # optional callback (CLI progress lines); never allowed to break the run
         self.t_start = time.monotonic()
+        self.trace_run_id: str | None = None   # LangSmith root run id when tracing is on (agent_runs.trace_run_id)
         self._agent_t0: dict[str, float] = {}
         self._lock = threading.Lock()   # evidence and context run in parallel: one event at a time, so event_id
         #                                  order = ts order = callback order (the console orders by event_id)
@@ -97,7 +98,8 @@ class Run:
 
     def row(self, agent: str, started: datetime, input_summary: str, output: Any, tokens: int = 0, verdict: str | None = None):
         self.tools.log_agent_run(self.run_id, self.alert_id, agent, input_summary, output,
-                                 self.tool_calls.pop(agent, []), started, datetime.now(timezone.utc), tokens, verdict)
+                                 self.tool_calls.pop(agent, []), started, datetime.now(timezone.utc), tokens, verdict,
+                                 trace_run_id=self.trace_run_id)
 
 
 def _now():
@@ -320,6 +322,19 @@ def build_graph(tools, run: Run):
     return g.compile()
 
 
+def _trace_url(tools, run: Run) -> str | None:
+    """LangSmith link of the finished run, stored on its agent_runs rows (console link). None when tracing is off."""
+    if not run.trace_run_id:
+        return None
+    url = tracing.trace_url(run.trace_run_id, tracing.configure()["project"])
+    if url:
+        try:
+            tools.set_trace_url(run.run_id, url)
+        except Exception:  # noqa: BLE001 - a missing link never changes the outcome
+            pass
+    return url
+
+
 def run_alert(tools, alert_id: str, force: bool = False, on_event=None) -> dict:
     """Run the graph on one alert. Never raises: any failure leaves template v1 (outcome `v1_kept`, error logged).
     `on_event(row)` is called for every agent event as it happens (CLI progress)."""
@@ -328,6 +343,7 @@ def run_alert(tools, alert_id: str, force: bool = False, on_event=None) -> dict:
     run = Run(tools, uuid.uuid4().hex[:12], alert_id, on_event)
     app = build_graph(tools, run)
     trace_id = uuid.uuid4()   # LangChain uses it as the root run id, so the LangSmith trace can be linked
+    run.trace_run_id = str(trace_id) if tr["enabled"] else None
     base = {"run_id": run.run_id, "alert_id": alert_id, "trace_run_id": str(trace_id) if tr["enabled"] else None,
             "trace_project": tr["project"], "tools_via": getattr(tools, "calls", None) or "direct"}
     try:
@@ -338,6 +354,9 @@ def run_alert(tools, alert_id: str, force: bool = False, on_event=None) -> dict:
         run.event("coordinator", "end", {"error": f"{type(e).__name__}: {str(e)[:200]}", "kept": "template v1"})
         return {**base, "outcome": "v1_kept", "error": str(e), "events": run.events,
                 "elapsed_s": round(time.monotonic() - run.t_start, 2)}
+    url = _trace_url(tools, run)
+    if url:
+        base["trace_url"] = url
     return {**base, "outcome": final.get("outcome"), "version": final.get("version"),
             "elapsed_s": round(time.monotonic() - run.t_start, 2),
             "advisory_id": final.get("advisory_id"), "confidence": final.get("confidence"),

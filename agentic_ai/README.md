@@ -129,6 +129,7 @@ are spaced 65 s (`--gap`) for the Groq free tier; 28 live runs take about 30 min
 pip install -r requirements-dev.txt -r requirements-agents.txt
 cd docker; docker compose up -d; cd ..
 python -m agentic_ai.seed                    # measured May 2019 record; also removes the old illustrative seed rows
+python -m agentic_ai.seed --drop-neighbour-alerts   # once: the 5 neighbour-gauge alerts older seeds wrote (windows stay)
 python -m agentic_ai.run --alert-id '08158700|major|2019-05-04T01:00:00Z'      # --force re-runs
 python -m agentic_ai.run                     # or: consume alerts.flood (group agent), Ctrl-C to stop
 python -m pytest -q tests/agents             # always LLM_PROVIDER=none, no network
@@ -143,7 +144,7 @@ python -m pytest -q tests/agents             # always LLM_PROVIDER=none, no netw
 | Groq 429 | waits once for the reset hint (`retry-after`, else `x-ratelimit-reset-*`) when it is at most 20 s, shown as a progress line, then retries Groq; a longer hint goes straight to `LLM_FALLBACK` |
 | `LLM_FORCE_DOWN=1` | every LLM call fails at once (fault drill). Any LLM failure (no key, provider error, timeout, forced) keeps template v1: no agents draft, no judge call, outcome `v1_kept` with reason "LLM unavailable: ..." (since 1 Nov; before, the template text was saved again as v2) |
 | `LLM_FALLBACK` | `gemini` / `groq` / `none`: a failed call is retried once there, then the template text is used |
-| `LANGSMITH_TRACING=true` + `LANGSMITH_API_KEY` | optional tracing; the CLI prints the trace link |
+| `LANGSMITH_TRACING=true` + `LANGSMITH_API_KEY` | optional tracing; the CLI prints the trace link, and every `agent_runs` row of the run carries `trace_run_id` and `trace_url` (console link) |
 | `PG_DSN` | PostgreSQL (default the docker one) |
 | `AGENT_TOOLS` | `mcp` (default: the agents' tool calls go through the stdio MCP server, started once per process, about 1 s) or `direct` (plain Python calls). Any MCP failure falls back to the direct call for that call; each tool_call event says `via` |
 

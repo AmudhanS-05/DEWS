@@ -179,7 +179,7 @@ def main(argv=None) -> int:
         res = graph.run_alert(tools, args.alert_id, force=args.force, on_event=None if args.quiet else show)
         if res.get("draft") and res["outcome"] != "dropped":
             print("\n" + res["draft"] + "\n")
-        print(final_line(res, tracing.trace_url(res.get("trace_run_id"), res.get("trace_project"))), flush=True)
+        print(final_line(res, res.get("trace_url") or tracing.trace_url(res.get("trace_run_id"), res.get("trace_project"))), flush=True)
         tv = res.get("tools_via")
         if isinstance(tv, dict):
             print(f"tools via MCP (agentic_ai.mcp_server, stdio): {tv['mcp']} call(s), direct fallback {tv['fallback']}",

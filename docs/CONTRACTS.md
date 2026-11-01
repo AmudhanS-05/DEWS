@@ -49,7 +49,11 @@ Oct; for a replay this is the historical time, `raised_at` is not), `episode_sta
 `ts`. Written by the agents as they run; read-only for the console.
 
 **`agent_runs`** (S1 skeleton, S4 full): `run_id`, `alert_id`, `agent`, `input_summary`, `output`, `tool_calls`,
-`started_at`, `ended_at`, `tokens`, `verdict`.
+`started_at`, `ended_at`, `tokens`, `verdict`, `trace_run_id`, `trace_url` (agents 1 Nov: the LangSmith root run id
+on every row of a run when tracing is on, and its web URL filled after the run; both NULL when tracing is off or
+LangSmith is unreachable). Core, for storage/schema.sql:
+`ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS trace_run_id TEXT; ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS trace_url TEXT;`
+(agentic_ai/schema_agents.sql already runs both). Console link: `SELECT DISTINCT run_id, trace_url FROM agent_runs`.
 
 ## ML model (S3)
 
