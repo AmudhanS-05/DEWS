@@ -32,7 +32,7 @@ issue official warnings. It is a decision-support prototype for a duty officer.
 flowchart LR
   subgraph Sources
     USGS[USGS gauges<br/>live, every 5 min]
-    MRMS[NOAA MRMS radar rain<br/>planned, S2]
+    MRMS[NOAA MRMS radar rain<br/>producer on branch claude/rain]
     HIST[cached history<br/>replay = SIMULATION]
   end
   subgraph Kafka["Kafka: 3 brokers, 3 partitions, RF 3"]
@@ -89,16 +89,18 @@ Only measured results are listed. Source: commit messages and `docs/breadcrumbs/
 | Faust windows (3 workers) | done | May 2019 replay: 119 hourly windows, no window emitted twice |
 | PostgreSQL sink | done | killed mid-replay and restarted: 4233/4233 readings, 0 gaps, 0 duplicates |
 | Fault drills (`tools.fault_drill`) | done, 6 scenarios | recovery after restart: Faust worker 18.1 s, broker 21.1 s, sink 5.4 s, PostgreSQL 3.9 s, notifier 1.1 s, live producer 4.2 s; all checks PASS (one run each, replay) |
-| Forecaster (rise-rate baseline) | done | 3903 windows → 3903 forecasts. On the 2019 DRWT2 replay the baseline alerted **only after** the minor crossing, so it gave no lead time there |
+| Forecaster | done; `s3_v0` (gradient boosting, stage only) active at the 3 h horizon, rise-rate rule at every other horizon and on any failure | test period 2024-26 (replay, 63 minor crossings): **comparable detection with about a third fewer false alarms** than rise-rate (29 vs 33 detected, 150 vs 224 false alarms), no lead-time gain (median 0.42 h gross, −0.58 h net). Not "better forecasts". On the 2019 DRWT2 replay the rise-rate baseline alerted only after the minor crossing |
 | Template advisory, console approval, notifier | done | an approved replayed advisory was emailed and its delivery time recorded (runbook step 11) |
 | Console | done: landing page, Pipeline flow, Map (globe and flat), Readings & alerts, Metrics, Agents | |
-| Agents (LangGraph) | S1 + S2 code done | agent tests pass with PostgreSQL and `LLM_PROVIDER=none`; repeated live Groq runs not measured yet |
-| ML model (gradient boosting, stage + rain) | trained once on replayed real data (2020 to 2026) | **neither version beats the rise-rate baseline consistently; no skill is claimed** (`ml/MODEL_CARD.md`) |
-| MRMS rain | history decoded for 102 floods + 102 dry windows (offline); live producer and rain in windows not built (S2) | |
-| India data study | US side of the audit (Table 1) run on real data; India-WRIS loader and API client written | no Indian data processed yet |
+| Agents (LangGraph) | S1 + S2 code done | live Groq `openai/gpt-oss-120b`, reasoning effort low, 5 runs on the 2019 DRWT2 alert (replay): 5/5 passed the reviewer on the first attempt, 2.6 to 3.9 s, 3.1k to 3.5k tokens per advisory |
+| ML models | v0 (stage) and v1 (stage + radar rain) trained on 2015-2020, thresholds on 2021-23, tested once on 2024-26 | **neither beats the rise-rate rule consistently; no forecast skill is claimed**; adding rain did not help (`ml/MODEL_CARD.md`) |
+| Sensor-fault rules | 3 rules shipped (no readings, step, stuck); spike not shipped; Isolation Forest kept as a negative result | test 2024-26, faults injected into real series: no readings 100 % detected, step 81.4 %, stuck 29.5 %, 0 to 0.49 % of flood windows falsely flagged; spike 100 % but 1.07 % of flood windows (above the 1 % team limit) |
+| MRMS rain | live and replay producer `producers/mrms_qpe_producer.py` on branch `claude/rain`, **not yet merged**; rain not yet joined into windows | read back from a real Kafka: 38 gauges per live poll; RadarOnly product in hand about 3 min after the hour, Pass 1 about 15 min. History: 102 floods + 102 dry windows decoded offline. No radar rain exists for floods before Oct 2020 (incl. the 2019 demo flood) |
+| India data study | US side of Table 1 measured; India-WRIS API client works from an Indian connection | the two stations probed report **manual staff-gauge readings about once a day** (00:00 / 08:00); no Indian series processed through the pipeline yet |
 | Power BI | page 1 guide written (`dashboard/powerbi/README.md`); report not built yet | |
-| Slice check | `python -m tools.verify_slice S1` | first real run: 16 of 19 checks passed; one FAIL is the late baseline alert above |
-| Tests | `pytest -q` | 243 passed + 23 skipped without a test database (Python 3.12, 31 Oct 2026, after merging ml-india 17cbf4e) |
+| Latency trace | done | replay through the running stack, 167 traces: ingest median 0.066 s, forecast 0.506 s, one alert 1.07 s. Human approval and delivery: PostgreSQL test only. Live feed delay: one sample, 24 to 69 min |
+| Slice check | `python -m tools.verify_slice S1` | first real run: 16 of 19 checks passed (before the S1 rule became "one alert per episode, lead time reported"); not re-run since |
+| Tests | `pytest -q` | after merging core, ml-india and agents (1 Nov 2026, Python 3.12): 303 passed, 28 skipped, **7 failed** in `tests/test_forecaster.py`. Those tests assume the rise-rate rule, while `ml/models/active.json` now activates `s3_v0`; the fix is with core |
 
 **The bar any model must beat** is rise-rate extrapolation at 3 h, scored by `ml/harness.py` on stream windows
 (38 gauges, 2015 to 2025, replay): pooled F1 0.28 (precision 0.18, recall 0.61, 310 minor crossings), slow floods only
@@ -117,7 +119,7 @@ macOS, are in [Setup](docs/guide/02-setup.md).
 py -3.12 -m venv .venv; .venv\Scripts\Activate.ps1
 python -m pip install -U pip setuptools wheel
 pip install -r requirements-dev.txt          # everything: pipeline, ML, agents, tests
-pytest -q                                    # all green; database tests skip without AGENTS_TEST_DSN
+pytest -q                                    # database tests skip without AGENTS_TEST_DSN (see Status for known failures)
 copy .env.example .env                       # then fill in; never commit .env
 cd docker; docker compose up -d; cd ..       # 3 Kafka brokers + PostgreSQL (tables and views load on first start)
 python -m dashboard.flow_monitor             # console at http://127.0.0.1:8765

@@ -8,10 +8,15 @@ forecasts and an alert appear, approve the advisory, and optionally send it by e
 Before you start: [02 Setup](02-setup.md) is done, the Docker stack is healthy, and the venv is active in **every**
 terminal (`.venv\Scripts\Activate.ps1`, repo root).
 
-**What to expect from the forecaster.** It is still the rise-rate baseline. On this replay its first alert for DRWT2
-(`08158700|major|2019-05-04T01:00:00Z`) came in the window where the gauge was already at 8.2 ft, above moderate. So it
-gave **no lead time on the minor crossing**. The demo shows the pipeline working, not forecast skill
+**What to expect from the forecaster.** At the 3 h horizon the forecaster now uses the trained `s3_v0` model; it
+falls back to the rise-rate rule at other horizons and on any error. On the team's measured run of this replay with
+the rise-rate rule, the first DRWT2 alert (`08158700|major|2019-05-04T01:00:00Z`) came in the window where the gauge
+was already at 8.2 ft, above moderate, so it gave **no lead time on the minor crossing**. This replay has not been
+re-measured with `s3_v0` active. The demo shows the pipeline working, not forecast skill
 ([06](06-ml-and-evaluation.md)).
+
+**No radar rain for this flood.** The MRMS archive starts in October 2020. For a flood with rain, see
+[A flood with radar rain](#a-flood-with-radar-rain) below.
 
 ## 0. Get the history (once)
 
@@ -24,8 +29,8 @@ This writes `data/raw/usgs/08158700_00065_2019.json`. Skip it if the cache alrea
 ## 1. Start the pipeline
 
 **One command (Windows):** `powershell -ExecutionPolicy Bypass -File scripts\start_demo.ps1 -NoLiveProducer` starts
-everything in steps 1 to 3 in the background (it expects the venv at `..\spaenv`, see [02](02-setup.md)). Then go to
-step 4.
+everything below in the background (venv: `.venv` in the repo, else `..\spaenv`, or `-Venv <folder>`). Then go to
+step 2.
 
 **By hand**, one terminal each:
 
@@ -132,6 +137,21 @@ powershell -ExecutionPolicy Bypass -File scripts\stop_demo.ps1        # or stop 
 cd docker; docker compose down -v; docker compose up -d; cd ..
 Remove-Item -Recurse -Force *-data, state -ErrorAction SilentlyContinue      # Faust local stores, forecaster state
 ```
+
+## A flood with radar rain
+
+The MRMS rain producer (`producers/mrms_qpe_producer.py`) is on branch `claude/rain` and is **not yet merged**. Rain is
+not yet joined into the windows, so it shows on `replay.rain` and the Pipeline flow, not in the forecast. Once the
+branch is merged:
+
+```powershell
+python -m producers.mrms_qpe_producer --replay --start 2023-10-26T00 --end 2023-10-26T18 --speed 1800
+```
+
+ML's candidate list (`ml/figures/demo_flood_candidates.csv`, 102 minor crossings since Oct 2020) suggests
+**AHOT2 / LLAT2 on 26 Oct 2023** as the visual rain demo: 23 to 75 mm in the 24 h before. That date lies in the
+**validation** period used to choose the model's threshold, so its alert lead times are not results. Quote only
+test-period numbers (2024 to 2026, `ml/figures/s3_eval.csv`) as evidence.
 
 ## Agents without the pipeline
 

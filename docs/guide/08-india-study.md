@@ -4,10 +4,12 @@ The team is in India, but the live pipeline runs on Texas gauges. That is a data
 India study tests it with the same pipeline and the same metrics, so the gap is measured and not just asserted. Full
 plan: [`docs/INDIA_STUDY.md`](../INDIA_STUDY.md). Code: `india/` (ML + India workstream).
 
-> **Status (31 Oct 2026):** the **US side** of the audit (Table 1) has been run on real data (38 gauges). The
-> India-WRIS Excel loader and an API client built from the published OpenAPI spec exist, but they are tested only on
-> a hand-made fixture and mocked responses. The real API response layout is unverified. **No real Indian data has been
-> processed yet, and no India result is claimed.** The console shows India as a *planned* area with no gauges.
+> **Status (1 Nov 2026):** the **US side** of the audit (Table 1) has been run on real data (38 gauges). The India-WRIS
+> API client works from an Indian connection (the user's laptop). The two stations probed so far, Aheri (Gudem Bridge,
+> Pranhita, CWC) and NEELEESWARAM (Periyar), are described by India-WRIS itself as **"MANUAL-Water Level by Staff
+> Gauge"**, with readings at 00:00 or 08:00: **manual, about daily** (`india/figures/table1_us_vs_india.md`,
+> measurement-method row). That is two stations, not a survey. **No Indian series has been run through the pipeline
+> yet, and no India result is claimed.** The console shows India as a *planned* area with no gauges.
 
 ## Why US data for the live pipeline
 
@@ -21,9 +23,9 @@ Of the open sources checked, only the US provides all of the following openly, f
 | 10+ years of history | yes | varies; CAMELS-IND is daily and ends in 2020 |
 
 India-WRIS also publishes an API specification (`docs/indiawris_api.json`, OpenAPI 3, endpoints such as
-`/Dataset/River Water Level`). `india/indiawris_api.py` is a client for it. Whether the API gives sub-daily, recent
-data for free stations is part of the audit and has not been tested yet: the site was not reachable from the cloud
-session where the client was written.
+`/Dataset/River Water Level`), and `india/indiawris_api.py` is a client for it. It needs an Indian connection, because
+the cloud sessions could not reach the site. The first responses are the manual, about-daily staff-gauge readings
+described above. Whether any free station gives sub-daily, recent data is still part of the audit.
 
 ## The four steps
 
@@ -47,7 +49,8 @@ python -m india.audit --out india/figures/audit_us.csv      # US side; needs the
 python -m india.table1                                     # Table 1 (CSV + Markdown); India cells say "pending" until exports exist
 python -m india.indiawris_loader data/raw/indiawris        # check downloaded India-WRIS Excel files
 python -m india.indiawris_api --probe                      # one small API request; prints status and the raw body
-python -m india.indiawris_api --basin Godavari --tributary Godavari --agency CWC --start 2015-01-01 --end 2025-12-31
+python -m india.indiawris_api --list-stations              # station catalogue -> data/raw/indiawris/api/stations.csv
+python -m india.indiawris_api --fetch CW1PRA000084 --start 2015-01-01 --end 2025-12-31   # one station's history, resumable
 ```
 
 The API client saves every raw response under `data/raw/indiawris/api/` and writes per-station CSVs that the loader and

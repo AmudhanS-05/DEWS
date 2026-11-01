@@ -108,12 +108,24 @@ deterministic, used by every test). Each call has a 30 s timeout and never raise
 
 ## Measured so far
 
-- `pytest tests/agents`: 92 passed with PostgreSQL 16 and `LLM_PROVIDER=none` (agents workstream, 31 Oct 2026).
-  The tests cover disagreement → UNCERTAIN, "Update 2" wording, a bad draft sent back then passed, still failing after
-  2 revisions → v1 kept, LLM and tool failures → v1 kept.
-- A first live Groq run on the laptop ended `v1_kept`: the reviewer rejected `~0.79 probability` and typographic
-  Unicode. The reviewer was fixed and regression tests were added. **Repeated live Groq runs, LangSmith traces and the
-  Gemini fallback have not been measured yet.**
+All on the 2019 DRWT2 alert (replay, SIMULATION), Groq `openai/gpt-oss-120b`, runs spaced 65 s apart
+(`docs/breadcrumbs/agents.md`, 31 Oct 2026):
+
+| Setting | Runs | Saved, reviewer pass | First attempt | Time per advisory | Tokens per advisory |
+|---|---|---|---|---|---|
+| reasoning effort not set | 5 | 5/5 | 4/5 (one draft was 917 > 900 characters) | 4.2 to 11.0 s | 4.0k to 8.4k |
+| `GROQ_REASONING_EFFORT=low` + abbreviation check | 5 | 5/5 | **5/5**, 0 revisions | **2.6 to 3.9 s** | **3.1k to 3.5k** |
+
+- An abbreviation check was added after "NGS" (for NWS) slipped past both reviewers in 2 of 5 earlier low-effort runs.
+  With the check, no slips occurred in the 5 runs above.
+- LangSmith: 5/5 traces found, one root run per advisory with every graph node.
+- Fallback: back-to-back runs hit Groq's free-tier tokens-per-minute limit (429) on 2 of 5; the template text covered
+  both. Gemini `gemini-3.5-flash-lite` as the fallback: one live run saved (attempt 3, 7.0 s).
+- `pytest tests/agents`: 122 passed with PostgreSQL 16 and `LLM_PROVIDER=none`. The tests cover disagreement →
+  UNCERTAIN, "Update 2" wording, a bad draft sent back, still failing after 2 revisions → v1 kept, and LLM or tool
+  failures → v1 kept.
+- **Not measured yet:** reviewer catch rate on deliberately corrupted drafts, faithfulness over many alerts, and a
+  single-agent vs multi-agent ablation.
 - Not built yet: the MCP server (S4), episodic memory beyond "Update n", agent evaluation (faithfulness, reviewer
   catch rate, single-agent vs multi-agent ablation).
 

@@ -1,92 +1,110 @@
 # 06 ML and evaluation
 
-> **Status (31 Oct 2026):** the forecaster in the pipeline is the **rise-rate baseline**. The gradient-boosting models
-> (stage only, and stage + radar rain) have been trained **once** on replayed real data (38 gauges, Oct 2020 to
-> Oct 2026). **Neither beats the rise-rate baseline consistently on events, so no skill is claimed.** Every result,
-> with the command that produced it, is in [`ml/MODEL_CARD.md`](../../ml/MODEL_CARD.md).
+> **Status (1 Nov 2026):** at the 3 h horizon the forecaster uses **`s3_v0`**, a gradient-boosting model on stage
+> features. Every other horizon, and any failure, uses the rise-rate rule. On the held-out 2024-26 test period it shows
+> **comparable detection with about a third fewer false alarms** than the rise-rate rule, and no lead-time gain. That
+> is not "better forecasts", and **no forecast skill is claimed**. All numbers are from replayed USGS history (mode
+> SIMULATION); none is a live result. Source of truth: [`ml/MODEL_CARD.md`](../../ml/MODEL_CARD.md).
 
 ## What is predicted
 
-For each hourly window and each horizon h = 1 to 6 h, per gauge:
+For each hourly window (built by `streams/windowing.py`, the same code Faust runs) and horizon h = 1 to 6 h:
 
-- `p_minor`: the probability that the stage, now below the official **minor** flood stage, reaches it within h hours;
+- `p_minor`: the probability that the stage, now below the official NWPS **minor** stage, reaches it within h hours;
 - `forecast_stage`: the stage at t + h, in feet.
 
-An alert fires when `p >= tau` while the stage is below minor. The pipeline's forecaster turns the forecast into
-category crossings for all four official categories. Labels come **only** from the official NWPS categories in
-`config/gauge_locations.csv`.
+Only the minor category was trained, so `p_action`, `p_moderate` and `p_major` stay empty. An alert is raised when
+`p >= tau` while the stage is below minor, with a 6 h cooldown. The pipeline's forecaster then turns forecasts into
+alert episodes (new, upgrade, retract) against all four official categories.
 
-What this cannot tell you: flooded area, damage, anything at ungauged creeks, or warning beyond the river's rise time.
+It cannot tell you flooded area, damage, anything at ungauged creeks, or warning beyond the river's rise time.
+
+## Protocol (fixed before any test number was looked at)
+
+| | |
+|---|---|
+| Rows | 3,895,185 hourly windows, 38 gauges, 2015 to 31 Oct 2026, 331 minor crossings |
+| Split by time | fit 2015-2020 (229 crossings) · validate 2021-2023 (39) · **test 2024-01-01 to 2026-10-31 (63 crossings, 23 storms, 36 slow)** |
+| Threshold `tau` | false-alarm budget: the most detected crossings whose validation false alarms do not exceed the rise-rate rule's on the same rows |
+| Scoring | per event: precision, recall, F1, false alarms, median lead time **gross and net** of the 1 h feed delay; POOLED and POOLED-SLOW (rise of 3 h or more); equal weight per gauge and per event; rise-rate rescored on the same rows |
+| Disclosed correction | a first run refitted v0 and reused the validation tau, which broke the false-alarm budget (378 vs 224 at 3 h); kept as `ml/figures/s3_eval_run1_refit*`, and the final protocol keeps each tau with its model |
+
+Accuracy is never used: flood windows are a tiny share of all windows. Splits are never random, because one storm
+would leak into both sides.
 
 ## Models
 
-| Model | Inputs | State |
+| Model | Inputs | Result on the test period |
 |---|---|---|
-| persistence | stage now = stage later | baseline; never warns (recall 0 in the EDA) |
-| `rise_rate` | extrapolate the last 3 h rise | baseline; **live in the pipeline** via `ml/predict.py` |
-| `gbm_v0_stage` | stage relative to minor/action, fraction to minor, rise rate, range, 1/3/6 h changes | trained once (`ml/rain_model.py`); not better than rise-rate |
-| `gbm_v1_stage_rain` | v0 + MRMS radar rain over a 10 km circle (1, 3, 6, 24 h) | trained once; better row-level ranking than v0 at most horizons, no consistent event-level gain |
+| rise-rate | extrapolate the window's rise for h hours | the bar to beat ([below](#the-bar-to-beat)) |
+| `s3_v0` | stage relative to minor and action, fraction to minor, rise rate, range, 1/3/6 h changes (+12/24 h where chosen on validation) | **active at 3 h**; comparable detection, fewer false alarms |
+| `s3_v1_r10` | v0 + MRMS radar rain over a 10 km circle (1/3/6 h) | below v0 on the rain rows at every horizon tried; never above rise-rate. **Rain did not help** |
+| persistence | stage stays the same | never warns |
 
-Both GBMs use scikit-learn `HistGradientBoostingClassifier` for the probability and `HistGradientBoostingRegressor` for
-the stage. **One pooled model** covers all gauges. Stage is expressed relative to each gauge's own minor stage so that
-gauges are comparable. The full card, including hyper-parameters and the rebuild commands, is in
-[`ml/MODEL_CARD.md`](../../ml/MODEL_CARD.md).
+Learner: scikit-learn `HistGradientBoostingClassifier` and `Regressor`, pinned to scikit-learn 1.9.1 so the committed
+models in `ml/models/` load. A call takes 8.4 ms, and `predict()` never raises: on any error it returns the rise-rate
+result. To return to the rise-rate rule everywhere, delete `ml/models/active.json` and restart the forecaster.
 
-**The contract with the pipeline:** `ml.predict.predict(features) -> {forecast_stage, p_action, p_minor, p_moderate,
-p_major, horizon_h, model}`. It must answer in under 50 ms and **never raise**; on any error it returns the rise-rate
-baseline. The forecaster records the model name on every forecast.
+## Results (test period 2024-26, all test windows, POOLED; `ml/figures/s3_eval.csv`)
 
-**Same features online and offline.** Training windows are built by `streams/windowing.py`, the same code Faust runs, so
-a model sees the same features in replay, evaluation and live.
+| h | v0 F1 | v0 false alarms | rise-rate F1 | rise-rate false alarms |
+|---|---|---|---|---|
+| 1 | 0.29 | 44 | 0.30 | 72 |
+| 2 | 0.24 | 109 | 0.26 | 145 |
+| **3** | **0.24** (P 0.16, R 0.46) | **150** | **0.21** (P 0.13, R 0.52) | **224** |
+| 4 | 0.19 | 189 | 0.19 | 297 |
+| 5 | no alert | 0 | 0.17 | 362 |
+| 6 | 0.17 | 340 | 0.16 | 425 |
 
-## How it is scored
+At 3 h, v0 detects 29 of 63 crossings against rise-rate's 33, with 150 against 224 false alarms. Median lead time is
+0.42 h gross / **−0.58 h net** for v0, and 0.50 / −0.50 h for rise-rate. Slow floods only: F1 0.16 for both. 63
+crossings in 23 storms is a small sample, so a few detections either way are within noise.
 
-- **Events, not rows.** Floods are 0.05 to 0.3% of readings, so accuracy means nothing. Scores: precision, recall,
-  F1, false-alarm count, lead time and stage MAE/RMSE, plus precision-recall curves.
-- **Lead time gross and net:** net subtracts the roughly 1 h feed delay.
-- **Split by time, never at random.** Random splits leak one storm into train and test. Both sides must hold floods;
-  `ml.rain_model` refuses a split with no crossings on one side. The threshold `tau` is chosen on the last 25% of the
-  training period, and the test period is never used for a choice.
-- **Pooled, per gauge and slow-only.** Only 2 of 38 gauges have 10 or more floods, so the evaluation pools events from
-  all gauges (accepted by faculty) and reports per gauge, POOLED, and POOLED-SLOW (rise of 3 h or more, where lead time
-  is possible). Each gauge gets equal total weight, so fast urban creeks do not dominate (AHOT2 alone has 38 of 213
-  floods). The number of **distinct storms** is reported too, because one storm floods several gauges.
-- **Live and replay are never merged.**
-- **Case-control caveat (v0/v1):** rain history exists only around floods plus matched dry periods, so precision and
-  false-alarm counts from those rows are not those of a year of live operation.
+**Radar rain radius** (5 / 10 / 25 km, `ml/figures/s3_radius.csv`): row-level average precision at 3 h of 0.065 /
+0.063 / 0.058, so the radius has no consistent effect. 10 km stays.
 
-## Numbers that do exist
+### The bar to beat
 
-| What | Value | Source |
-|---|---|---|
-| Gauges / history | 38 gauges, 10 years, about 26 million stage readings, 213 minor crossings, 123 slow | gate check, 3 Oct 2026 (`FAQ.md`) |
-| Rise-rate baseline, 3 h, scored by `ml/harness.py` on stream windows (38 gauges, 2015 to 2025, replay) | pooled F1 0.28 (precision 0.18, recall 0.61, 310 crossings), slow floods only 0.21; DRWT2 0.25, LCPT2 0.42, JNCT2 0.76, AHOT2 0.25; median warning 0.8 h gross, −0.2 h net of the 1 h feed delay | `ml/figures/baselines.csv`, `ml/REFERENCE_BASELINES.md` |
-| Baseline in the pipeline, May 2019 DRWT2 replay | alert only **after** the minor crossing (no lead time) | core run, 31 Oct 2026 |
-| v0 / v1 vs rise-rate, POOLED, h = 1 to 6 | no consistent event-level gain; median net lead time around zero | `ml/MODEL_CARD.md`, "Measured results" |
+Rise-rate extrapolation at 3 h, scored by `ml/harness.py` on stream windows (38 gauges, 2015 to 2025): pooled F1 0.28
+(precision 0.18, recall 0.61, 310 minor crossings), slow floods only 0.21; per gauge DRWT2 0.25, LCPT2 0.42, JNCT2 0.76,
+AHOT2 0.25; median warning 0.8 h gross, −0.2 h net of the 1 h feed delay (`ml/figures/baselines.csv`).
+*Corrected 31 Oct 2026: earlier figures (0.65 / 0.26 / 0.64 / 0.41) included a 1 h look-ahead; evidence in
+`ml/REFERENCE_BASELINES.md`.* This bar covers 2015-2025. The S3 table above rescored rise-rate on the 2024-26 test rows,
+which is why its F1 differs.
 
-The rise-rate baseline is the bar to beat; the model comparison scores it on the same rows as v0/v1. *Corrected 31 Oct 2026: earlier figures (0.65 / 0.26 / 0.64 / 0.41) included a 1 h look-ahead; evidence in `ml/REFERENCE_BASELINES.md`.* DEWS makes no comparison with NWS, NSSL FLASH or GloFAS forecasts, and claims
-nothing against them.
+## Sensor-fault rules (`ml/fault_rules.py`)
+
+Physical rules on raw readings, with nearby gauges (within 60 km) and radar rain as independent evidence. Settings were
+chosen on 2021-23 and tested once on 2024-26, with faults injected into real series, 10 per type per gauge
+(`ml/figures/fault_rules_test.csv`):
+
+| Rule (fault) | Detected | Flood windows falsely flagged | Shipped |
+|---|---|---|---|
+| no readings for 3 h or more (6 h dropout) | 100 % | 0.49 % | yes |
+| step (offset that holds) | 81.4 % | 0 % | yes |
+| stuck (24 h flat while a neighbour moves or rain falls) | 29.5 % | 0 % | yes |
+| spike (one-reading jump) | 100 % | **1.07 %** | **no**: above the team's 1 % limit |
+| slow drift | 0 % | n/a | no rule |
+
+A stuck sensor at quiet low flow cannot be told apart from real flat water, so the stuck rule only fires when something
+independent moves.
+
+**Measured negative result:** an Isolation Forest on window features flagged **11.2 % of real flood windows** and
+swung strongly between validation and test, so it is not shipped (`ml/figures/anomaly_eval*.csv`). A rarity detector
+flags floods, because floods are rare.
 
 ## Reproduce
 
-Run from the repo root with `pip install -r requirements-dev.txt` done. Data goes to `data/` (git-ignored).
-
 ```powershell
-python -m ml.fetch_history --start-year 2015                                 # USGS history (38 gauges, ~31 M readings)
-python -m ml.harness --gauges-only DRWT2,LCPT2,JNCT2,AHOT2 --horizons 3 --out ml/figures/baselines_ref.csv
+python -m ml.fetch_history --start-year 2015          # USGS history (38 gauges, ~31 M readings); skip if cached
 python -m ml.harness --horizons 1,2,3,4,5,6 --label m1.4-baselines --out ml/figures/baselines.csv
-python -m ml.dataset --end 2026-10-31 --out ml/figures/pooled_dataset.parquet
-python -m ml.mrms_history --radii 5,10,25 --workers 4 --max-hours 20         # smoke test first; resumable
-python -m ml.rain_model --split 2024-01-01 --horizons 1,2,3,4,5,6 --label m2.2-rain-v1 --out ml/figures/model_v1_vs_v0.csv
+python -m ml.s3_model build --end 2026-10-31          # uses the committed ml/rain_cache/ for rain (8 min)
+python -m ml.s3_model train                           # v0 + v1, h = 1..6 -> ml/models/, ml/figures/s3_eval* (8 min)
+python -m ml.s3_model radius                          # ml/figures/s3_radius.csv
+python -m ml.plot_s3                                  # ml/figures/s3_pr_3h.png
+python -m ml.fault_rules evaluate --period test       # ml/figures/fault_rules_test.csv
+python -m ml.demo_floods                              # ml/figures/demo_flood_candidates.csv
+python -m ml.import_runs ml/figures/s3_eval.csv ml/figures/s3_radius.csv   # rows into evaluation_runs (DB up)
 ```
 
-Add `--insert` to `ml.harness` or `ml.rain_model` (with the database up) to write rows into `evaluation_runs`, which
-Power BI page 3 reads. The MRMS archive starts on 2020-10-14, so v1 cannot use the 51 floods of 2018. `ml/backtest.py`
-scores one gauge and date range against the baselines
-(`python -m ml.backtest --site 08158700 --start 2019-05-01 --end 2019-05-10 --thresholds 5.5,5.5,7.0,13.0`; `--lid DRWT2` fetches the levels from NWPS instead).
-
-## Planned (S3 to S5)
-
-Final split and evaluation, model v2 with a quantile range, a radius sensitivity test (5/10/25 km), an Isolation Forest
-for sensor faults (spikes, flat lines; not for floods), and the forecaster hot-swapping to the trained model with a
-fallback to the baseline.
+DEWS is not compared with, and makes no claim against, NWS, NSSL FLASH or GloFAS forecasts.

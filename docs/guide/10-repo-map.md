@@ -13,7 +13,7 @@ parallel and each commits only its own folders (`docs/BUILD_PHASES.md`, "Who wor
 | `dashboard/` | core | `flow_monitor.py` + `flow.html` + `static/` (the console: landing page, globe and map, pipeline flow, approval, metrics, agents); `powerbi/README.md` (Power BI guide) |
 | `docker/` | core | `docker-compose.yml` (3 KRaft brokers, topic init, PostgreSQL 16), `docker-compose.single.yml` (one broker) |
 | `tools/` | core | command-line checks and data tools (table below), including `verify_slice.py` (acceptance checks per slice) and `fault_drill.py` |
-| `scripts/` | core | `start_demo.ps1` / `stop_demo.ps1`: start or stop the whole demo on Windows (expect the venv at `..\spaenv`) |
+| `scripts/` | core | `start_demo.ps1` / `stop_demo.ps1`: start or stop the whole demo on Windows (`-Venv <folder>` or `DEWS_VENV`; default `.venv`, else `..\spaenv`) |
 | `ml/` | ML + India | baselines, dataset builder, evaluation harness, history fetchers, models; `MODEL_CARD.md`; `predict.py` is the pipeline's entry point |
 | `india/` | ML + India | `audit.py`, `table1.py`, `indiawris_loader.py` (Excel exports), `indiawris_api.py` (API client), `thresholds.csv` |
 | `notebooks/` | ML + India | EDA notebooks 01 to 03, self-contained (Colab/Kaggle); every cell explained in `docs/EDA_WALKTHROUGH.md` |
