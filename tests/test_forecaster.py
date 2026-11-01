@@ -138,3 +138,21 @@ def test_s3_v0_is_3h_only_other_horizons_use_rise_rate():
     st = forecaster.new_state()
     fc, _ = forecaster.step(st, window(0, 4.0, 0.7), GAUGE, predict, horizon_h=1, now=T0)
     assert fc["model"] == "rise_rate" and fc["p_minor"] is None
+
+
+def test_window_rain_fields_reach_predict():
+    """C2.2: the window handed to ml.predict carries rain_1h/3h/6h/24h (s3_v0 is stage-only; kept for display and
+    for v1 models that read rain)."""
+    seen = []
+
+    def spy(features):
+        seen.append(features)
+        return predict(features)
+
+    w = dict(window(0, 2.0, 0.0), rain_1h=1.5, rain_3h=4.0, rain_6h=6.5, rain_24h=None, rain_product="P2")
+    forecaster.step(forecaster.new_state(), w, GAUGE, spy, horizon_h=3, now=T0)
+    assert {k: seen[0][k] for k in ("rain_1h", "rain_3h", "rain_6h", "rain_24h")} == \
+        {"rain_1h": 1.5, "rain_3h": 4.0, "rain_6h": 6.5, "rain_24h": None}
+    from ml.predict import model_features
+    X = model_features(seen[0], GAUGE["levels"])
+    assert X["rain_1h"] == 1.5 and X["rain_6h"] == 6.5
