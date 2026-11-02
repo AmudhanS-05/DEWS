@@ -19,7 +19,16 @@ coordinator -> [evidence || context] -> reconcile -> writer -> reviewer --pass--
 | context | radar rain, upstream/downstream/nearby gauges, NWS impact statements; direction, signal kind (LEADING / SUPPORTING) or `unknown` | get_rain, get_neighbours, get_gauge_info, get_impacts |
 | reconcile | evidence and context disagree -> advisory marked UNCERTAIN, both signals stated | (pure rules, `rules.py`) |
 | writer | LLM draft from the facts (or the deterministic template when there is no LLM or it fails) | `llm.py`, `advisory.py` |
-| reviewer | deterministic checks first (`checks.py`), then an LLM judgement on a draft that passed them | `checks.py`, `llm.py` |
+| reviewer | deterministic checks first (`checks.py`), then an LLM judgement on a draft that passed them, by an independent judge (`JUDGE_PROVIDER`, default gemini) | `checks.py`, `llm.py` |
+
+**Independent judge (1 Nov, user decision "make Gemini the judge").** The writer (Groq `openai/gpt-oss-120b`) no
+longer grades its own draft: the reviewer's LLM judgement runs on `JUDGE_PROVIDER` / `JUDGE_MODEL` (`llm.judge`).
+Each reviewer attempt records `judge_status` (`pass` / `fail` / `unclear` / `unavailable` / `off` / `not_run`),
+`judge_provider` and `judge_model` in its `verdict` event, in `agent_runs.output.judge` (reviewer row) and in the
+run result (`judges`, `judge_unavailable`). A judge that fails (no key, error, timeout, rate limit) never blocks and
+never counts as a judge PASS: the deterministic checks decide and the run says "judge unavailable" (also on the
+coordinator's final row). No fallback to the writer's model unless `JUDGE_FALLBACK` is set. Judge = writer's provider
+and model -> a `revision` event `{"warning": "same-model judge"}` (CLI: `WARNING same-model judge`).
 
 **Tools over MCP (A4.1).** The agents reach their tools through the Model Context Protocol: `run_alert` wraps the
 database `Tools` in `mcp_client.McpTools`, which starts `python -m agentic_ai.mcp_server` (stdio) with the same
@@ -123,14 +132,36 @@ category's stage), `threshold` (danger/warning levels or made-up categories inst
 ```
 python -m agentic_ai.eval.catch_rate                     # seeded errors on template drafts -> eval/reviewer_catch_rate.md
 python -m agentic_ai.eval.build_replays --write          # (network) re-fetch the 8 measured USGS floods -> eval/replay_events.json
-python -m agentic_ai.eval.evaluate --dsn <scratch db>    # multi / single / template / llm_down on the 14 replayed alerts
+python -m agentic_ai.eval.evaluate --dsn <scratch db>    # multi / single / template / llm_down on the replayed alerts
+python -m agentic_ai.eval.evaluate --dsn <scratch db> --configs multi_ij   # multi, Gemini judges the Groq writer
 python -m agentic_ai.eval.evaluate --report-only         # rebuild eval/agent_eval.md, ablation.md, agent_eval_runs.csv
 python -m ml.import_runs agentic_ai/eval/agent_eval_runs.csv   # rows into evaluation_runs (run_label agent_eval:*)
 python -m agentic_ai.drill [--alert-id ID] [--no-key]   # LLM down: PASS/FAIL line, exit 0/1
 ```
 Use a scratch database for `evaluate` (it loads 8 replayed floods, mode SIMULATION, and writes agent rows). Live runs
 are spaced 65 s (`--gap`) for the Groq free tier; 28 live runs take about 30 min. Results: `eval/agent_eval.md`,
-`eval/ablation.md`; raw per-run records `eval/runs.jsonl`.
+`eval/ablation.md`; raw per-run records `eval/runs.jsonl`. Current tables: replay set rebuilt through core 6b105c1
+(alerts raised by the model's probability, `alert_by_model`): 12 floods, 9 alerts. The earlier tables (stage-forecast
+rule, 8 floods, 14 alerts) are kept in `eval/before_alert_by_model/` with run labels `agent_eval_before_alert_by_model:*`.
+
+| live Groq, replay only | multi-agent now | single agent now | multi before | single before |
+|---|---|---|---|---|
+| alerts | 9 | 9 | 14 | 14 |
+| pass all deterministic checks | 9/9 | 6/9 | 14/14 | 7/14 |
+| saved on attempt 1 | 8/9 | - | 14/14 | - |
+| numbers in the evidence | 142/142 | 70/70 | 176/176 | 124/125 |
+| UNCERTAIN where needed | 8 of 8 | 8 of 8 | 2 of 2 | 0 of 2 |
+| tokens median / time median | 3376 / 2.7 s | 2731 / 1.86 s | 3056 / 2.38 s | 2514 / 1.67 s |
+
+**Independent judge (1 Nov, `--configs multi_ij`, live, replay only):** same 9 alerts, writer Groq
+openai/gpt-oss-120b, judge Gemini gemini-3.5-flash-lite (no judge fallback): 9/9 saved, 9/9 pass all checks, 9/9 on
+attempt 1, judge 9 calls / 0 FAIL / 0 unavailable, 147/147 numbers in the evidence, UNCERTAIN 8 of 8, tokens median
+3346 (total 30435, of which 11568 judge tokens on Gemini), time median 2.7 s (max 3.37 s), 0 same-model warnings. Table:
+`eval/ablation.md` "Independent judge"; the "multi" column above had the judge on the writer's own model.
+
+What changed between the two: the alert rule (model probability instead of stage forecast; alerts MINOR only, 8 of 9
+with the stage forecast below MINOR, so UNCERTAIN), 4 more floods, and the single agent's rules gained the
+model-probability rule.
 
 ## Set up and run (Windows laptop, PowerShell, repo folder)
 
@@ -153,7 +184,10 @@ python -m pytest -q tests/agents             # always LLM_PROVIDER=none, no netw
 | `GROQ_REASONING_EFFORT` | `low` (default) / `medium` / `high`, sent only for `openai/gpt-oss-*`. Measured 31 Oct, 5 runs each: low 2.0-3.1 s, 3.0-3.3k tokens, 5/5 on attempt 1; not set (Groq default, round 4) 4.2-11.0 s, 4.0-8.4k tokens, 4/5 on attempt 1 |
 | Groq 429 | waits once for the reset hint (`retry-after`, else `x-ratelimit-reset-*`) when it is at most 20 s, shown as a progress line, then retries Groq; a longer hint goes straight to `LLM_FALLBACK` |
 | `LLM_FORCE_DOWN=1` | every LLM call fails at once (fault drill). Any LLM failure (no key, provider error, timeout, forced) keeps template v1: no agents draft, no judge call, outcome `v1_kept` with reason "LLM unavailable: ..." (since 1 Nov; before, the template text was saved again as v2) |
-| `LLM_FALLBACK` | `gemini` / `groq` / `none`: a failed call is retried once there, then the template text is used |
+| `LLM_FALLBACK` | `gemini` / `groq` / `none`: a failed writer call is retried once there, then template v1 stays (never used for the judge) |
+| `JUDGE_PROVIDER` | `gemini` (default) / `groq` / `ollama` / `none`: who runs the reviewer's LLM judgement. `none` = judge off (recorded `off`) |
+| `JUDGE_MODEL` | optional; default the judge provider's model variable (`GEMINI_MODEL`, `GROQ_MODEL`, `OLLAMA_MODEL`) or its default |
+| `JUDGE_FALLBACK` | `none` (default) / `groq` / `gemini` / `ollama`: only when set is a failed judge call retried there (this may be the writer's model) |
 | `LANGSMITH_TRACING=true` + `LANGSMITH_API_KEY` | optional tracing; the CLI prints the trace link, and every `agent_runs` row of the run carries `trace_run_id` and `trace_url` (console link) |
 | `PG_DSN` | PostgreSQL (default the docker one) |
 | `AGENT_TOOLS` | `mcp` (default: the agents' tool calls go through the stdio MCP server, started once per process, about 1 s) or `direct` (plain Python calls). Any MCP failure falls back to the direct call for that call; each tool_call event says `via` |

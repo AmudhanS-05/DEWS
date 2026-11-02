@@ -68,6 +68,8 @@ def progress_line(e: dict) -> str | None:
         msg = (f"{d['rate_limit']} rate limit (429): waiting {d['wait_s']:g} s (hint {d['hint_s']:g} s, cap "
                f"{d['cap_s']:g} s), then retrying {d['rate_limit']}" if d["wait_s"] else
                f"{d['rate_limit']} rate limit (429): reset in {d['hint_s']:g} s > {d['cap_s']:g} s cap, not waiting")
+    elif a == "reviewer" and k == "revision" and d.get("warning") == "same-model judge":
+        msg = f"WARNING same-model judge: {d.get('provider')} {d.get('model')} judges its own draft"
     elif a == "writer" and k == "revision" and "llm_failed" in d:
         msg = f"LLM failed ({d['llm_failed']}); using the deterministic template text"
     elif a == "writer" and k == "end":
@@ -83,6 +85,10 @@ def progress_line(e: dict) -> str | None:
             msg += ": " + "; ".join(d["reasons"])
         elif str(d.get("llm_judgement") or "").startswith("no reply"):   # deterministic checks passed, judge silent
             msg += f" (deterministic checks only; LLM judgement {d['llm_judgement'][:120]})"
+        elif str(d.get("llm_judgement") or "").startswith("judge unavailable"):   # same, judge provider failed
+            msg += f" (deterministic checks only; {d['llm_judgement'][:120]})"
+        elif d.get("judge_provider") and d.get("judge_status") in ("pass", "unclear"):
+            msg += f" (judge {d['judge_provider']} {d.get('judge_model') or ''})".replace(" )", ")")
     if msg is None:
         return None
     return f"[{e.get('t_s', 0):6.2f}s] {a:<11} {msg}"

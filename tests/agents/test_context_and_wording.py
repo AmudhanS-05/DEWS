@@ -163,6 +163,8 @@ def test_reviewer_llm_sees_the_replay_statement(monkeypatch):
         return llm.LlmReply(text=None, provider="none")      # writer: deterministic text, judge still runs
     monkeypatch.setattr(llm, "provider", lambda: "groq")
     monkeypatch.setattr(llm, "complete", fake)
+    monkeypatch.setattr(llm, "judge_provider", lambda: "gemini")
+    monkeypatch.setattr(llm, "judge", fake)
     assert graph.run_alert(t, ALERT)["outcome"] == "saved"
     sys_r, user_r = next(p for p in prompts if p[0].startswith("You review"))
     assert "replay of a historical USGS record" in sys_r and "supporting context only" in sys_r

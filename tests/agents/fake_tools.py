@@ -96,7 +96,7 @@ class FakeTools(Tools):
     def log_agent_run(self, run_id, alert_id, agent, input_summary="", output=None, tool_calls=None, started_at=None,
                       ended_at=None, tokens=None, verdict=None, trace_run_id=None):
         self.runs.append({"run_id": run_id, "agent": agent, "tokens": tokens, "verdict": verdict, "tool_calls": tool_calls,
-                          "trace_run_id": trace_run_id})
+                          "trace_run_id": trace_run_id, "output": output})
 
     def set_trace_url(self, run_id, trace_url):
         for r in self.runs:

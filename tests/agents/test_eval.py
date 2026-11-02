@@ -32,7 +32,7 @@ def test_replay_builder_runs_core_functions_on_synthetic_readings():
 @pytest.fixture()
 def small_replays(tmp_path, monkeypatch):
     data = json.loads(evaluate.REPLAYS.read_text(encoding="utf-8"))
-    ev = next(e for e in data["events"] if e["lid"] == "LCPT2")       # action + upgrade minor, with MRMS rain
+    ev = next(e for e in data["events"] if e["lid"] == "LLAT2" and e["alerts"])   # alert_by_model, forecasts disagree
     p = tmp_path / "replay_events.json"
     p.write_text(json.dumps({**data, "events": [ev]}), encoding="utf-8")
     monkeypatch.setattr(evaluate, "REPLAYS", p)
@@ -51,11 +51,14 @@ def test_eval_template_and_llm_down_on_measured_replay(pg_empty, small_replays, 
     from agentic_ai.tools import Tools
     monkeypatch.setattr("agentic_ai.db.connect", lambda dsn=None: pg_empty)
     alerts = evaluate.load_replays(pg_empty)
-    assert [a["category"] for a in alerts] == ["action", "minor"] and alerts[1]["kind"] == "upgrade"
-    assert Tools(pg_empty).get_rain("08172400", 6, alerts[0]["raised_at"], "SIMULATION")["available"] is True
+    assert alerts and all(a["mode"] == "SIMULATION" for a in alerts)
+    assert alerts[0]["alert_rule"] == "alert_by_model" and alerts[0]["tau"]
+    assert Tools(pg_empty).get_alert(alerts[0]["alert_id"])["alert_rule"] == "alert_by_model"
+    assert Tools(pg_empty).get_rain(alerts[0]["site_no"], 6, alerts[0]["raised_at"], "SIMULATION")["available"] is True
+    n = len(alerts)
 
-    replies = iter(["SIMULATION: replay of a historical USGS gauge record. Plum Creek at Lockhart: forecast to reach "
-                    "ACTION (12.0 ft) within 3 h; probability: not available. It will flood.", None])
+    replies = iter(["SIMULATION: replay of a historical USGS gauge record. Llano River at Llano: forecast to reach "
+                    "MINOR (10.0 ft) within 3 h. It will flood."] + [None] * 5)
 
     def fake(system, user, **k):                                     # the single agent's one call
         t = next(replies, None)
@@ -64,8 +67,9 @@ def test_eval_template_and_llm_down_on_measured_replay(pg_empty, small_replays, 
     evaluate.run(None, ["template", "llm_down", "single"], gap_s=0)
     out = evaluate.report()
     t, d, s = out["sums"]["template"], out["sums"]["llm_down"], out["sums"]["single"]
-    assert t["saved"] == 2 and t["checks_pass"] == 2 and t["numbers_ok"] == t["numbers"] > 0
-    assert d["v1_kept"] == 2 and d["saved"] == 0
+    assert t["saved"] == n and t["checks_pass"] == n and t["numbers_ok"] == t["numbers"] > 0
+    assert t["model_rule"] == n and t["forecasts_disagree"] == 1
+    assert d["v1_kept"] == n and d["saved"] == 0
     assert s["texts"] == 1 and s["checks_pass"] == 0 and "certainty" in s["failed_checks"]
     rows = (small_replays / "agent_eval_runs.csv").read_text(encoding="utf-8")
     assert "agent_eval:template" in rows and "replay" in rows
