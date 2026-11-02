@@ -37,11 +37,13 @@ def when(iso: str | None) -> str:
 
 
 def model_wording(alert: dict) -> tuple[str, str | None]:
-    """Headline and UNCERTAIN sentence of a model-probability alert, in the agents' own words (agentic_ai/advisory.py), so draft,
-    advisory and email say the same thing. Never "forecast to reach": the probability raised this alert, not the stage forecast."""
+    """Headline and UNCERTAIN sentence of a model-probability alert: the v1 draft's probability headline and the agents' sentence
+    (agentic_ai/advisory.py), so draft, advisory and email say the same thing. Never "forecast to reach": the probability raised
+    this alert, not the stage forecast."""
     from agentic_ai import advisory
-    lines = advisory.template_text({"raised_at": "", **alert}, {}, {}, "normal", 1, None).splitlines()
-    return next(ln for ln in lines if "probability of crossing" in ln), advisory.disagreement_sentence(alert)
+    from alerting import template
+    head = next(ln for ln in template.render_v1(alert).splitlines() if "probability of crossing" in ln)
+    return head, advisory.disagreement_sentence(alert)
 
 
 def facts(rec: dict, alert: dict | None, site_name: str | None) -> dict:
