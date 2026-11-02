@@ -4,7 +4,7 @@ Deterministic reviewer (`agentic_ai/checks.py`), 5 correct base drafts (template
 
 **Caught 74 of 74 seeded errors (100.0 %).**
 
-| error kind | caught / seeded | in SLICES A3.1 list |
+| error kind | caught / seeded | in the core list |
 |---|---|---|
 | wrong_number | 5 / 5 | yes |
 | wrong_category | 5 / 5 | yes |

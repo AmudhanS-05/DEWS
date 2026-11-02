@@ -4,7 +4,7 @@ Each corruption is a pure function (text, alert, facts) -> corrupted text, or No
 SIMULATION label to remove on live data). `seed_errors()` returns every applicable corruption with the reviewer check
 ids that count as catching it. `catch_rate()` runs the deterministic reviewer (`checks.review_detailed`) on each one.
 
-Error kinds (the six from docs/SLICES.md A3.1 first, then extra ones):
+Error kinds (the six core kinds first, then extra ones):
   wrong_number        a stage/rate changed to a value that is not in the facts                     -> numbers
   wrong_probability   probability changed by 15 points                                             -> probability/numbers
   wrong_category      the alert's category word replaced by another official category              -> category

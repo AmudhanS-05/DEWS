@@ -69,7 +69,7 @@ def write(res: dict, stem: str = "reviewer_catch_rate") -> tuple[Path, Path]:
              + (f" ({', '.join(res['base_false_alarms'])})" if res["base_false_alarms"] else "") + ".", "",
              f"**Caught {res['caught']} of {res['total']} seeded errors "
              f"({100 * res['caught'] / max(res['total'], 1):.1f} %).**", "",
-             "| error kind | caught / seeded | in SLICES A3.1 list |", "|---|---|---|"]
+             "| error kind | caught / seeded | in the core list |", "|---|---|---|"]
     for k, (c, t) in res["by_kind"].items():
         lines.append(f"| {k} | {c} / {t} | {'yes' if k in corrupt.SLICE_KINDS else ''} |")
     missed = [r for r in res["rows"] if not r["caught"]]

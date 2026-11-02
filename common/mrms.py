@@ -19,7 +19,7 @@ import numpy as np
 
 BUCKET = "https://noaa-mrms-pds.s3.amazonaws.com"
 # Short names -> bucket product folders. Latency = S3 LastModified minus the valid time, measured 31 Oct 2026
-# 13Z-17Z (see FAQ / docs/breadcrumbs/rain.md): radaronly ~3 min (a rolling 1 h sum every 2 min; we use the HH:00
+# 13Z-17Z (see FAQ.md): radaronly ~3 min (a rolling 1 h sum every 2 min; we use the HH:00
 # file only), pass1 ~15.5 min, pass2 ~57 min (gauge-corrected; the ML training product).
 PRODUCTS = {
     "radaronly": "RadarOnly_QPE_01H_00.00",

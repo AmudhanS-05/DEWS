@@ -46,7 +46,7 @@ from common.envfile import load_env
 HERE = os.path.dirname(os.path.abspath(__file__))
 LOC_CSV = os.path.join(os.path.dirname(HERE), "config", "gauge_locations.csv")
 
-# ---------------------------------------------------------------- the graph (matches the Phase I diagram)
+# ---------------------------------------------------------------- the graph (matches the architecture diagram)
 # kind: producer | topic | group | store | manual | info
 NODE_SPECS = {
     "p_usgs":     {"kind": "producer", "title": "USGS live", "topics": [config.TOPIC_GAUGE], "live": True},

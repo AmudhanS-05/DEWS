@@ -14,7 +14,7 @@ _xfer/
 .env
 # Faust local data directory (one per app id)
 *-data/
-# slide decks and other review material: kept locally, never committed
+# presentations: kept locally, never committed
 presentations/
 *.pptx
 # personal working notes: kept locally, commit only when decided

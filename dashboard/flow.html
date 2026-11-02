@@ -197,7 +197,7 @@
   <div class="fineprint">Prototype, not an official warning</div>
 </main>
 <script>
-// layout: x, y, w, h  (the same arrangement as the Phase I methodology diagram)
+// layout: x, y, w, h  (the same arrangement as the architecture diagram)
 const LAYOUT = {
   p_usgs:[20,40,130,64], p_mrms:[20,140,130,64], p_replay:[20,240,130,64],
   t_gauge:[200,40,150,64], t_rain:[200,140,150,64], t_replay:[200,240,150,64],
@@ -309,7 +309,7 @@ async function loadDb(){
     if(!resp.ok){ note.textContent=`the console server answered ${resp.status}: restart python -m dashboard.flow_monitor`; return; }
     const d=await resp.json();
     if(!d.ok){ note.textContent="PostgreSQL not reachable: "+d.error; return; }
-    note.textContent = (d.windows.length||d.alerts.length) ? "Newest rows first." : "Connected. No rows yet: windows arrive once the Postgres sink (Phase 5) runs, alerts once the forecaster (Phase 4) runs.";
+    note.textContent = (d.windows.length||d.alerts.length) ? "Newest rows first." : "Connected. No rows yet: windows arrive once the Postgres sink (storage.sink) runs, alerts once the forecaster (streams.forecaster) runs.";
     document.getElementById("db-win").innerHTML = d.windows.map(w=>`<tr><td>${esc(w.site_no)}</td><td>${fmtDT(w.window_start)}</td><td>${esc(w.mode)}</td><td>${esc(w.n_readings)}</td><td>${w.stage_last==null?"":(+w.stage_last).toFixed(2)}</td><td>${w.rise_rate_ft_per_h==null?"":(+w.rise_rate_ft_per_h).toFixed(2)}</td><td>${w.rain_3h==null?"":(+w.rain_3h).toFixed(1)}</td></tr>`).join("");
     document.getElementById("db-alerts").innerHTML = d.alerts.map(a=>`<tr><td>${fmtDT(a.raised_at)}</td><td>${esc(a.site_no)}</td><td>${esc(a.mode)}</td><td>${esc(a.category)}</td><td>${a.probability==null?"":(+a.probability).toFixed(2)}</td><td>${esc(a.horizon_h)}</td><td>${esc(a.status)}</td><td>${fmtDT(a.delivered_at)}</td></tr>`).join("");
   }catch(e){ note.textContent="cannot reach the console server"; }

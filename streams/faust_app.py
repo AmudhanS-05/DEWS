@@ -1,7 +1,7 @@
 """Faust stream app: gauge.usgs + rain.mrms and replay.gauge + replay.rain -> event-time windows -> aggregates.window.
 
 - One consumer group, "flood-windowing" (Faust's app id). Run 3 workers of it, one per
-  partition (see docs/BUILD_PHASES.md, Phase 3).
+  partition (3 partitions per topic).
 - Live (gauge.usgs + rain.mrms) and replay (replay.gauge + replay.rain) use separate agents and separate state
   tables, so replayed history can never touch live window state. Each agent reads its gauge AND rain topic (all
   keyed by site_no, 3 partitions, so co-partitioned): a gauge's rain lands in the same per-site state as its

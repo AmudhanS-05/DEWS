@@ -1,4 +1,4 @@
-"""Check that a slice is really done, against the running stack (C1.8, runbook step 15).
+"""Check that a stage (S1 to S5) is really done, against the running stack.
 
     python -m tools.verify_slice S1                  # all workstreams
     python -m tools.verify_slice S1 --part core      # only your part (core | ml | agents)
@@ -31,12 +31,12 @@ S1_SCENARIOS = SCENARIOS[:-1]
 GROUPS = {config.GROUP_WINDOWING: 3, config.GROUP_SINK: 1, config.GROUP_FORECASTER: 1, config.GROUP_NOTIFIER: 1}
 TOPICS = {config.TOPIC_GAUGE, config.TOPIC_RAIN, config.TOPIC_REPLAY_GAUGE, config.TOPIC_REPLAY_RAIN, config.TOPIC_AGG,
           config.TOPIC_FORECASTS, config.TOPIC_ALERTS, config.TOPIC_APPROVED, config.TOPIC_DLQ}
-MANUAL = {"S1": ["Power BI page 1: a new replayed reading appears within one page refresh (runbook step 12)",
+MANUAL = {"S1": ["Power BI page 1: a new replayed reading appears within one page refresh (dashboard/powerbi/README.md)",
                  "the S1 scene in docs/DEMO.md runs twice in a row",
                  "the approved email reached a person's inbox (delivered_at only says SMTP accepted it)"],
           "S3": ["Power BI page 3 built from dashboard/powerbi/README.md"],
           "S4": ["the Agents tab followed a real run live (nodes change while it runs)", "Power BI page 4 built from dashboard/powerbi/README.md"],
-          "S5": ["two clean rehearsals of docs/DEMO.md on the presentation laptop", "Ollama fallback with Groq off, run by hand"]}
+          "S5": ["two clean rehearsals of docs/DEMO.md on the demo machine", "Ollama fallback with Groq off, run by hand"]}
 
 
 # ---- pure logic (tests/test_verify_slice.py) ----------------------------------------------------------------------

@@ -17,7 +17,7 @@ def test_every_seeded_error_is_caught():
     res = corrupt.catch_rate(CASES)
     missed = [(r["case"], r["kind"]) for r in res["rows"] if not r["caught"]]
     assert not missed and res["total"] >= 70
-    assert set(corrupt.SLICE_KINDS) <= set(res["by_kind"])          # the six error kinds named in SLICES A3.1
+    assert set(corrupt.SLICE_KINDS) <= set(res["by_kind"])          # the six core error kinds
 
 
 def _ids(text, case):

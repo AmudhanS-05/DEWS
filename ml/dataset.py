@@ -3,7 +3,7 @@
 Features come from the SAME hourly windows the stream builds (`streams/windowing.py`, via
 `ml.backtest.windows_from_readings`), so offline and live inputs match. One row per closed window.
 
-Stage features are RELATIVE to the gauge's official minor stage (pooled model, decided with faculty):
+Stage features are RELATIVE to the gauge's official minor stage (pooled model):
 `rel_minor = stage_last - minor`. Labels use official NWPS categories only.
 
 Labels, for each horizon h in `horizons` (window end t):
