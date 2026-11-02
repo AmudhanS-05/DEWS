@@ -73,7 +73,7 @@ publish to Kafka and never send anything. Only the notifier sends, and it reads 
 | Official flood categories per gauge | NOAA NWPS (`config/gauge_locations.csv`) | real |
 | Past floods replayed for the demo and evaluation (e.g. Onion Creek, May 2019) | cached USGS history | `mode = SIMULATION`, own topics |
 | Seeded agent test alert (`python -m agentic_ai.seed`) | the measured May 2019 USGS record, run through the pipeline's own window and forecast code | `mode = SIMULATION` |
-| India study inputs (India-WRIS exports, synthetic "ideal India") | manual downloads / generator | `mode = SIMULATION` |
+| India study: US gauges degraded to Indian-like reporting, one synthetic replay | real US history, changed one property at a time | `mode = SIMULATION`, source `SYNTHETIC` |
 
 Replayed and synthetic data are labelled SIMULATION all the way through: in topics, tables, alerts and the advisory
 text. Live and replay results are always reported separately.
@@ -96,11 +96,11 @@ Only measured results are listed. Source: commit messages and `docs/breadcrumbs/
 | ML models | v0 (stage) and v1 (stage + radar rain) trained on 2015-2020, thresholds on 2021-23, tested once on 2024-26 | **neither beats the rise-rate rule consistently; no forecast skill is claimed**; adding rain did not help (`ml/MODEL_CARD.md`) |
 | Sensor-fault rules | 3 rules shipped (no readings, step, stuck); spike not shipped; Isolation Forest kept as a negative result | test 2024-26, faults injected into real series: no readings 100 % detected, step 81.4 %, stuck 29.5 %, 0 to 0.49 % of flood windows falsely flagged; spike 100 % but 1.07 % of flood windows (above the 1 % team limit) |
 | MRMS rain | live and replay producer `producers/mrms_qpe_producer.py` on branch `claude/rain`, **not yet merged**; rain not yet joined into windows | read back from a real Kafka: 38 gauges per live poll; RadarOnly product in hand about 3 min after the hour, Pass 1 about 15 min. History: 102 floods + 102 dry windows decoded offline. No radar rain exists for floods before Oct 2020 (incl. the 2019 demo flood) |
-| India data study | US side of Table 1 measured; India-WRIS API client works from an Indian connection | the two stations probed report **manual staff-gauge readings about once a day** (00:00 / 08:00); no Indian series processed through the pipeline yet |
+| India data study | **by decision, a pain-point analysis** (`india/PAIN_POINTS.md`); Indian data is not run through the pipeline | India-WRIS scan, July 2022, 83 CWC stations: about hourly at most river stations, 3 to 24 h at dams, manual and telemetry mixed. On real US data, hourly readings cut the 3 h rise-rate detection from 0.52 to 0.17, and a 1 h feed delay to 0.12 (`india/figures/degradation.csv`) |
 | Power BI | page 1 guide written (`dashboard/powerbi/README.md`); report not built yet | |
 | Latency trace | done | replay through the running stack, 167 traces: ingest median 0.066 s, forecast 0.506 s, one alert 1.07 s. Human approval and delivery: PostgreSQL test only. Live feed delay: one sample, 24 to 69 min |
 | Slice check | `python -m tools.verify_slice S1` | first real run: 16 of 19 checks passed (before the S1 rule became "one alert per episode, lead time reported"); not re-run since |
-| Tests | `pytest -q` | after merging core, ml-india and agents (1 Nov 2026, Python 3.12): 303 passed, 28 skipped, **7 failed** in `tests/test_forecaster.py`. Those tests assume the rise-rate rule, while `ml/models/active.json` now activates `s3_v0`; the fix is with core |
+| Tests | `pytest -q` | after merging core, ml-india (834e50b) and agents (1 Nov 2026, Python 3.12): 308 passed, 28 skipped, **7 failed** in `tests/test_forecaster.py`. Those tests assume the rise-rate rule, while `ml/models/active.json` now activates `s3_v0`; the fix is with core |
 
 **The bar any model must beat** is rise-rate extrapolation at 3 h, scored by `ml/harness.py` on stream windows
 (38 gauges, 2015 to 2025, replay): pooled F1 0.28 (precision 0.18, recall 0.61, 310 minor crossings), slow floods only
