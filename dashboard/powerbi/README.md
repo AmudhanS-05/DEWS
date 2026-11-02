@@ -1,4 +1,4 @@
-# Power BI guide (runbook step 12)
+# Power BI guide
 
 **Project file:** `DEWS.pbip` holds the semantic model and the report pages, and the saved project is the source of truth:
 `tools.make_pbip` refuses to overwrite it. Open it in Power BI Desktop; the password is the local one in
@@ -56,7 +56,7 @@ Relate `gauges[site_no]` one-to-many to the others.
 
 Wording on the page: "forecast of crossing an official category", never "predicts a flood".
 
-## Check (pass condition of step 12)
+## Check that page 1 is live
 
 ```powershell
 python -m producers.replay_producer --site 08158700 --start 2019-06-06 --end 2019-06-07 --speed 3600
@@ -105,14 +105,7 @@ category". The model's measured limits are in `ml/MODEL_CARD.md`.
 
 Rows with mode `no alert row` are seed or test runs. Do not count them with replay or live runs.
 
-## Page 5: India and the US
+## If Power BI is not available
 
-**Get Data → Text/CSV** → `india/figures/table1_us_vs_india.csv`, **Import** (it is a file; the rest stays DirectQuery). A table of
-`property`, `us_usgs`, `us_provenance`, `india_measured`, `india_literature`, `india_provenance`. Keep both provenance columns, and keep
-measured and literature values in separate columns: a cell reading "pending" stays "pending". This page has no live or replay data, so
-it needs no mode slicer; say so in its title.
-
-## If Power BI is not available on demo day
-
-The console (`python -m dashboard.flow_monitor`) shows the same data. State the substitution and the reason in the
-report; the brief names Power BI.
+Power BI Desktop runs on Windows only. The console (`python -m dashboard.flow_monitor`) shows the same data on any
+platform.

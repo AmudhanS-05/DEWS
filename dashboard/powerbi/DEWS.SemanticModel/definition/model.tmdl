@@ -6,7 +6,7 @@ model Model
 		legacyRedirects
 		returnErrorValuesAsNull
 
-annotation PBI_QueryOrder = ["advisories","agent_events","agent_run_metrics","agent_run_summary","agent_runs","alert_overview","alerts","catchment_rain","current_advisory","evaluation_runs","feed_staleness","gauge_impacts","gauge_readings","gauges","latency_trace","latency_waterfall","past_floods","risk_scores","windowed_aggregates","table1_us_vs_india","mode_list","latency_stage","gauge_levels","flood_chart"]
+annotation PBI_QueryOrder = ["advisories","agent_events","agent_run_metrics","agent_run_summary","agent_runs","alert_overview","alerts","catchment_rain","current_advisory","evaluation_runs","feed_staleness","gauge_impacts","gauge_readings","gauges","latency_trace","latency_waterfall","past_floods","risk_scores","windowed_aggregates","mode_list","latency_stage","gauge_levels","flood_chart"]
 
 annotation __PBI_TimeIntelligenceEnabled = 1
 
@@ -31,7 +31,6 @@ ref table latency_waterfall
 ref table past_floods
 ref table risk_scores
 ref table windowed_aggregates
-ref table table1_us_vs_india
 ref table mode_list
 ref table latency_stage
 ref table gauge_levels

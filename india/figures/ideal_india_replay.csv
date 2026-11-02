@@ -1,4 +1,0 @@
-variant,site_no,replay_file,readings,windows,zero_filled_windows,riserate_alerts,riserate_lead_h,s3_v0_alerts,s3_v0_lead_h
-ideal_india,SYN-IND-BDAT2-ideal_india,data/replay/synthetic_india_ideal_india.jsonl,1619,407,1,1,1.5,1,1.5
-cwc_hourly,SYN-IND-BDAT2-cwc_hourly,data/replay/synthetic_india_cwc_hourly.jsonl,407,407,1,1,0.5,0,
-daily_dams,SYN-IND-BDAT2-daily_dams,data/replay/synthetic_india_daily_dams.jsonl,17,384,368,0,,0,

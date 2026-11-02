@@ -1,4 +1,4 @@
-# Agents workstream (AAI). Install on top of requirements-dev.txt:  pip install -r requirements-agents.txt
+# Agents (agentic_ai/). Install on top of requirements-dev.txt:  pip install -r requirements-agents.txt
 # Pins are the versions the tests ran against (Python 3.12/3.13).
 langgraph==1.2.19
 langchain-core==1.7.3

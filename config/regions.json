@@ -7,15 +7,5 @@
     "lon": -98.3,
     "gauges_csv": "config/gauge_locations.csv",
     "enabled": true
-  },
-  {
-    "id": "india-planned",
-    "name": "India",
-    "provider": "Planned: CWC / India-WRIS stations, no gauges connected yet",
-    "lat": 22.0,
-    "lon": 79.0,
-    "gauges_csv": "config/gauge_locations_india.csv",
-    "enabled": true,
-    "planned": true
   }
 ]
