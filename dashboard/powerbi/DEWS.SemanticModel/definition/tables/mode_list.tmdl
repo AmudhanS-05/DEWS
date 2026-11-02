@@ -1,0 +1,28 @@
+table mode_list
+	lineageTag: 623cb592-28a8-59b0-9fb3-cb317d54e219
+
+	measure 'Title flood overview' = "Flood Overview | mode: " & SELECTEDVALUE(mode_list[mode], "select one") & " | gauge: " & SELECTEDVALUE(gauge_levels[lid], "select one") & " " & SELECTEDVALUE(gauge_levels[name]) & " | forecast of crossing an official category"
+		lineageTag: f4c79932-6060-5dab-b992-eb377ea74201
+
+	measure 'Title pipeline health' = "Pipeline Health | mode: " & SELECTEDVALUE(mode_list[mode], "select one") & " | fault drills: " & SELECTEDVALUE(evaluation_runs[data_source], "select one")
+		lineageTag: 53d28e24-5335-536b-a78e-1e70eb6de190
+
+	measure 'Title agents' = "Agents | mode: " & SELECTEDVALUE(mode_list[mode], "select one")
+		lineageTag: 82b8e0a3-b301-5f88-aa99-550e776a6034
+
+	column mode
+		dataType: string
+		lineageTag: f43445ae-2d88-5837-9e44-1b37abcb620c
+		summarizeBy: none
+		sourceColumn: mode
+
+	partition mode_list = m
+		mode: directQuery
+		source =
+				let
+					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
+					Data = Value.NativeQuery(Source, "SELECT mode FROM (VALUES ('SIMULATION'),('LIVE'),('no alert row')) AS v(mode)", null, [EnableFolding=true])
+				in
+					Data
+
+	annotation PBI_ResultType = Table

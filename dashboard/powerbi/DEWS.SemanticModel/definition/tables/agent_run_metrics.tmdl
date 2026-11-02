@@ -1,0 +1,82 @@
+table agent_run_metrics
+	lineageTag: fca474be-e9e7-52a7-9154-12bfaf432b61
+
+	measure 'Tokens per run' = AVERAGE(agent_run_metrics[tokens])
+		formatString: 0
+		lineageTag: 04294ff7-39aa-50e1-8a6d-4dad7c67e40d
+
+	measure 'Agent runs' = COUNTROWS(agent_run_metrics)
+		formatString: 0
+		lineageTag: 21989ffb-6f10-5bbf-a40d-48b4db399872
+
+	measure 'Agent duration, median (s)' = MEDIAN(agent_run_metrics[duration_s])
+		formatString: 0.0
+		lineageTag: ee2a3bde-39e7-5440-98c8-54e5a7e1c788
+
+	column run_id
+		dataType: string
+		lineageTag: 54e5903e-52d6-507a-9fa5-e3d9270361c7
+		summarizeBy: none
+		sourceColumn: run_id
+
+	column alert_id
+		dataType: string
+		lineageTag: 892fed4b-657a-56c0-858e-3816df2f2ffc
+		summarizeBy: none
+		sourceColumn: alert_id
+
+	column mode
+		dataType: string
+		lineageTag: 868debc0-d78a-5a87-9c3d-0a1be1668469
+		summarizeBy: none
+		sourceColumn: mode
+
+	column site_no
+		dataType: string
+		lineageTag: 4715a24b-54d1-5e80-b922-3b577126b743
+		summarizeBy: none
+		sourceColumn: site_no
+
+	column duration_s
+		dataType: double
+		lineageTag: 87dfc3e1-7cbc-552f-a3ae-1f27c0cc9512
+		summarizeBy: none
+		sourceColumn: duration_s
+
+	column tokens
+		dataType: double
+		lineageTag: d2384541-b188-50ac-874e-93971a8f4d23
+		summarizeBy: none
+		sourceColumn: tokens
+
+	column revisions
+		dataType: int64
+		lineageTag: 6d1d276e-49bd-519f-a9a4-96b87dfa587a
+		summarizeBy: none
+		sourceColumn: revisions
+
+	column disagreements
+		dataType: int64
+		lineageTag: 830721fa-5b5f-535a-bfa4-daa8d8142e1b
+		summarizeBy: none
+		sourceColumn: disagreements
+
+	column tool_calls
+		dataType: int64
+		formatString: 0
+		sourceProviderType: bigint
+		lineageTag: 6ec74ab3-bc75-4a8c-b443-ad4746dcb3a3
+		summarizeBy: sum
+		sourceColumn: tool_calls
+
+		annotation SummarizationSetBy = Automatic
+
+	partition agent_run_metrics = m
+		mode: directQuery
+		source =
+				let
+					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
+					Data = Value.NativeQuery(Source, "SELECT e.run_id, e.alert_id, COALESCE(a.mode, 'no alert row') AS mode, a.site_no, EXTRACT(EPOCH FROM (max(e.ts) - min(e.ts)))::float8 AS duration_s, COALESCE(sum((e.detail->>'tokens')::numeric) FILTER (WHERE e.kind = 'end'), 0)::float8 AS tokens, count(*) FILTER (WHERE e.kind = 'tool_call') AS tool_calls, count(*) FILTER (WHERE e.kind = 'revision') AS revisions, count(*) FILTER (WHERE e.kind = 'disagreement') AS disagreements FROM agent_events e LEFT JOIN alerts a USING (alert_id) GROUP BY 1, 2, 3, 4", null, [EnableFolding=true])
+				in
+					Data
+

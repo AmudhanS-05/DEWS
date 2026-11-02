@@ -1,0 +1,136 @@
+table latency_waterfall
+	lineageTag: a6cd24d6-27a7-50a0-82b1-6e440b0e12cc
+
+	measure 'Stage median (s)' = SWITCH(SELECTEDVALUE(latency_stage[stage]), "Feed delay", [Feed delay, median (s)], "Ingest", [Ingest, median (s)], "Windowing", [Windowing, median (s)], "Forecast", [Forecast, median (s)], "Alert", [Alert, median (s)], "Human approval", [Human approval, median (s)], "Delivery", [Delivery, median (s)])
+		formatString: 0.000
+		lineageTag: 69401609-c06b-5f13-b71c-2249bee5d190
+
+	measure 'Feed delay, median (s)' = MEDIAN(latency_waterfall[feed_delay_s])
+		formatString: 0.000
+		lineageTag: 7036679c-26e0-5dbe-9fc5-be24c73e5864
+
+	measure 'Ingest, median (s)' = MEDIAN(latency_waterfall[ingest_s])
+		formatString: 0.000
+		lineageTag: 9fcf632d-38ae-5e12-88c5-6a2e97530c0b
+
+	measure 'Windowing, median (s)' = MEDIAN(latency_waterfall[windowing_s])
+		formatString: 0.000
+		lineageTag: c615c518-136e-56b0-9f4b-1c6a3648d635
+
+	measure 'Forecast, median (s)' = MEDIAN(latency_waterfall[forecast_s])
+		formatString: 0.000
+		lineageTag: 2dbb5882-f69c-54e6-b5a7-2e9be529baa1
+
+	measure 'Alert, median (s)' = MEDIAN(latency_waterfall[alert_s])
+		formatString: 0.000
+		lineageTag: 46bdc4e3-8a15-5398-87d3-3cc0da3d3b96
+
+	measure 'Human approval, median (s)' = MEDIAN(latency_waterfall[human_s])
+		formatString: 0.000
+		lineageTag: 99b3061d-8334-5b7d-ae7f-67d893a2fdb7
+
+	measure 'Delivery, median (s)' = MEDIAN(latency_waterfall[delivery_s])
+		formatString: 0.000
+		lineageTag: 81b2db8d-b432-50db-bea7-d886670c1900
+
+	measure 'Total net of feed delay, median (s)' = MEDIAN(latency_waterfall[net_total_s])
+		formatString: 0.000
+		lineageTag: 0188151a-843a-5f25-ba10-4b864d805e63
+
+	measure 'Total gross, median (s)' = MEDIAN(latency_waterfall[gross_total_s])
+		formatString: 0.000
+		lineageTag: e4ef25ad-9bf3-57ab-9566-44525e645655
+
+	column trace_id
+		dataType: string
+		lineageTag: 5845f949-34bc-5077-bee5-5d4d39f2d706
+		summarizeBy: none
+		sourceColumn: trace_id
+
+	column site_no
+		dataType: string
+		lineageTag: 60278d9b-136d-5861-ad92-7960f44732d6
+		summarizeBy: none
+		sourceColumn: site_no
+
+	column mode
+		dataType: string
+		lineageTag: 1948ee62-23cf-504c-a2fb-dce36d2ffac4
+		summarizeBy: none
+		sourceColumn: mode
+
+	column reading_time
+		dataType: dateTime
+		lineageTag: 732e198a-6191-53b6-9bd2-8066414292e9
+		summarizeBy: none
+		sourceColumn: reading_time
+
+	column feed_delay_s
+		dataType: double
+		lineageTag: 23b4b567-17bb-50af-8833-823700762a69
+		summarizeBy: none
+		sourceColumn: feed_delay_s
+
+	column ingest_s
+		dataType: double
+		lineageTag: 385d0dcb-76fc-5027-be5d-0c41f9aa47f1
+		summarizeBy: none
+		sourceColumn: ingest_s
+
+	column windowing_s
+		dataType: double
+		lineageTag: 02544aa0-c279-5802-83b2-4b3ed221b2d8
+		summarizeBy: none
+		sourceColumn: windowing_s
+
+	column forecast_s
+		dataType: double
+		lineageTag: cbe21805-5e22-5a13-b894-8b1c38809e63
+		summarizeBy: none
+		sourceColumn: forecast_s
+
+	column alert_s
+		dataType: double
+		lineageTag: 059f198d-a6f7-57ce-98dd-c7acaa538a68
+		summarizeBy: none
+		sourceColumn: alert_s
+
+	column human_s
+		dataType: double
+		lineageTag: 69a52f34-96f9-5c26-814f-5afcbbe160b5
+		summarizeBy: none
+		sourceColumn: human_s
+
+	column delivery_s
+		dataType: double
+		lineageTag: be9806b6-ea9a-55c7-a32c-52260386453a
+		summarizeBy: none
+		sourceColumn: delivery_s
+
+	column net_total_s
+		dataType: double
+		lineageTag: ddb67e5c-1a14-54fd-8de7-89eeb52d3b22
+		summarizeBy: none
+		sourceColumn: net_total_s
+
+	column gross_total_s
+		dataType: double
+		lineageTag: 30be30cc-9f68-5279-8f50-f4e01591aedd
+		summarizeBy: none
+		sourceColumn: gross_total_s
+
+	column instrumented
+		dataType: boolean
+		lineageTag: acf1009f-322e-5701-9284-f554abf340dc
+		summarizeBy: none
+		sourceColumn: instrumented
+
+	partition latency_waterfall = m
+		mode: directQuery
+		source =
+				let
+					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
+					Data = Source{[Schema="public",Item="latency_waterfall"]}[Data]
+				in
+					Data
+

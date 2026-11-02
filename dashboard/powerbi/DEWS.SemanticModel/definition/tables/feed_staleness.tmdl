@@ -1,0 +1,46 @@
+table feed_staleness
+	lineageTag: af946795-aaa4-5e4b-844f-0ec436d22c61
+
+	measure 'Staleness, max (min)' = IF(SELECTEDVALUE(mode_list[mode]) = "LIVE", MAX(feed_staleness[staleness_min]))
+		formatString: 0.0
+		lineageTag: 99b42209-094b-59da-a96f-d7c89d93440b
+
+	column site_no
+		dataType: string
+		lineageTag: ba1b5c84-4c7b-56e7-bfc3-c776d5777aa3
+		summarizeBy: none
+		sourceColumn: site_no
+
+	column series
+		dataType: string
+		lineageTag: 644c3257-6e6f-55b7-8077-8ba6e612c6f2
+		summarizeBy: none
+		sourceColumn: series
+
+	column reading_time
+		dataType: dateTime
+		lineageTag: cb0c6516-259e-5ec5-a1f3-b2139643e8b5
+		summarizeBy: none
+		sourceColumn: reading_time
+
+	column fetched_at
+		dataType: dateTime
+		lineageTag: 667629a3-1ec0-5483-8253-923c370a0957
+		summarizeBy: none
+		sourceColumn: fetched_at
+
+	column staleness_min
+		dataType: double
+		lineageTag: 91dbf72a-92e0-5560-b57a-a75a16a4cb9c
+		summarizeBy: none
+		sourceColumn: staleness_min
+
+	partition feed_staleness = m
+		mode: directQuery
+		source =
+				let
+					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
+					Data = Source{[Schema="public",Item="feed_staleness"]}[Data]
+				in
+					Data
+

@@ -1,0 +1,15 @@
+# Runtime. Install into a fresh venv (python -m venv .venv) after upgrading pip and
+# setuptools: an old setuptools fails to build faust-streaming's opentracing dependency.
+requests==2.32.3
+confluent-kafka==2.5.3
+faust-streaming==0.11.3
+# faust-streaming 0.11.3 breaks with aiokafka >= 0.13 ("MetadataRequest_v1 ... has no attribute 'prepare'")
+aiokafka[lz4]==0.12.0
+cramjam==2.11.0                # lz4 codec: our producers compress with lz4; Faust/aiokafka needs it to read
+psycopg2-binary==2.9.9
+# producers/mrms_qpe_producer.py (C2.1): MRMS GRIB2 decoded in memory. eccodeslib ships the ecCodes binary as a
+# wheel (no separate ecCodes install); tested with eccodes 2.50.0 / eccodeslib 2.50.0.33 / numpy 2.5.3 (Python 3.13).
+numpy
+eccodes
+eccodeslib; sys_platform != "win32"      # no Windows wheel
+ecmwflibs; sys_platform == "win32"        # ships the ecCodes binary on Windows (tested: eccodes 2.50.0, Python 3.12)

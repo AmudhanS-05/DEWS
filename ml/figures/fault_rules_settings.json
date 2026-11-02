@@ -1,0 +1,8 @@
+{
+ "chosen": {
+  "spike": 2.0,
+  "stuck": 24.0,
+  "step": 1.0
+ },
+ "criteria": "flood-window rate <= 1 % and clean episodes <= 5 per gauge-year on 2021-2023; most sensitive (highest detection of its fault type)"
+}

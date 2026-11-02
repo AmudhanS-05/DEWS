@@ -1,0 +1,51 @@
+# 05 Power BI
+
+Power BI Desktop is the analytics view for the project. It connects to the same PostgreSQL as the console in
+**DirectQuery** mode, so pages show current rows instead of an imported copy.
+
+> The report is the Power BI project `dashboard/powerbi/DEWS.pbip` (4 pages: Flood Overview, Pipeline Health,
+> Forecast Evaluation, Agents). The page-by-page build guide, with the check that page 1 is live, is
+> [`dashboard/powerbi/README.md`](../../dashboard/powerbi/README.md). This page is the overview: what to connect to,
+> what each table holds, and how to read the pages.
+
+## Connect
+
+1. Install Power BI Desktop (Windows only, free).
+2. **Get Data → PostgreSQL database**. Server `localhost:5432`, database `disaster_warning`, Data Connectivity mode
+   **DirectQuery**. The first time, Power BI may ask you to install the Npgsql provider.
+3. Credentials: the user and password of the `postgres` service in `docker/docker-compose.yml`. These are local demo
+   values, so do not reuse them elsewhere or save them into a file in this repo. If you changed them, see
+   [02 Setup](02-setup.md#2-start-kafka-and-postgresql).
+4. Turn on **automatic page refresh** for each page (Format → Page refresh) so the metrics update while a replay runs.
+
+Embedding Power BI in the console would need Power BI Service, a gateway and a licence, so the two are shown side by
+side instead.
+
+## What to load
+
+| Table / view | One row per | Use |
+|---|---|---|
+| `gauges` | gauge | names, location, official levels |
+| `gauge_readings` | raw reading | stage trend lines |
+| `windowed_aggregates` | gauge × hour | stage min/max/last, rise rate, rain |
+| `risk_scores` | forecast | forecast stage against official levels, model name |
+| `alerts`, `alert_overview` | alert | category, probability, status, `raise_to_approval_s`, `approval_to_delivery_s` |
+| `current_advisory` | alert | the advisory a person sees (v2 replaces v1) |
+| `latency_waterfall` | traced record | seconds per stage: feed delay, ingest, windowing, forecast, alert, human, delivery; `net_total_s` and `gross_total_s` |
+| `evaluation_runs` | evaluation row | precision, recall, F1, false alarms, lead time, recovery times |
+| `agent_run_summary` | agent run | duration, events, tool calls, review rounds, verdict |
+| `feed_staleness` | gauge | age of the newest reading |
+
+The views come from `storage/views.sql` ([02 Setup](02-setup.md#2-start-kafka-and-postgresql)).
+
+## Pages and how to read them
+
+| Page | Shows | Read it as |
+|---|---|---|
+| 1 Flood Overview | slicers for `mode` (single select, no "all") and gauge; observed stage and forecast stage over time with the official levels as reference lines; the `alert_overview` table; a card with the newest reading time | the card moving forward proves DirectQuery is live; the gap between the forecast line crossing a level and the observed line crossing it is the lead time |
+| 2 Pipeline Health | median seconds per stage, gross and net of the feed delay; trace detail; feed staleness (live); fault-drill recovery times | `net_total_s` is what an officer experiences after the feed delay |
+| 3 Forecast Evaluation | precision, recall, F1, false alarms and lead time per model and horizon, pooled and per gauge | compare models only within one evaluation run label; `POOLED` rows are summaries |
+| 4 Agents | runs, tokens, duration, events per agent, drafts and reviewer verdicts | rows with mode `no alert row` are seed or test runs |
+
+**Filter on `mode`** on every page. `SIMULATION` rows are replays and synthetic data, and they must not be read as live
+performance.

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Report",
+    "displayName": "DEWS"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "95b87e0a-931b-536c-8a84-74b9b1aa26d3"
+  }
+}

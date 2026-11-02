@@ -1,0 +1,254 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "60d9553e957307498047",
+  "position": {
+    "x": 16,
+    "y": 536,
+    "z": 510,
+    "height": 168,
+    "width": 1248,
+    "tabOrder": 510
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "evaluation_runs"
+                    }
+                  },
+                  "Property": "site_no"
+                }
+              },
+              "queryRef": "evaluation_runs.site_no",
+              "nativeQueryRef": "site_no"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "evaluation_runs"
+                    }
+                  },
+                  "Property": "model"
+                }
+              },
+              "queryRef": "evaluation_runs.model",
+              "nativeQueryRef": "model"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "evaluation_runs"
+                    }
+                  },
+                  "Property": "horizon_h"
+                }
+              },
+              "queryRef": "evaluation_runs.horizon_h",
+              "nativeQueryRef": "horizon_h"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "evaluation_runs"
+                    }
+                  },
+                  "Property": "precision"
+                }
+              },
+              "queryRef": "evaluation_runs.precision",
+              "nativeQueryRef": "precision"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "evaluation_runs"
+                    }
+                  },
+                  "Property": "recall"
+                }
+              },
+              "queryRef": "evaluation_runs.recall",
+              "nativeQueryRef": "recall"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "evaluation_runs"
+                    }
+                  },
+                  "Property": "f1"
+                }
+              },
+              "queryRef": "evaluation_runs.f1",
+              "nativeQueryRef": "f1"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "evaluation_runs"
+                    }
+                  },
+                  "Property": "false_alarms"
+                }
+              },
+              "queryRef": "evaluation_runs.false_alarms",
+              "nativeQueryRef": "false_alarms"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "evaluation_runs"
+                    }
+                  },
+                  "Property": "median_lead_time_h"
+                }
+              },
+              "queryRef": "evaluation_runs.median_lead_time_h",
+              "nativeQueryRef": "median_lead_time_h"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "evaluation_runs"
+                    }
+                  },
+                  "Property": "notes"
+                }
+              },
+              "queryRef": "evaluation_runs.notes",
+              "nativeQueryRef": "notes"
+            }
+          ]
+        }
+      }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'By gauge (replay test rows)'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "3fbb0d6030e6bb705648",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "evaluation_runs"
+              }
+            },
+            "Property": "site_no"
+          }
+        },
+        "type": "Categorical",
+        "filter": {
+          "Version": 2,
+          "From": [
+            {
+              "Name": "e",
+              "Entity": "evaluation_runs",
+              "Type": 0
+            }
+          ],
+          "Where": [
+            {
+              "Condition": {
+                "Not": {
+                  "Expression": {
+                    "In": {
+                      "Expressions": [
+                        {
+                          "Column": {
+                            "Expression": {
+                              "SourceRef": {
+                                "Source": "e"
+                              }
+                            },
+                            "Property": "site_no"
+                          }
+                        }
+                      ],
+                      "Values": [
+                        [
+                          {
+                            "Literal": {
+                              "Value": "'POOLED'"
+                            }
+                          }
+                        ],
+                        [
+                          {
+                            "Literal": {
+                              "Value": "'POOLED-SLOW'"
+                            }
+                          }
+                        ]
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "objects": {
+          "general": [
+            {
+              "properties": {
+                "isInvertedSelectionMode": {
+                  "expr": {
+                    "Literal": {
+                      "Value": "true"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

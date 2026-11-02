@@ -1,0 +1,39 @@
+site_no,lid,name,lat,lon,county,state,action,minor,moderate,major,units
+08155300,ABTT2,Barton Creek at Loop 360,30.24444,-97.80194,Travis,TX,6.0,8.0,11.0,12.0,ft
+08154700,ABUT2,Bull Creek above Loop 360,30.37194,-97.78444,Travis,TX,5.0,5.0,5.0,9.0,ft
+08158000,ACRT2,Colorado River (TX) at Austin,30.24611,-97.68,Travis,TX,25.0,33.0,38.0,42.0,ft
+08156800,AHOT2,Shoal Creek at West 12th Street,30.27639,-97.75,Travis,TX,5.0,7.0,10.0,12.0,ft
+08159000,ATIT2,Onion Creek at US 183,30.17778,-97.68833,Travis,TX,15.0,17.0,23.0,27.0,ft
+08170800,BAPT2,Blanco River at Crabapple Road,30.1025,-98.51056,Blanco,TX,4.0,7.0,17.0,30.0,ft
+08178880,BDAT2,Medina River at Bandera,29.72361,-99.06972,Bandera,TX,10.0,13.0,14.0,24.0,ft
+08170950,BFST2,Blanco River at Fischer Store Rd near Fischer,30.00058,-98.20036,Hays,TX,12.0,17.0,23.0,38.0,ft
+08171350,BSMT2,Blanco River at San Marcos,29.87944,-97.91056,Hays,TX,13.0,18.0,24.0,30.0,ft
+08190500,BTVT2,West Nueces River at Brackettville,29.48108,-100.23917,Kinney,TX,9.0,15.0,17.0,18.0,ft
+08195000,CNCT2,Frio River at Concan,29.48833,-99.70444,Uvalde,TX,7.0,11.0,12.0,15.0,ft
+08167000,COMT2,Guadalupe River at Comfort,29.96524,-98.89717,Kendall,TX,10.0,21.0,26.0,28.0,ft
+08158700,DRWT2,Onion Creek near Driftwood,30.08278,-98.0075,Hays,TX,5.5,5.5,7.0,13.0,ft
+08152900,FRBT2,Pedernales River at Fredericksburg,30.22028,-98.86944,Gillespie,TX,12.0,22.0,25.0,32.0,ft
+08169500,GBCT2,Guadalupe River below Comal,29.69778,-98.10639,Comal,TX,13.0,13.0,14.0,20.0,ft
+08104900,GETT2,San Gabriel River at Georgetown South Fork,30.62556,-97.69083,Williamson,TX,7.0,9.0,13.0,26.0,ft
+08173900,GNLT2,Guadalupe River at Gonzales,29.4843,-97.44754,Gonzales,TX,17.0,31.0,37.0,43.0,ft
+08165500,HNTT2,Guadalupe River at Hunt,30.06993,-99.32171,Kerr,TX,10.0,10.0,12.0,22.0,ft
+08148500,JCTT2,North Llano River near Junction,30.51722,-99.80583,Kimble,TX,14.0,21.0,25.0,28.0,ft
+08150000,JNCT2,Llano River near Junction,30.50417,-99.73417,Kimble,TX,12.0,16.0,22.0,31.0,ft
+08153500,JOCT2,Pedernales River at Johnson City,30.29167,-98.39917,Blanco,TX,13.0,14.0,17.0,19.0,ft
+08152000,KNLT2,Sandy Creek near Kingsland,30.5575,-98.47194,Llano,TX,8.0,12.0,14.0,20.0,ft
+08166200,KRRT2,Guadalupe River at Kerrville,30.05306,-99.16306,Kerr,TX,7.0,9.0,12.0,20.0,ft
+08170890,LBFT2,Little Blanco River at FM32 near Fischer,30.02081,-98.33056,Blanco,TX,8.0,12.0,17.0,25.0,ft
+08172400,LCPT2,Plum Creek at Lockhart,29.92278,-97.67889,Caldwell,TX,12.0,14.0,15.0,19.0,ft
+08151500,LLAT2,Llano River at Llano,30.75111,-98.66944,Llano,TX,10.0,10.0,12.0,23.0,ft
+08172000,LLGT2,San Marcos River at Luling,29.66611,-97.65056,Caldwell,TX,11.0,20.0,24.0,30.0,ft
+08173000,LULT2,Plum Creek near Luling,29.6996,-97.6036,Caldwell,TX,20.0,23.0,24.0,25.0,ft
+08150800,MBCT2,Beaver Creek (Llano River Basin) near Mason,30.64333,-99.09556,Mason,TX,14.0,17.0,20.0,25.0,ft
+08150700,MLRT2,Llano River near Mason,30.66056,-99.10889,Mason,TX,11.0,18.0,24.0,28.0,ft
+08169000,NBCT2,Comal River at New Braunfels,29.70583,-98.12222,Comal,TX,9.0,11.0,15.0,23.0,ft
+08168500,NBRT2,Guadalupe River above Comal River at New Braunfels,29.71472,-98.10972,Comal,TX,6.0,7.0,10.0,14.0,ft
+08155200,OHBT2,Barton Creek above Hwy 71 near Oak Hill,30.29611,-97.92528,Travis,TX,12.0,12.0,15.0,18.0,ft
+08196000,RWDT2,Dry Frio River near Reagan Wells near Uvalde 23N,29.50444,-99.78111,Uvalde,TX,7.0,10.0,13.0,20.0,ft
+08158840,SCAT2,Slaughter Creek at FM 1826 near Austin ,30.20889,-97.90306,Travis,TX,8.0,8.0,9.0,15.0,ft
+08169740,SEGT2,Guadalupe River at Seguin,29.55194,-97.96972,Guadalupe,TX,17.0,19.0,22.0,26.0,ft
+08185000,SELT2,Cibolo Creek at Selma,29.59389,-98.31083,Bexar,TX,14.0,17.0,20.0,22.0,ft
+08177700,SIOT2,Olmos Creek at Dresden Drive,29.49889,-98.51,Bexar,TX,9.0,9.0,10.0,12.0,ft

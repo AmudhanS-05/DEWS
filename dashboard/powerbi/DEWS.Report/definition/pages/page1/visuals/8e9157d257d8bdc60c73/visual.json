@@ -1,0 +1,146 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "8e9157d257d8bdc60c73",
+  "position": {
+    "x": 284,
+    "y": 448,
+    "z": 600,
+    "height": 256,
+    "width": 980,
+    "tabOrder": 600
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "alert_overview"
+                    }
+                  },
+                  "Property": "raised_at"
+                }
+              },
+              "queryRef": "alert_overview.raised_at",
+              "nativeQueryRef": "raised_at"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "alert_overview"
+                    }
+                  },
+                  "Property": "category"
+                }
+              },
+              "queryRef": "alert_overview.category",
+              "nativeQueryRef": "category"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "alert_overview"
+                    }
+                  },
+                  "Property": "alert_status"
+                }
+              },
+              "queryRef": "alert_overview.alert_status",
+              "nativeQueryRef": "alert_status"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "alert_overview"
+                    }
+                  },
+                  "Property": "advisory_version"
+                }
+              },
+              "queryRef": "alert_overview.advisory_version",
+              "nativeQueryRef": "advisory_version"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "alert_overview"
+                    }
+                  },
+                  "Property": "raise_to_approval_s"
+                }
+              },
+              "queryRef": "alert_overview.raise_to_approval_s",
+              "nativeQueryRef": "raise_to_approval_s"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "alert_overview"
+                    }
+                  },
+                  "Property": "approval_to_delivery_s"
+                }
+              },
+              "queryRef": "alert_overview.approval_to_delivery_s",
+              "nativeQueryRef": "approval_to_delivery_s"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Column": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "alert_overview"
+                  }
+                },
+                "Property": "raised_at"
+              }
+            },
+            "direction": "Descending"
+          }
+        ]
+      }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Alerts, newest first: forecast of crossing an official category'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

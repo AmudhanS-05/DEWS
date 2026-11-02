@@ -1,0 +1,26 @@
+table latency_stage
+	lineageTag: c55c9783-d3b0-507d-9c51-dac3e70c5104
+
+	column stage_order
+		dataType: int64
+		lineageTag: 76d307c2-9de7-501e-8062-a5afc32b0631
+		summarizeBy: none
+		sourceColumn: stage_order
+
+	column stage
+		dataType: string
+		lineageTag: dd500ffd-bc37-5872-87f9-61c54b9a2b92
+		summarizeBy: none
+		sourceColumn: stage
+		sortByColumn: stage_order
+
+	partition latency_stage = m
+		mode: directQuery
+		source =
+				let
+					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
+					Data = Value.NativeQuery(Source, "SELECT stage, stage_order FROM (VALUES ('Feed delay',1),('Ingest',2),('Windowing',3),('Forecast',4),('Alert',5),('Human approval',6),('Delivery',7)) AS v(stage, stage_order)", null, [EnableFolding=true])
+				in
+					Data
+
+	annotation PBI_ResultType = Table

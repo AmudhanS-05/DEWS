@@ -1,0 +1,79 @@
+table gauge_readings
+	lineageTag: 3da22126-5d09-5f7b-8570-f70b433557cb
+
+	measure 'Newest reading (local time)' = MAX(gauge_readings[ingested_at])
+		formatString: "yyyy-mm-dd hh:nn:ss"
+		lineageTag: cc775d6e-9672-5d81-a639-7941247f2aea
+
+	column site_no
+		dataType: string
+		lineageTag: 6be059ba-a1ca-5da9-85ce-36fd0ecfb211
+		summarizeBy: none
+		sourceColumn: site_no
+
+	column parameter
+		dataType: string
+		lineageTag: f2bdfb64-b12a-5f71-ac9e-8eb2fd95f7f3
+		summarizeBy: none
+		sourceColumn: parameter
+
+	column series
+		dataType: string
+		lineageTag: 9790d606-68bd-5d60-bfba-0909c0a6ec8d
+		summarizeBy: none
+		sourceColumn: series
+
+	column reading_time
+		dataType: dateTime
+		lineageTag: c4f7f8d5-c316-593d-a713-de4cc0aa5dc2
+		summarizeBy: none
+		sourceColumn: reading_time
+
+	column value
+		dataType: double
+		lineageTag: bc7ddb96-e110-5c0f-ba30-e22739af08c8
+		summarizeBy: none
+		sourceColumn: value
+
+	column unit
+		dataType: string
+		lineageTag: 2ee5a8b4-8404-5195-9fde-42d33faa5bdf
+		summarizeBy: none
+		sourceColumn: unit
+
+	column mode
+		dataType: string
+		lineageTag: 68baeba4-ef94-598c-860a-82731f177dfa
+		summarizeBy: none
+		sourceColumn: mode
+
+	column fetched_at
+		dataType: dateTime
+		lineageTag: 6d788655-3642-5602-9843-bd76bb160348
+		summarizeBy: none
+		sourceColumn: fetched_at
+
+	column ingested_at
+		dataType: dateTime
+		lineageTag: 12b3205f-867f-5856-b324-9c1e96d95d78
+		summarizeBy: none
+		sourceColumn: ingested_at
+
+	column qualifiers
+		dataType: string
+		sourceProviderType: nchar
+		lineageTag: 2eaa2557-d880-4105-a729-5e301ca529b8
+		summarizeBy: none
+		sourceColumn: qualifiers
+
+		annotation SummarizationSetBy = Automatic
+
+	partition gauge_readings = m
+		mode: directQuery
+		source =
+				let
+					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
+					Data = Source{[Schema="public",Item="gauge_readings"]}[Data]
+				in
+					Data
+

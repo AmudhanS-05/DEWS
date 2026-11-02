@@ -1,0 +1,1098 @@
+[
+ {
+  "name": "llm:08156800|minor|2023-10-26T12:00:00Z",
+  "text": "SIMULATION - replay of a historical USGS gauge record, not a real-time event\n\nShoal Creek at West 12th Street - current stage 2.6 ft, forecast stage 3.3 ft\n\nProbability 83% of crossing MINOR within 3 h. MINOR stage is 7.0 ft. Official stages: ACTION 5.0 ft, MINOR 7.0 ft, MODERATE 10.0 ft, MAJOR 12.0 ft\n\nLead time to MINOR: not available (the two forecasts disagree)\n\nImpacts: no specific impacts reported\n\nUNCERTAIN: the two forecasts disagree. The model's probability of crossing MINOR within 3 h is 83%, but its stage forecast is 3.3 ft, below the MINOR stage (7.0 ft). Treat as uncertain and re-check at the next window.\n\nData: approved per USGS, model trained S3 model v0, reading time 2023-10-26T13:00:00Z UTC",
+  "alert": {
+   "alert_id": "08156800|minor|2023-10-26T12:00:00Z",
+   "kind": "new",
+   "site_no": "08156800",
+   "site_name": "Shoal Creek at West 12th Street",
+   "mode": "SIMULATION",
+   "category": "minor",
+   "probability": 0.8296869309375021,
+   "horizon_h": 3.0,
+   "forecast_stage": 3.3406996774777324,
+   "current_stage": 2.62,
+   "official_levels": {
+    "action": 5.0,
+    "minor": 7.0,
+    "moderate": 10.0,
+    "major": 12.0,
+    "units": "ft",
+    "source": "gauges table"
+   },
+   "provisional_data": false,
+   "model": "s3_v0",
+   "raised_at": "2023-10-26T13:00:00Z",
+   "window_start": "2023-10-26T12:00:00Z",
+   "alert_rule": "alert_by_model",
+   "tau": 0.8265651563841883,
+   "as_of": "2023-10-26T13:00:00Z",
+   "episode_start": "2023-10-26T12:00:00Z",
+   "status": "draft"
+  },
+  "facts": {
+   "data_source": "SIMULATION: a replay of a historical USGS gauge record (mode SIMULATION), not a real-time event",
+   "alert": {
+    "site_no": "08156800",
+    "site_name": "Shoal Creek at West 12th Street",
+    "mode": "SIMULATION",
+    "category": "MINOR",
+    "probability_pct": 83,
+    "horizon_h": 3.0,
+    "forecast_stage_ft": 3.3,
+    "current_stage_ft": 2.6,
+    "official_levels_ft": {
+     "action": 5.0,
+     "minor": 7.0,
+     "moderate": 10.0,
+     "major": 12.0
+    },
+    "data_status": "approved per USGS",
+    "model": "trained S3 model v0",
+    "readings_time_utc": "2023-10-26T13:00:00Z",
+    "alert_rule": "the model's probability of crossing the category within the horizon is at or above its alert threshold",
+    "alert_threshold_pct": 83
+   },
+   "highest_category_forecast": "below all official categories",
+   "category_now": "below all official categories",
+   "evidence": {
+    "stage_now_ft": 2.6,
+    "rise_rate_ft_per_h": 1.2,
+    "stage_12h_ago_ft": 1.6,
+    "n_windows": 12,
+    "forecast_stage_ft": 3.3,
+    "horizon_h": 3.0,
+    "probability_pct": {
+     "action": null,
+     "minor": 83,
+     "moderate": null,
+     "major": null
+    },
+    "model": "trained S3 model v0",
+    "past_floods_n": 0,
+    "direction": "rising"
+   },
+   "context": {
+    "direction": "rising",
+    "signal_kind": "leading",
+    "summary": "LEADING signal (radar rain 11.8 mm in 3 h; no upstream gauge)",
+    "rule": "upstream gauges and radar rain are LEADING signals; downstream and nearby gauges are SUPPORTING context only (never a cause or predictor of the rise at this gauge)",
+    "rain": {
+     "rain_3h_mm": 11.8,
+     "rain_6h_mm": 11.9
+    },
+    "neighbours": [
+     {
+      "name": "Barton Creek at Loop 360",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 6.1,
+      "stage_now_ft": 1.8,
+      "change_ft": 0.1,
+      "hours": 3,
+      "rising": "not rising"
+     },
+     {
+      "name": "Colorado River (TX) at Austin",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 7.5,
+      "stage_now_ft": 11.5,
+      "change_ft": -0.1,
+      "hours": 3,
+      "rising": "not rising"
+     },
+     {
+      "name": "Bull Creek above Loop 360",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 11.1,
+      "stage_now_ft": 2.7,
+      "change_ft": 0.0,
+      "hours": 3,
+      "rising": "not rising"
+     }
+    ],
+    "impacts": "no NWS impact statement loaded"
+   },
+   "update_n": 1,
+   "lead_time_h": "not available (the two forecasts disagree)",
+   "forecasts_disagree": "UNCERTAIN: the two forecasts disagree. The model's probability of crossing MINOR within 3 h is 83%, but its stage forecast is 3.3 ft, below the MINOR stage (7.0 ft). Treat as uncertain and re-check at the next window."
+  },
+  "confidence": "uncertain",
+  "source": "llm (multi-agent v2)"
+ },
+ {
+  "name": "llm:08151500|minor|2023-10-26T07:00:00Z",
+  "text": "SIMULATION replay of a historical USGS gauge record, not a real-time event  \nGauge: Llano River at Llano (site 08151500) - current stage 8.4 ft  \nForecast: stage 5.4 ft within 3 h, probability 89% of crossing MINOR  \nLead time to MINOR: not available (the two forecasts disagree)  \nImpacts: none reported  \nUNCERTAIN: the two forecasts disagree. The model's probability of crossing MINOR within 3 h is 89%, but its stage forecast is 5.4 ft, below the MINOR stage (10.0 ft). Treat as uncertain and re-check at the next window.  \nData: approved per USGS, model trained S3 model v0, readings time 2023-10-26T08:00:00Z UTC.",
+  "alert": {
+   "alert_id": "08151500|minor|2023-10-26T07:00:00Z",
+   "kind": "new",
+   "site_no": "08151500",
+   "site_name": "Llano River at Llano",
+   "mode": "SIMULATION",
+   "category": "minor",
+   "probability": 0.8946256485266523,
+   "horizon_h": 3.0,
+   "forecast_stage": 5.418183193581809,
+   "current_stage": 8.38,
+   "official_levels": {
+    "action": 10.0,
+    "minor": 10.0,
+    "moderate": 12.0,
+    "major": 23.0,
+    "units": "ft",
+    "source": "gauges table"
+   },
+   "provisional_data": false,
+   "model": "s3_v0",
+   "raised_at": "2023-10-26T08:00:00Z",
+   "window_start": "2023-10-26T07:00:00Z",
+   "alert_rule": "alert_by_model",
+   "tau": 0.8265651563841883,
+   "as_of": "2023-10-26T08:00:00Z",
+   "episode_start": "2023-10-26T07:00:00Z",
+   "status": "draft"
+  },
+  "facts": {
+   "data_source": "SIMULATION: a replay of a historical USGS gauge record (mode SIMULATION), not a real-time event",
+   "alert": {
+    "site_no": "08151500",
+    "site_name": "Llano River at Llano",
+    "mode": "SIMULATION",
+    "category": "MINOR",
+    "probability_pct": 89,
+    "horizon_h": 3.0,
+    "forecast_stage_ft": 5.4,
+    "current_stage_ft": 8.4,
+    "official_levels_ft": {
+     "action": 10.0,
+     "minor": 10.0,
+     "moderate": 12.0,
+     "major": 23.0
+    },
+    "data_status": "approved per USGS",
+    "model": "trained S3 model v0",
+    "readings_time_utc": "2023-10-26T08:00:00Z",
+    "alert_rule": "the model's probability of crossing the category within the horizon is at or above its alert threshold",
+    "alert_threshold_pct": 83
+   },
+   "highest_category_forecast": "below all official categories",
+   "category_now": "below all official categories",
+   "evidence": {
+    "stage_now_ft": 8.4,
+    "rise_rate_ft_per_h": 2.8,
+    "stage_12h_ago_ft": 1.9,
+    "n_windows": 12,
+    "forecast_stage_ft": 5.4,
+    "horizon_h": 3.0,
+    "probability_pct": {
+     "action": null,
+     "minor": 89,
+     "moderate": null,
+     "major": null
+    },
+    "model": "trained S3 model v0",
+    "past_floods_n": 0,
+    "direction": "rising"
+   },
+   "context": {
+    "direction": "rising",
+    "signal_kind": "leading",
+    "summary": "LEADING signal (radar rain 12.7 mm in 3 h; no upstream gauge)",
+    "rule": "upstream gauges and radar rain are LEADING signals; downstream and nearby gauges are SUPPORTING context only (never a cause or predictor of the rise at this gauge)",
+    "rain": {
+     "rain_3h_mm": 12.7,
+     "rain_6h_mm": 38.6
+    },
+    "neighbours": [
+     {
+      "name": "Sandy Creek near Kingsland",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 28.6,
+      "stage_now_ft": 5.2,
+      "change_ft": 0.0,
+      "hours": 3,
+      "rising": "not rising"
+     },
+     {
+      "name": "Beaver Creek (Llano River Basin) near Mason",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 42.5,
+      "stage_now_ft": 11.9,
+      "change_ft": 5.0,
+      "hours": 3,
+      "rising": "rising"
+     },
+     {
+      "name": "Llano River near Mason",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 43.2,
+      "stage_now_ft": 6.0,
+      "change_ft": 0.4,
+      "hours": 3,
+      "rising": "not rising"
+     }
+    ],
+    "impacts": "no NWS impact statement loaded"
+   },
+   "update_n": 1,
+   "lead_time_h": "not available (the two forecasts disagree)",
+   "forecasts_disagree": "UNCERTAIN: the two forecasts disagree. The model's probability of crossing MINOR within 3 h is 89%, but its stage forecast is 5.4 ft, below the MINOR stage (10.0 ft). Treat as uncertain and re-check at the next window."
+  },
+  "confidence": "uncertain",
+  "source": "llm (multi-agent v2)"
+ },
+ {
+  "name": "llm:08172400|minor|2024-01-22T21:00:00Z",
+  "text": "SIMULATION replay of a historical USGS gauge record, not a real-time event.  \nGauge: Plum Creek at Lockhart (site 08172400) current stage 13.0 ft (ACTION 12.0 ft).  \nForecast: probability 85% of crossing MINOR within 3 h; forecast stage 13.0 ft.  \nLead time to MINOR: not available (the two forecasts disagree).  \nImpacts: none reported.  \nUNCERTAIN: the two forecasts disagree. The model's probability of crossing MINOR within 3 h is 85%, but its stage forecast is 13.0 ft, below the MINOR stage (14.0 ft). Evidence shows rising (0.5 ft/h); context shows no rising (rain 0.0 mm in 3 h). Treat as uncertain and re-check at the next window.  \nData: approved per USGS.",
+  "alert": {
+   "alert_id": "08172400|minor|2024-01-22T21:00:00Z",
+   "kind": "new",
+   "site_no": "08172400",
+   "site_name": "Plum Creek at Lockhart",
+   "mode": "SIMULATION",
+   "category": "minor",
+   "probability": 0.8473007454439272,
+   "horizon_h": 3.0,
+   "forecast_stage": 12.985926176290047,
+   "current_stage": 13.03,
+   "official_levels": {
+    "action": 12.0,
+    "minor": 14.0,
+    "moderate": 15.0,
+    "major": 19.0,
+    "units": "ft",
+    "source": "gauges table"
+   },
+   "provisional_data": false,
+   "model": "s3_v0",
+   "raised_at": "2024-01-22T22:00:00Z",
+   "window_start": "2024-01-22T21:00:00Z",
+   "alert_rule": "alert_by_model",
+   "tau": 0.8265651563841883,
+   "as_of": "2024-01-22T22:00:00Z",
+   "episode_start": "2024-01-22T21:00:00Z",
+   "status": "draft"
+  },
+  "facts": {
+   "data_source": "SIMULATION: a replay of a historical USGS gauge record (mode SIMULATION), not a real-time event",
+   "alert": {
+    "site_no": "08172400",
+    "site_name": "Plum Creek at Lockhart",
+    "mode": "SIMULATION",
+    "category": "MINOR",
+    "probability_pct": 85,
+    "horizon_h": 3.0,
+    "forecast_stage_ft": 13.0,
+    "current_stage_ft": 13.0,
+    "official_levels_ft": {
+     "action": 12.0,
+     "minor": 14.0,
+     "moderate": 15.0,
+     "major": 19.0
+    },
+    "data_status": "approved per USGS",
+    "model": "trained S3 model v0",
+    "readings_time_utc": "2024-01-22T22:00:00Z",
+    "alert_rule": "the model's probability of crossing the category within the horizon is at or above its alert threshold",
+    "alert_threshold_pct": 83
+   },
+   "highest_category_forecast": "ACTION",
+   "category_now": "ACTION",
+   "evidence": {
+    "stage_now_ft": 13.0,
+    "rise_rate_ft_per_h": 0.5,
+    "stage_12h_ago_ft": 2.2,
+    "n_windows": 12,
+    "forecast_stage_ft": 13.0,
+    "horizon_h": 3.0,
+    "probability_pct": {
+     "action": null,
+     "minor": 85,
+     "moderate": null,
+     "major": null
+    },
+    "model": "trained S3 model v0",
+    "past_floods_n": 0,
+    "direction": "rising"
+   },
+   "context": {
+    "direction": "not rising",
+    "signal_kind": "none",
+    "summary": "no rising signal (radar rain 0.0 mm in 3 h; no upstream gauge; downstream/nearby gauges not rising)",
+    "rule": "upstream gauges and radar rain are LEADING signals; downstream and nearby gauges are SUPPORTING context only (never a cause or predictor of the rise at this gauge)",
+    "rain": {
+     "rain_3h_mm": 0.0,
+     "rain_6h_mm": 0.1
+    },
+    "neighbours": [
+     {
+      "name": "Blanco River at San Marcos",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 22.8,
+      "stage_now_ft": 10.2,
+      "change_ft": -0.4,
+      "hours": 3,
+      "rising": "not rising"
+     },
+     {
+      "name": "Plum Creek near Luling",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 25.9,
+      "stage_now_ft": 4.8,
+      "change_ft": 0.0,
+      "hours": 3,
+      "rising": "not rising"
+     },
+     {
+      "name": "Onion Creek at US 183",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 28.4,
+      "stage_now_ft": 11.1,
+      "change_ft": -1.5,
+      "hours": 3,
+      "rising": "not rising"
+     }
+    ],
+    "impacts": "no NWS impact statement loaded"
+   },
+   "update_n": 1,
+   "lead_time_h": "not available (the two forecasts disagree)",
+   "forecasts_disagree": "UNCERTAIN: the two forecasts disagree. The model's probability of crossing MINOR within 3 h is 85%, but its stage forecast is 13.0 ft, below the MINOR stage (14.0 ft). Treat as uncertain and re-check at the next window.",
+   "context_disagreement": "the gauge evidence and a leading context signal point different ways"
+  },
+  "confidence": "uncertain",
+  "source": "llm (multi-agent v2)"
+ },
+ {
+  "name": "llm:08150000|minor|2024-07-23T18:00:00Z",
+  "text": "SIMULATION replay of a historical USGS gauge record, not a real-time event.  \n\nHeadline: MINOR flood category crossing probability 89% within 3 h.  \n\nGauge and stage: Llano River near Junction (site 08150000) current stage 14.2 ft, forecast stage 16.7 ft. Official stages - ACTION 12.0 ft, MINOR 16.0 ft, MODERATE 22.0 ft, MAJOR 31.0 ft.  \n\nForecast and probability: model forecasts to reach MINOR stage (16.0 ft) within 3 h with probability 89%.  \n\nLead time: Lead time to MINOR: about 0.4 h.  \n\nImpacts: impacts not available.  \n\nUncertainty: probability for other categories not available; nearby gauge North Llano River near Junction is a SUPPORTING signal, rising 1.4 ft in 3 h.  \n\nData note: data: approved per USGS, reading time 2024-07-23T19:00:00Z, mode SIMULATION.",
+  "alert": {
+   "alert_id": "08150000|minor|2024-07-23T18:00:00Z",
+   "kind": "new",
+   "site_no": "08150000",
+   "site_name": "Llano River near Junction",
+   "mode": "SIMULATION",
+   "category": "minor",
+   "probability": 0.8931103258540085,
+   "horizon_h": 3.0,
+   "forecast_stage": 16.71955180521092,
+   "current_stage": 14.18,
+   "official_levels": {
+    "action": 12.0,
+    "minor": 16.0,
+    "moderate": 22.0,
+    "major": 31.0,
+    "units": "ft",
+    "source": "gauges table"
+   },
+   "provisional_data": false,
+   "model": "s3_v0",
+   "raised_at": "2024-07-23T19:00:00Z",
+   "window_start": "2024-07-23T18:00:00Z",
+   "alert_rule": "alert_by_model",
+   "tau": 0.8265651563841883,
+   "as_of": "2024-07-23T19:00:00Z",
+   "episode_start": "2024-07-23T18:00:00Z",
+   "status": "draft"
+  },
+  "facts": {
+   "data_source": "SIMULATION: a replay of a historical USGS gauge record (mode SIMULATION), not a real-time event",
+   "alert": {
+    "site_no": "08150000",
+    "site_name": "Llano River near Junction",
+    "mode": "SIMULATION",
+    "category": "MINOR",
+    "probability_pct": 89,
+    "horizon_h": 3.0,
+    "forecast_stage_ft": 16.7,
+    "current_stage_ft": 14.2,
+    "official_levels_ft": {
+     "action": 12.0,
+     "minor": 16.0,
+     "moderate": 22.0,
+     "major": 31.0
+    },
+    "data_status": "approved per USGS",
+    "model": "trained S3 model v0",
+    "readings_time_utc": "2024-07-23T19:00:00Z",
+    "alert_rule": "the model's probability of crossing the category within the horizon is at or above its alert threshold",
+    "alert_threshold_pct": 83
+   },
+   "highest_category_forecast": "MINOR",
+   "category_now": "ACTION",
+   "evidence": {
+    "stage_now_ft": 14.2,
+    "rise_rate_ft_per_h": 4.2,
+    "stage_12h_ago_ft": 3.4,
+    "n_windows": 12,
+    "forecast_stage_ft": 16.7,
+    "horizon_h": 3.0,
+    "probability_pct": {
+     "action": null,
+     "minor": 89,
+     "moderate": null,
+     "major": null
+    },
+    "model": "trained S3 model v0",
+    "past_floods_n": 0,
+    "direction": "rising"
+   },
+   "context": {
+    "direction": "rising",
+    "signal_kind": "supporting",
+    "summary": "SUPPORTING signal only: nearby North Llano River near Junction +1.4 ft in 3 h rising in the same window (the storm affects the area; this does not cause or predict the rise here); no leading signal (radar rain 0.5 mm in 3 h, no upstream gauge)",
+    "rule": "upstream gauges and radar rain are LEADING signals; downstream and nearby gauges are SUPPORTING context only (never a cause or predictor of the rise at this gauge)",
+    "rain": {
+     "rain_3h_mm": 0.5,
+     "rain_6h_mm": 16.9
+    },
+    "neighbours": [
+     {
+      "name": "North Llano River near Junction",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 7.0,
+      "stage_now_ft": 13.2,
+      "change_ft": 1.4,
+      "hours": 3,
+      "rising": "rising"
+     }
+    ],
+    "impacts": "no NWS impact statement loaded"
+   },
+   "update_n": 1,
+   "lead_time_h": 0.4
+  },
+  "confidence": "normal",
+  "source": "llm (multi-agent v2)"
+ },
+ {
+  "name": "llm:08156800|minor|2025-05-28T23:00:00Z",
+  "text": "SIMULATION replay of a historical USGS gauge record, not a real-time event  \nShoal Creek at West 12th Street (site 08156800) current stage 3.0 ft, forecast stage 3.6 ft  \nProbability of crossing MINOR within 3 h is 83%  \nLead time to MINOR: not available (the two forecasts disagree)  \nNo specific impacts identified  \nUNCERTAIN: the two forecasts disagree. The model's probability of crossing MINOR within 3 h is 83%, but its stage forecast is 3.6 ft, below the MINOR stage (7.0 ft). Treat as uncertain and re-check at the next window.  \nData: approved per USGS, model trained S3 model v0, readings time 2025-05-29T00:00:00Z UTC.",
+  "alert": {
+   "alert_id": "08156800|minor|2025-05-28T23:00:00Z",
+   "kind": "new",
+   "site_no": "08156800",
+   "site_name": "Shoal Creek at West 12th Street",
+   "mode": "SIMULATION",
+   "category": "minor",
+   "probability": 0.8296869309375021,
+   "horizon_h": 3.0,
+   "forecast_stage": 3.5701655836673685,
+   "current_stage": 3.04,
+   "official_levels": {
+    "action": 5.0,
+    "minor": 7.0,
+    "moderate": 10.0,
+    "major": 12.0,
+    "units": "ft",
+    "source": "gauges table"
+   },
+   "provisional_data": false,
+   "model": "s3_v0",
+   "raised_at": "2025-05-29T00:00:00Z",
+   "window_start": "2025-05-28T23:00:00Z",
+   "alert_rule": "alert_by_model",
+   "tau": 0.8265651563841883,
+   "as_of": "2025-05-29T00:00:00Z",
+   "episode_start": "2025-05-28T23:00:00Z",
+   "status": "draft"
+  },
+  "facts": {
+   "data_source": "SIMULATION: a replay of a historical USGS gauge record (mode SIMULATION), not a real-time event",
+   "alert": {
+    "site_no": "08156800",
+    "site_name": "Shoal Creek at West 12th Street",
+    "mode": "SIMULATION",
+    "category": "MINOR",
+    "probability_pct": 83,
+    "horizon_h": 3.0,
+    "forecast_stage_ft": 3.6,
+    "current_stage_ft": 3.0,
+    "official_levels_ft": {
+     "action": 5.0,
+     "minor": 7.0,
+     "moderate": 10.0,
+     "major": 12.0
+    },
+    "data_status": "approved per USGS",
+    "model": "trained S3 model v0",
+    "readings_time_utc": "2025-05-29T00:00:00Z",
+    "alert_rule": "the model's probability of crossing the category within the horizon is at or above its alert threshold",
+    "alert_threshold_pct": 83
+   },
+   "highest_category_forecast": "below all official categories",
+   "category_now": "below all official categories",
+   "evidence": {
+    "stage_now_ft": 3.0,
+    "rise_rate_ft_per_h": 1.4,
+    "stage_12h_ago_ft": 1.9,
+    "n_windows": 12,
+    "forecast_stage_ft": 3.6,
+    "horizon_h": 3.0,
+    "probability_pct": {
+     "action": null,
+     "minor": 83,
+     "moderate": null,
+     "major": null
+    },
+    "model": "trained S3 model v0",
+    "past_floods_n": 0,
+    "direction": "rising"
+   },
+   "context": {
+    "direction": "rising",
+    "signal_kind": "leading",
+    "summary": "LEADING signal (radar rain 14.5 mm in 3 h; no upstream gauge)",
+    "rule": "upstream gauges and radar rain are LEADING signals; downstream and nearby gauges are SUPPORTING context only (never a cause or predictor of the rise at this gauge)",
+    "rain": {
+     "rain_3h_mm": 14.5,
+     "rain_6h_mm": 14.5
+    },
+    "neighbours": [
+     {
+      "name": "Barton Creek at Loop 360",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 6.1,
+      "stage_now_ft": 1.7,
+      "change_ft": 0.0,
+      "hours": 3,
+      "rising": "not rising"
+     },
+     {
+      "name": "Colorado River (TX) at Austin",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 7.5,
+      "stage_now_ft": 13.7,
+      "change_ft": 1.8,
+      "hours": 3,
+      "rising": "rising"
+     },
+     {
+      "name": "Bull Creek above Loop 360",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 11.1,
+      "stage_now_ft": 3.1,
+      "change_ft": 1.6,
+      "hours": 3,
+      "rising": "rising"
+     }
+    ],
+    "impacts": "no NWS impact statement loaded"
+   },
+   "update_n": 1,
+   "lead_time_h": "not available (the two forecasts disagree)",
+   "forecasts_disagree": "UNCERTAIN: the two forecasts disagree. The model's probability of crossing MINOR within 3 h is 83%, but its stage forecast is 3.6 ft, below the MINOR stage (7.0 ft). Treat as uncertain and re-check at the next window."
+  },
+  "confidence": "uncertain",
+  "source": "llm (multi-agent v2)"
+ },
+ {
+  "name": "llm:08165500|minor|2025-07-04T07:00:00Z",
+  "text": "SIMULATION - replay of a historical USGS gauge record, not a real-time event\n\nGauge: Guadalupe River at Hunt, current stage 9.4 ft\n\nForecast: stage forecast 9.4 ft, probability 89% of crossing MINOR within 3 h\n\nLead time to MINOR: not available (the two forecasts disagree)\n\nImpacts: none reported\n\nUNCERTAIN: the two forecasts disagree. The model's probability of crossing MINOR within 3 h is 89%, but its stage forecast is 9.4 ft, below the MINOR stage (10.0 ft). Treat as uncertain and re-check at the next window.\n\nData: approved per USGS, mode SIMULATION.",
+  "alert": {
+   "alert_id": "08165500|minor|2025-07-04T07:00:00Z",
+   "kind": "new",
+   "site_no": "08165500",
+   "site_name": "Guadalupe River at Hunt",
+   "mode": "SIMULATION",
+   "category": "minor",
+   "probability": 0.8908816795321441,
+   "horizon_h": 3.0,
+   "forecast_stage": 9.398251082241975,
+   "current_stage": 9.41,
+   "official_levels": {
+    "action": 10.0,
+    "minor": 10.0,
+    "moderate": 12.0,
+    "major": 22.0,
+    "units": "ft",
+    "source": "gauges table"
+   },
+   "provisional_data": false,
+   "model": "s3_v0",
+   "raised_at": "2025-07-04T08:00:00Z",
+   "window_start": "2025-07-04T07:00:00Z",
+   "alert_rule": "alert_by_model",
+   "tau": 0.8265651563841883,
+   "as_of": "2025-07-04T08:00:00Z",
+   "episode_start": "2025-07-04T07:00:00Z",
+   "status": "draft"
+  },
+  "facts": {
+   "data_source": "SIMULATION: a replay of a historical USGS gauge record (mode SIMULATION), not a real-time event",
+   "alert": {
+    "site_no": "08165500",
+    "site_name": "Guadalupe River at Hunt",
+    "mode": "SIMULATION",
+    "category": "MINOR",
+    "probability_pct": 89,
+    "horizon_h": 3.0,
+    "forecast_stage_ft": 9.4,
+    "current_stage_ft": 9.4,
+    "official_levels_ft": {
+     "action": 10.0,
+     "minor": 10.0,
+     "moderate": 12.0,
+     "major": 22.0
+    },
+    "data_status": "approved per USGS",
+    "model": "trained S3 model v0",
+    "readings_time_utc": "2025-07-04T08:00:00Z",
+    "alert_rule": "the model's probability of crossing the category within the horizon is at or above its alert threshold",
+    "alert_threshold_pct": 83
+   },
+   "highest_category_forecast": "below all official categories",
+   "category_now": "below all official categories",
+   "evidence": {
+    "stage_now_ft": 9.4,
+    "rise_rate_ft_per_h": 1.6,
+    "stage_12h_ago_ft": 7.6,
+    "n_windows": 12,
+    "forecast_stage_ft": 9.4,
+    "horizon_h": 3.0,
+    "probability_pct": {
+     "action": null,
+     "minor": 89,
+     "moderate": null,
+     "major": null
+    },
+    "model": "trained S3 model v0",
+    "past_floods_n": 0,
+    "direction": "rising"
+   },
+   "context": {
+    "direction": "rising",
+    "signal_kind": "leading",
+    "summary": "LEADING signal (radar rain 78.0 mm in 3 h; no upstream gauge)",
+    "rule": "upstream gauges and radar rain are LEADING signals; downstream and nearby gauges are SUPPORTING context only (never a cause or predictor of the rise at this gauge)",
+    "rain": {
+     "rain_3h_mm": 78.0,
+     "rain_6h_mm": 80.4
+    },
+    "neighbours": [
+     {
+      "name": "Guadalupe River at Kerrville",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 15.4,
+      "stage_now_ft": 1.3,
+      "change_ft": 0.9,
+      "hours": 3,
+      "rising": "rising"
+     },
+     {
+      "name": "Guadalupe River at Comfort",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 42.5,
+      "stage_now_ft": 3.0,
+      "change_ft": 0.0,
+      "hours": 3,
+      "rising": "not rising"
+     },
+     {
+      "name": "Medina River at Bandera",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 45.5,
+      "stage_now_ft": 3.3,
+      "change_ft": 0.0,
+      "hours": 3,
+      "rising": "not rising"
+     }
+    ],
+    "impacts": "no NWS impact statement loaded"
+   },
+   "update_n": 1,
+   "lead_time_h": "not available (the two forecasts disagree)",
+   "forecasts_disagree": "UNCERTAIN: the two forecasts disagree. The model's probability of crossing MINOR within 3 h is 89%, but its stage forecast is 9.4 ft, below the MINOR stage (10.0 ft). Treat as uncertain and re-check at the next window."
+  },
+  "confidence": "uncertain",
+  "source": "llm (multi-agent v2)"
+ },
+ {
+  "name": "llm:08169500|minor|2021-10-14T05:00:00Z",
+  "text": "SIMULATION replay of a historical USGS gauge record, not a real-time event\n\nGuadalupe River below Comal gauge 08169500 - current stage 11.6 ft, forecast stage 11.0 ft\n\nForecast: probability 89% of crossing MINOR within 3 h; official MINOR flood stage 13.0 ft (ACTION 13.0 ft, MINOR 13.0 ft, MODERATE 14.0 ft, MAJOR 20.0 ft)\n\nLead time to MINOR: not available (the two forecasts disagree)\n\nImpacts: no NWS impact statement loaded\n\nUNCERTAIN: the two forecasts disagree. The model's probability of crossing MINOR within 3 h is 89%, but its stage forecast is 11.0 ft, below the MINOR stage (13.0 ft). Treat as uncertain and re-check at the next window.\n\nData: approved per USGS, model trained S3 model v0, readings time 2021-10-14T06:00:00Z UTC.",
+  "alert": {
+   "alert_id": "08169500|minor|2021-10-14T05:00:00Z",
+   "kind": "new",
+   "site_no": "08169500",
+   "site_name": "Guadalupe River below Comal",
+   "mode": "SIMULATION",
+   "category": "minor",
+   "probability": 0.8908816795321441,
+   "horizon_h": 3.0,
+   "forecast_stage": 10.961654115226555,
+   "current_stage": 11.59,
+   "official_levels": {
+    "action": 13.0,
+    "minor": 13.0,
+    "moderate": 14.0,
+    "major": 20.0,
+    "units": "ft",
+    "source": "gauges table"
+   },
+   "provisional_data": false,
+   "model": "s3_v0",
+   "raised_at": "2021-10-14T06:00:00Z",
+   "window_start": "2021-10-14T05:00:00Z",
+   "alert_rule": "alert_by_model",
+   "tau": 0.8265651563841883,
+   "as_of": "2021-10-14T06:00:00Z",
+   "episode_start": "2021-10-14T05:00:00Z",
+   "status": "draft"
+  },
+  "facts": {
+   "data_source": "SIMULATION: a replay of a historical USGS gauge record (mode SIMULATION), not a real-time event",
+   "alert": {
+    "site_no": "08169500",
+    "site_name": "Guadalupe River below Comal",
+    "mode": "SIMULATION",
+    "category": "MINOR",
+    "probability_pct": 89,
+    "horizon_h": 3.0,
+    "forecast_stage_ft": 11.0,
+    "current_stage_ft": 11.6,
+    "official_levels_ft": {
+     "action": 13.0,
+     "minor": 13.0,
+     "moderate": 14.0,
+     "major": 20.0
+    },
+    "data_status": "approved per USGS",
+    "model": "trained S3 model v0",
+    "readings_time_utc": "2021-10-14T06:00:00Z",
+    "alert_rule": "the model's probability of crossing the category within the horizon is at or above its alert threshold",
+    "alert_threshold_pct": 83
+   },
+   "highest_category_forecast": "below all official categories",
+   "category_now": "below all official categories",
+   "evidence": {
+    "stage_now_ft": 11.6,
+    "rise_rate_ft_per_h": 2.0,
+    "stage_12h_ago_ft": 9.7,
+    "n_windows": 12,
+    "forecast_stage_ft": 11.0,
+    "horizon_h": 3.0,
+    "probability_pct": {
+     "action": null,
+     "minor": 89,
+     "moderate": null,
+     "major": null
+    },
+    "model": "trained S3 model v0",
+    "past_floods_n": 0,
+    "direction": "rising"
+   },
+   "context": {
+    "direction": "rising",
+    "signal_kind": "leading",
+    "summary": "LEADING signal (radar rain 60.0 mm in 3 h; no upstream gauge)",
+    "rule": "upstream gauges and radar rain are LEADING signals; downstream and nearby gauges are SUPPORTING context only (never a cause or predictor of the rise at this gauge)",
+    "rain": {
+     "rain_3h_mm": 60.0,
+     "rain_6h_mm": 60.1
+    },
+    "neighbours": [
+     {
+      "name": "Comal River at New Braunfels",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 1.8,
+      "stage_now_ft": 7.3,
+      "change_ft": 3.2,
+      "hours": 3,
+      "rising": "rising"
+     },
+     {
+      "name": "Guadalupe River above Comal River at New Braunfels",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 1.9,
+      "stage_now_ft": 3.3,
+      "change_ft": 1.4,
+      "hours": 3,
+      "rising": "rising"
+     },
+     {
+      "name": "Guadalupe River at Seguin",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 20.9,
+      "stage_now_ft": -0.1,
+      "change_ft": 0.4,
+      "hours": 3,
+      "rising": "not rising"
+     }
+    ],
+    "impacts": "no NWS impact statement loaded"
+   },
+   "update_n": 1,
+   "lead_time_h": "not available (the two forecasts disagree)",
+   "forecasts_disagree": "UNCERTAIN: the two forecasts disagree. The model's probability of crossing MINOR within 3 h is 89%, but its stage forecast is 11.0 ft, below the MINOR stage (13.0 ft). Treat as uncertain and re-check at the next window."
+  },
+  "confidence": "uncertain",
+  "source": "llm (multi-agent v2)"
+ },
+ {
+  "name": "llm:08156800|minor|2024-05-02T00:00:00Z",
+  "text": "SIMULATION - replay of a historical USGS gauge record, not a real-time event\n\nShoal Creek at West 12th Street: current stage 2.5 ft, model forecast stage 2.8 ft\n\nForecast to reach 2.8 ft within 3 h; probability 83% of crossing MINOR within 3 h. Official MINOR flood stage: 7.0 ft (ACTION 5.0 ft, MINOR 7.0 ft, MODERATE 10.0 ft, MAJOR 12.0 ft)\n\nLead time to MINOR: not available (the two forecasts disagree)\n\nImpacts: none reported\n\nUNCERTAIN: the two forecasts disagree. The model's probability of crossing MINOR within 3 h is 83%, but its stage forecast is 2.8 ft, below the MINOR stage (7.0 ft). Treat as uncertain and re-check at the next window.\n\nData: approved per USGS, readings time 2024-05-02T01:00:00Z UTC, mode SIMULATION.",
+  "alert": {
+   "alert_id": "08156800|minor|2024-05-02T00:00:00Z",
+   "kind": "new",
+   "site_no": "08156800",
+   "site_name": "Shoal Creek at West 12th Street",
+   "mode": "SIMULATION",
+   "category": "minor",
+   "probability": 0.8296869309375021,
+   "horizon_h": 3.0,
+   "forecast_stage": 2.7785130619191447,
+   "current_stage": 2.55,
+   "official_levels": {
+    "action": 5.0,
+    "minor": 7.0,
+    "moderate": 10.0,
+    "major": 12.0,
+    "units": "ft",
+    "source": "gauges table"
+   },
+   "provisional_data": false,
+   "model": "s3_v0",
+   "raised_at": "2024-05-02T01:00:00Z",
+   "window_start": "2024-05-02T00:00:00Z",
+   "alert_rule": "alert_by_model",
+   "tau": 0.8265651563841883,
+   "as_of": "2024-05-02T01:00:00Z",
+   "episode_start": "2024-05-02T00:00:00Z",
+   "status": "draft"
+  },
+  "facts": {
+   "data_source": "SIMULATION: a replay of a historical USGS gauge record (mode SIMULATION), not a real-time event",
+   "alert": {
+    "site_no": "08156800",
+    "site_name": "Shoal Creek at West 12th Street",
+    "mode": "SIMULATION",
+    "category": "MINOR",
+    "probability_pct": 83,
+    "horizon_h": 3.0,
+    "forecast_stage_ft": 2.8,
+    "current_stage_ft": 2.5,
+    "official_levels_ft": {
+     "action": 5.0,
+     "minor": 7.0,
+     "moderate": 10.0,
+     "major": 12.0
+    },
+    "data_status": "approved per USGS",
+    "model": "trained S3 model v0",
+    "readings_time_utc": "2024-05-02T01:00:00Z",
+    "alert_rule": "the model's probability of crossing the category within the horizon is at or above its alert threshold",
+    "alert_threshold_pct": 83
+   },
+   "highest_category_forecast": "below all official categories",
+   "category_now": "below all official categories",
+   "evidence": {
+    "stage_now_ft": 2.5,
+    "rise_rate_ft_per_h": 1.4,
+    "stage_12h_ago_ft": 1.3,
+    "n_windows": 12,
+    "forecast_stage_ft": 2.8,
+    "horizon_h": 3.0,
+    "probability_pct": {
+     "action": null,
+     "minor": 83,
+     "moderate": null,
+     "major": null
+    },
+    "model": "trained S3 model v0",
+    "past_floods_n": 0,
+    "direction": "rising"
+   },
+   "context": {
+    "direction": "rising",
+    "signal_kind": "leading",
+    "summary": "LEADING signal (radar rain 16.4 mm in 3 h; no upstream gauge)",
+    "rule": "upstream gauges and radar rain are LEADING signals; downstream and nearby gauges are SUPPORTING context only (never a cause or predictor of the rise at this gauge)",
+    "rain": {
+     "rain_3h_mm": 16.4,
+     "rain_6h_mm": 16.4
+    },
+    "neighbours": [
+     {
+      "name": "Barton Creek at Loop 360",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 6.1,
+      "stage_now_ft": 2.0,
+      "change_ft": null,
+      "hours": 1,
+      "rising": "not available"
+     },
+     {
+      "name": "Colorado River (TX) at Austin",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 7.5,
+      "stage_now_ft": 11.6,
+      "change_ft": 0.1,
+      "hours": 3,
+      "rising": "not rising"
+     },
+     {
+      "name": "Bull Creek above Loop 360",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 11.1,
+      "stage_now_ft": 1.7,
+      "change_ft": 0.1,
+      "hours": 3,
+      "rising": "not rising"
+     }
+    ],
+    "impacts": "no NWS impact statement loaded"
+   },
+   "update_n": 1,
+   "lead_time_h": "not available (the two forecasts disagree)",
+   "forecasts_disagree": "UNCERTAIN: the two forecasts disagree. The model's probability of crossing MINOR within 3 h is 83%, but its stage forecast is 2.8 ft, below the MINOR stage (7.0 ft). Treat as uncertain and re-check at the next window."
+  },
+  "confidence": "uncertain",
+  "source": "llm (multi-agent v2)"
+ },
+ {
+  "name": "llm:08177700|minor|2025-06-12T07:00:00Z",
+  "text": "SIMULATION replay of a historical USGS gauge record, not a real-time event.\n\nOlmos Creek at Dresden Drive (site 08177700) current stage 7.5 ft.\n\nProbability of crossing MINOR within 3 h is 89%.\n\nLead time to MINOR: not available (the two forecasts disagree).\n\nNo specific impacts identified.\n\nUNCERTAIN: the two forecasts disagree. The model's probability of crossing MINOR within 3 h is 89%, but its stage forecast is 7.0 ft, below the MINOR stage (9.0 ft). Treat as uncertain and re-check at the next window.\n\nData: approved per USGS, model trained S3 model v0, readings time 2025-06-12T08:00:00Z UTC.",
+  "alert": {
+   "alert_id": "08177700|minor|2025-06-12T07:00:00Z",
+   "kind": "new",
+   "site_no": "08177700",
+   "site_name": "Olmos Creek at Dresden Drive",
+   "mode": "SIMULATION",
+   "category": "minor",
+   "probability": 0.8889429629481195,
+   "horizon_h": 3.0,
+   "forecast_stage": 7.042969840514718,
+   "current_stage": 7.48,
+   "official_levels": {
+    "action": 9.0,
+    "minor": 9.0,
+    "moderate": 10.0,
+    "major": 12.0,
+    "units": "ft",
+    "source": "gauges table"
+   },
+   "provisional_data": false,
+   "model": "s3_v0",
+   "raised_at": "2025-06-12T08:00:00Z",
+   "window_start": "2025-06-12T07:00:00Z",
+   "alert_rule": "alert_by_model",
+   "tau": 0.8265651563841883,
+   "as_of": "2025-06-12T08:00:00Z",
+   "episode_start": "2025-06-12T07:00:00Z",
+   "status": "draft"
+  },
+  "facts": {
+   "data_source": "SIMULATION: a replay of a historical USGS gauge record (mode SIMULATION), not a real-time event",
+   "alert": {
+    "site_no": "08177700",
+    "site_name": "Olmos Creek at Dresden Drive",
+    "mode": "SIMULATION",
+    "category": "MINOR",
+    "probability_pct": 89,
+    "horizon_h": 3.0,
+    "forecast_stage_ft": 7.0,
+    "current_stage_ft": 7.5,
+    "official_levels_ft": {
+     "action": 9.0,
+     "minor": 9.0,
+     "moderate": 10.0,
+     "major": 12.0
+    },
+    "data_status": "approved per USGS",
+    "model": "trained S3 model v0",
+    "readings_time_utc": "2025-06-12T08:00:00Z",
+    "alert_rule": "the model's probability of crossing the category within the horizon is at or above its alert threshold",
+    "alert_threshold_pct": 83
+   },
+   "highest_category_forecast": "below all official categories",
+   "category_now": "below all official categories",
+   "evidence": {
+    "stage_now_ft": 7.5,
+    "rise_rate_ft_per_h": 2.0,
+    "stage_12h_ago_ft": 2.0,
+    "n_windows": 12,
+    "forecast_stage_ft": 7.0,
+    "horizon_h": 3.0,
+    "probability_pct": {
+     "action": null,
+     "minor": 89,
+     "moderate": null,
+     "major": null
+    },
+    "model": "trained S3 model v0",
+    "past_floods_n": 0,
+    "direction": "rising"
+   },
+   "context": {
+    "direction": "rising",
+    "signal_kind": "leading",
+    "summary": "LEADING signal (radar rain 38.8 mm in 3 h; no upstream gauge)",
+    "rule": "upstream gauges and radar rain are LEADING signals; downstream and nearby gauges are SUPPORTING context only (never a cause or predictor of the rise at this gauge)",
+    "rain": {
+     "rain_3h_mm": 38.8,
+     "rain_6h_mm": 39.5
+    },
+    "neighbours": [
+     {
+      "name": "Cibolo Creek at Selma",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 22.0,
+      "stage_now_ft": 1.4,
+      "change_ft": 0.0,
+      "hours": 3,
+      "rising": "not rising"
+     },
+     {
+      "name": "Comal River at New Braunfels",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 44.0,
+      "stage_now_ft": 4.4,
+      "change_ft": 0.9,
+      "hours": 3,
+      "rising": "rising"
+     },
+     {
+      "name": "Guadalupe River below Comal",
+      "relation": "nearby",
+      "signal_kind": "supporting",
+      "distance_km": 44.9,
+      "stage_now_ft": 10.2,
+      "change_ft": 0.9,
+      "hours": 3,
+      "rising": "rising"
+     }
+    ],
+    "impacts": "no NWS impact statement loaded"
+   },
+   "update_n": 1,
+   "lead_time_h": "not available (the two forecasts disagree)",
+   "forecasts_disagree": "UNCERTAIN: the two forecasts disagree. The model's probability of crossing MINOR within 3 h is 89%, but its stage forecast is 7.0 ft, below the MINOR stage (9.0 ft). Treat as uncertain and re-check at the next window."
+  },
+  "confidence": "uncertain",
+  "source": "llm (multi-agent v2)"
+ }
+]

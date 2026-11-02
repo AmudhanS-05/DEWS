@@ -1,0 +1,70 @@
+table agent_run_summary
+	lineageTag: 0babd70b-6747-5c04-85fb-e57485e533c1
+
+	column run_id
+		dataType: string
+		lineageTag: ebe56fc7-9a2b-5cee-8002-2a3761ac3ef3
+		summarizeBy: none
+		sourceColumn: run_id
+
+	column alert_id
+		dataType: string
+		lineageTag: 251f2402-8076-5a8c-8d97-c4384d353323
+		summarizeBy: none
+		sourceColumn: alert_id
+
+	column started_at
+		dataType: dateTime
+		lineageTag: d2591bae-caac-59ca-b544-9f297891ad7a
+		summarizeBy: none
+		sourceColumn: started_at
+
+	column ended_at
+		dataType: dateTime
+		lineageTag: a79eae7c-0ef5-5e1b-9400-c45636205623
+		summarizeBy: none
+		sourceColumn: ended_at
+
+	column duration_s
+		dataType: double
+		lineageTag: 273ce7a9-50df-5a09-95c6-c684f227fdf0
+		summarizeBy: none
+		sourceColumn: duration_s
+
+	column events
+		dataType: int64
+		lineageTag: 9207d822-2913-52d5-8d62-a15055fa7080
+		summarizeBy: none
+		sourceColumn: events
+
+	column review_rounds
+		dataType: int64
+		lineageTag: 4ae17340-1f56-5319-a6dd-d29409458a22
+		summarizeBy: none
+		sourceColumn: review_rounds
+
+	column last_verdict
+		dataType: string
+		lineageTag: 5fd33b6a-ac64-58d6-8f8c-b4748543ae6d
+		summarizeBy: none
+		sourceColumn: last_verdict
+
+	column tool_calls
+		dataType: int64
+		formatString: 0
+		sourceProviderType: bigint
+		lineageTag: 3732f902-a020-43ce-a4a6-289a17e0dc07
+		summarizeBy: sum
+		sourceColumn: tool_calls
+
+		annotation SummarizationSetBy = Automatic
+
+	partition agent_run_summary = m
+		mode: directQuery
+		source =
+				let
+					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
+					Data = Source{[Schema="public",Item="agent_run_summary"]}[Data]
+				in
+					Data
+

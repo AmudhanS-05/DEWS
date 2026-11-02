@@ -1,0 +1,55 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "c4d2082709905d0048ad",
+  "position": {
+    "x": 204,
+    "y": 60,
+    "z": 300,
+    "height": 100,
+    "width": 200,
+    "tabOrder": 300
+  },
+  "visual": {
+    "visualType": "cardVisual",
+    "query": {
+      "queryState": {
+        "Data": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "latency_waterfall"
+                    }
+                  },
+                  "Property": "Total gross, median (s)"
+                }
+              },
+              "queryRef": "latency_waterfall.Total gross, median (s)",
+              "nativeQueryRef": "Total gross, median (s)"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Measure": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "latency_waterfall"
+                  }
+                },
+                "Property": "Total gross, median (s)"
+              }
+            },
+            "direction": "Descending"
+          }
+        ],
+        "isDefaultSort": true
+      }
+    }
+  }
+}

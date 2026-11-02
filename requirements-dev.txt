@@ -1,0 +1,9 @@
+# One install for everything: pipeline, ML, agents, tests.
+#   python -m pip install -U pip setuptools wheel
+#   pip install -r requirements-dev.txt
+# Python 3.12 is the tested version (faust-streaming and confluent-kafka 2.5.3 may not build on 3.13).
+# Each part (pipeline, ML, agents) keeps its own file and pins; this file only pulls them together.
+-r requirements.txt           # core: Kafka clients, Faust, PostgreSQL driver
+-r requirements-ml.txt        # ml/: pandas, scikit-learn, eccodes (MRMS GRIB2), matplotlib
+-r requirements-agents.txt    # agentic_ai/: LangGraph, Groq / Gemini / Ollama chat models, LangSmith
+pytest==8.3.3

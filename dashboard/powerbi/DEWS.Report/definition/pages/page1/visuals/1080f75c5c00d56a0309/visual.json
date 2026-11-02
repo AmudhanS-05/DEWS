@@ -1,0 +1,37 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "1080f75c5c00d56a0309",
+  "position": {
+    "x": 16,
+    "y": 568,
+    "z": 400,
+    "height": 136,
+    "width": 260,
+    "tabOrder": 400
+  },
+  "visual": {
+    "visualType": "cardVisual",
+    "query": {
+      "queryState": {
+        "Data": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "gauge_readings"
+                    }
+                  },
+                  "Property": "Newest reading (local time)"
+                }
+              },
+              "queryRef": "gauge_readings.Newest reading (local time)",
+              "nativeQueryRef": "Newest reading (local time)"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

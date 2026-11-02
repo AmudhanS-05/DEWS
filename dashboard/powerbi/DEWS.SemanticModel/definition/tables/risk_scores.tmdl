@@ -1,0 +1,84 @@
+table risk_scores
+	lineageTag: f712b3a7-e28b-5050-b8f5-ae2daf2a3a7a
+
+	column id
+		dataType: int64
+		lineageTag: f259f064-958d-5279-9f05-824771139507
+		summarizeBy: none
+		sourceColumn: id
+
+	column site_no
+		dataType: string
+		lineageTag: e8367a7b-5a66-53b9-9574-28a8d2f62705
+		summarizeBy: none
+		sourceColumn: site_no
+
+	column window_start
+		dataType: dateTime
+		lineageTag: 782bf4e5-e6a7-5cf8-9706-b0337847b1ed
+		summarizeBy: none
+		sourceColumn: window_start
+
+	column mode
+		dataType: string
+		lineageTag: 56698f1f-cdd9-5a46-a81c-9dac74b97f36
+		summarizeBy: none
+		sourceColumn: mode
+
+	column model
+		dataType: string
+		lineageTag: 8fb834d9-ba1f-566c-871a-d7161d59e3aa
+		summarizeBy: none
+		sourceColumn: model
+
+	column horizon_h
+		dataType: double
+		lineageTag: 6d51f6df-3715-5ed8-bcd8-e7bd36abe7b3
+		summarizeBy: none
+		sourceColumn: horizon_h
+
+	column forecast_stage
+		dataType: double
+		lineageTag: 761f24fe-f426-591a-bec5-0f1a8c6d1fae
+		summarizeBy: none
+		sourceColumn: forecast_stage
+
+	column p_action
+		dataType: double
+		lineageTag: 1bfe9531-7ed9-5fec-a605-591c76aaf832
+		summarizeBy: none
+		sourceColumn: p_action
+
+	column p_minor
+		dataType: double
+		lineageTag: 1288f4b8-c50a-59c5-9d80-fd8a99a9afcf
+		summarizeBy: none
+		sourceColumn: p_minor
+
+	column p_moderate
+		dataType: double
+		lineageTag: 8de09c0c-630b-50e7-99a0-b8a08fd23c07
+		summarizeBy: none
+		sourceColumn: p_moderate
+
+	column p_major
+		dataType: double
+		lineageTag: b638adc3-68fa-5e81-a876-6ec3578abcb3
+		summarizeBy: none
+		sourceColumn: p_major
+
+	column computed_at
+		dataType: dateTime
+		lineageTag: 3e2fdd32-d9e9-5981-9b00-7f53fee9e0d4
+		summarizeBy: none
+		sourceColumn: computed_at
+
+	partition risk_scores = m
+		mode: directQuery
+		source =
+				let
+					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
+					Data = Source{[Schema="public",Item="risk_scores"]}[Data]
+				in
+					Data
+

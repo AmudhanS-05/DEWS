@@ -1,0 +1,72 @@
+table gauges
+	lineageTag: 7b2d1131-4f7a-569a-8f38-54d617858204
+
+	column site_no
+		dataType: string
+		lineageTag: 35ea5122-fc1c-5136-a934-0bbcc747a5eb
+		summarizeBy: none
+		sourceColumn: site_no
+
+	column nwps_lid
+		dataType: string
+		lineageTag: 1346c571-24c3-535e-9bef-682bff213c3b
+		summarizeBy: none
+		sourceColumn: nwps_lid
+
+	column name
+		dataType: string
+		lineageTag: 6369ab61-1401-5c7a-a33c-8427e69676f3
+		summarizeBy: none
+		sourceColumn: name
+
+	column stage_units
+		dataType: string
+		lineageTag: cc08fcfa-c87e-511f-8fd6-e4362aec5bf2
+		summarizeBy: none
+		sourceColumn: stage_units
+
+	column action_stage
+		dataType: double
+		lineageTag: 3d16eb2d-a2a5-5cae-91e8-bd4ae1333b1e
+		summarizeBy: none
+		sourceColumn: action_stage
+
+	column minor_stage
+		dataType: double
+		lineageTag: 346fa2a9-71f3-5d9a-a0ff-9c623b64e481
+		summarizeBy: none
+		sourceColumn: minor_stage
+
+	column moderate_stage
+		dataType: double
+		lineageTag: 555b176a-e7c0-57c6-8a48-bd2f8f38685d
+		summarizeBy: none
+		sourceColumn: moderate_stage
+
+	column major_stage
+		dataType: double
+		lineageTag: 59825c49-4182-5039-9df7-5f7bc213d34f
+		summarizeBy: none
+		sourceColumn: major_stage
+
+	column median_rise_h
+		dataType: double
+		lineageTag: c2863ad1-47f2-582a-b2c0-5cba14af5061
+		summarizeBy: none
+		sourceColumn: median_rise_h
+
+	column updated_at
+		dataType: dateTime
+		lineageTag: e2f9cbc5-5197-51f7-bef3-4ec5e45345d7
+		summarizeBy: none
+		sourceColumn: updated_at
+
+	partition gauges = m
+		mode: directQuery
+		source =
+				let
+					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
+					Data = Source{[Schema="public",Item="gauges"]}[Data]
+				in
+					Data
+

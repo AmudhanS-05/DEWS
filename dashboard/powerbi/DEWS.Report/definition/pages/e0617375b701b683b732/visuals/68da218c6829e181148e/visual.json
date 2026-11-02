@@ -1,0 +1,188 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "68da218c6829e181148e",
+  "position": {
+    "x": 16,
+    "y": 476,
+    "z": 700,
+    "height": 228,
+    "width": 1248,
+    "tabOrder": 700
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "advisories"
+                    }
+                  },
+                  "Property": "alert_id"
+                }
+              },
+              "queryRef": "advisories.alert_id",
+              "nativeQueryRef": "alert_id"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "advisories"
+                    }
+                  },
+                  "Property": "version"
+                }
+              },
+              "queryRef": "advisories.version",
+              "nativeQueryRef": "version"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "advisories"
+                    }
+                  },
+                  "Property": "source"
+                }
+              },
+              "queryRef": "advisories.source",
+              "nativeQueryRef": "source"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "advisories"
+                    }
+                  },
+                  "Property": "status"
+                }
+              },
+              "queryRef": "advisories.status",
+              "nativeQueryRef": "status"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "advisories"
+                    }
+                  },
+                  "Property": "confidence"
+                }
+              },
+              "queryRef": "advisories.confidence",
+              "nativeQueryRef": "confidence"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "advisories"
+                    }
+                  },
+                  "Property": "reviewer_verdict"
+                }
+              },
+              "queryRef": "advisories.reviewer_verdict",
+              "nativeQueryRef": "reviewer_verdict"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "advisories"
+                    }
+                  },
+                  "Property": "created_at"
+                }
+              },
+              "queryRef": "advisories.created_at",
+              "nativeQueryRef": "created_at"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "advisories"
+                    }
+                  },
+                  "Property": "approved_at"
+                }
+              },
+              "queryRef": "advisories.approved_at",
+              "nativeQueryRef": "approved_at"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "advisories"
+                    }
+                  },
+                  "Property": "delivered_at"
+                }
+              },
+              "queryRef": "advisories.delivered_at",
+              "nativeQueryRef": "delivered_at"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Column": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "advisories"
+                  }
+                },
+                "Property": "created_at"
+              }
+            },
+            "direction": "Descending"
+          }
+        ]
+      }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Advisory drafts'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

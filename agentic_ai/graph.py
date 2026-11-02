@@ -1,0 +1,411 @@
+"""Coordinator-Worker-Delegator graph in LangGraph (A1.3).
+
+  coordinator -> [evidence || context] -> reconcile -> writer -> reviewer --pass--> save_advisory (v2, draft)
+                                                          ^---- fail (max 2 revisions) ----'  \\-- still failing --> keep v1
+
+Agents draft and check only. The only writes are advisories, agent_runs and agent_events, through Tools.
+Any failure leaves the template v1 in place (outcome `v1_kept`). The human approval gate is the console.
+"""
+from __future__ import annotations
+
+import json
+import threading
+import time
+import uuid
+from datetime import datetime, timezone
+from typing import Any, TypedDict
+
+from langgraph.graph import END, START, StateGraph
+
+from agentic_ai import advisory, checks, llm, mcp_client, rules, tracing
+
+
+class State(TypedDict, total=False):
+    run_id: str
+    alert_id: str
+    alert: dict
+    force: bool
+    outcome: str            # saved | v1_kept | dropped
+    drop_reason: str
+    urgent: bool
+    plan: list[str]
+    update_n: int
+    episode: dict
+    examples: list[dict]
+    data_quality: dict
+    evidence: dict
+    context: dict
+    disagreement: dict | None
+    confidence: str
+    attempt: int
+    feedback: list[str]
+    draft: str
+    reasons: list[str]
+    verdict: str
+    advisory_id: str
+    version: int
+    tokens: int
+    llm_error: str | None
+    llm_down: str | None
+    facts: dict
+    judges: list[dict]      # per reviewer attempt: judge status (pass/fail/unclear/unavailable/off/not_run), provider, model
+
+
+class Run:
+    """Per-run helper: timestamps, event log (also kept in memory), run rows and traced tool calls."""
+
+    def __init__(self, tools, run_id: str, alert_id: str, on_event=None):
+        self.tools, self.run_id, self.alert_id = tools, run_id, alert_id
+        self.events: list[dict] = []
+        self.tool_calls: dict[str, list[dict]] = {}
+        self.on_event = on_event          # optional callback (CLI progress lines); never allowed to break the run
+        self.t_start = time.monotonic()
+        self.trace_run_id: str | None = None   # LangSmith root run id when tracing is on (agent_runs.trace_run_id)
+        self._agent_t0: dict[str, float] = {}
+        self._lock = threading.Lock()   # evidence and context run in parallel: one event at a time, so event_id
+        #                                  order = ts order = callback order (the console orders by event_id)
+
+    def event(self, agent: str, kind: str, detail: dict | None = None) -> None:
+        with self._lock:
+            self._event(agent, kind, detail)
+
+    def _event(self, agent: str, kind: str, detail: dict | None = None) -> None:
+        ts = datetime.now(timezone.utc)
+        detail = dict(detail or {})
+        now = time.monotonic()
+        if kind == "start":
+            self._agent_t0[agent] = now
+        elif kind == "end" and agent in self._agent_t0:
+            detail.setdefault("ms", round((now - self._agent_t0[agent]) * 1000))   # duration since this agent's start
+        row = {"agent": agent, "kind": kind, "detail": detail, "ts": ts.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+               "t_s": round(now - self.t_start, 3)}
+        self.events.append(row)
+        self.tools.log_agent_event(self.run_id, self.alert_id, agent, kind, detail, ts)
+        if self.on_event:
+            try:
+                self.on_event(row)
+            except Exception:  # noqa: BLE001 - progress output must not change the outcome
+                pass
+
+    def call(self, agent: str, name: str, *args, **kwargs):
+        t0 = time.monotonic()
+        res = getattr(self.tools, name)(*args, **kwargs)
+        info = {"tool": name, "args": [str(a) for a in args] + [f"{k}={v}" for k, v in kwargs.items()],
+                "rows": len(res) if isinstance(res, (list, dict)) else (0 if res is None else 1),
+                "ms": round((time.monotonic() - t0) * 1000), "via": getattr(self.tools, "last_via", "direct")}
+        self.tool_calls.setdefault(agent, []).append(info)
+        self.event(agent, "tool_call", info)
+        return res
+
+    def row(self, agent: str, started: datetime, input_summary: str, output: Any, tokens: int = 0, verdict: str | None = None):
+        self.tools.log_agent_run(self.run_id, self.alert_id, agent, input_summary, output,
+                                 self.tool_calls.pop(agent, []), started, datetime.now(timezone.utc), tokens, verdict,
+                                 trace_run_id=self.trace_run_id)
+
+
+def _now():
+    return datetime.now(timezone.utc)
+
+
+def _facts(s: State) -> dict:
+    f = advisory.build_facts(s["alert"], s["evidence"], s["context"], s["update_n"], s.get("episode"),
+                             s["evidence"].get("data_quality"))
+    if s.get("disagreement"):
+        f["context_disagreement"] = "the gauge evidence and a leading context signal point different ways"
+    return f
+
+
+def build_graph(tools, run: Run):
+    """Compile the graph. `tools` is a Tools-like object; `run` carries the event log for this alert."""
+
+    def waiter(agent: str):
+        """on_wait for llm.complete: a 429 hint, logged before the sleep so the console/CLI show it as it happens."""
+        def on_wait(prov, wait_s, hint_s):
+            run.event(agent, "revision", {"rate_limit": prov, "wait_s": wait_s, "hint_s": round(hint_s, 2),
+                                          "cap_s": llm.RATE_LIMIT_WAIT_CAP_S})
+        return on_wait
+
+    def coordinator(s: State) -> dict:
+        t0 = _now()
+        run.event("coordinator", "start", {"alert_id": s["alert_id"]})
+        alert = run.call("coordinator", "get_alert", s["alert_id"])
+        if alert is None:
+            return _drop(s, t0, "alert not found")
+        if alert["kind"] == "retract":
+            return _drop(s, t0, "retraction: nothing to advise")
+        existing = [a for a in run.call("coordinator", "get_episode_history", s["alert_id"])["advisories"]
+                    if a["alert_id"] == s["alert_id"] and a["source"] == "agents" and a["status"] in ("draft", "approved", "sent")]
+        if existing and not s.get("force"):
+            adv = existing[-1]["advisory_id"]
+            return _drop(s, t0, f"duplicate: v{adv.rsplit('|', 1)[-1]} exists ({adv}), use --force to re-run")
+        history = run.call("coordinator", "get_episode_history", s["alert_id"])
+        hist = history["alerts"]
+        update_n = 1 + sum(1 for h in hist if h["raised_at"] < alert["raised_at"])
+        episode = advisory.episode_summary(history, s["alert_id"], alert["raised_at"], update_n)
+        try:   # episodic memory: officer edits as wording examples (numbers masked in the prompt)
+            examples = run.call("coordinator", "get_edit_examples", alert["site_no"], alert["mode"], 2)
+        except Exception:  # noqa: BLE001 - memory is optional
+            examples = []
+        urgent = alert["category"] == "major"
+        plan = ["evidence", "context", "writer", "reviewer"]
+        run.event("coordinator", "end", {"plan": plan, "urgent": urgent, "update_n": update_n, "mode": alert["mode"],
+                                         "earlier": episode["earlier_alert_categories"], "edit_examples": len(examples)})
+        run.row("coordinator", t0, f"alert {s['alert_id']} ({alert['category']}, {alert['mode']})",
+                {"plan": plan, "urgent": urgent, "update_n": update_n, "episode": episode, "edit_examples": len(examples)})
+        return {"alert": alert, "urgent": urgent, "plan": plan, "update_n": update_n, "episode": episode,
+                "examples": examples, "attempt": 0, "feedback": [], "tokens": 0, "outcome": "pending",
+                "judges": []}
+
+    def _drop(s: State, t0, reason: str) -> dict:
+        run.event("coordinator", "end", {"dropped": reason})
+        run.row("coordinator", t0, f"alert {s['alert_id']}", {"dropped": reason})
+        return {"outcome": "dropped", "drop_reason": reason}
+
+    def route_after_coordinator(s: State):
+        return END if s.get("outcome") == "dropped" else ["evidence", "context"]
+
+    def evidence(s: State) -> dict:
+        t0, a = _now(), s["alert"]
+        run.event("evidence", "start", {"site": a["site_no"]})
+        site, until, mode = a["site_no"], a.get("as_of") or a["raised_at"], a["mode"]   # the alert's own window
+        w = run.call("evidence", "get_recent_windows", site, 12, until=until, mode=mode)
+        fc = run.call("evidence", "get_forecast", site, until=until, mode=mode, horizon_h=a.get("horizon_h"))
+        lv = run.call("evidence", "get_official_levels", site)
+        pf = run.call("evidence", "get_past_floods", site)
+        dq = a.get("data_quality")            # core may put the sensor-fault flag on the alert; else check here
+        if not isinstance(dq, dict):
+            dq = run.call("evidence", "get_data_quality", site, until=until, mode=mode) \
+                if hasattr(tools, "get_data_quality") else {"suspect": None, "reasons": []}
+        stages = [x["stage_last"] for x in w if x.get("stage_last") is not None]
+        last = w[-1] if w else {}
+        rate = last.get("rise_rate_ft_per_h")
+        level = (lv or a["official_levels"]).get(a["category"])
+        fstage = fc["forecast_stage"] if fc else a.get("forecast_stage")
+        ev = {"stage_last": last.get("stage_last"), "rise_rate_ft_per_h": rate, "stage_12h_ago": stages[0] if stages else None,
+              "n_windows": len(w), "forecast_stage": fstage, "horizon_h": fc["horizon_h"] if fc else a["horizon_h"],
+              "p_action": fc and fc["p_action"], "p_minor": fc and fc["p_minor"], "p_moderate": fc and fc["p_moderate"],
+              "p_major": fc and fc["p_major"], "model": fc["model"] if fc else a.get("model"),
+              "official_levels": lv, "past_floods_n": pf["n"], "median_rise_h": pf["median_rise_h"],
+              "direction": rules.evidence_direction(rate, fstage, level), "data_quality": dq}
+        run.event("evidence", "end", {"direction": ev["direction"], "stage_last": ev["stage_last"], "rise_rate_ft_per_h": rate,
+                                      "forecast_stage": fstage, "p_minor": ev["p_minor"], "model": ev["model"],
+                                      "suspect": dq.get("suspect"), "suspect_reasons": dq.get("reasons")})
+        run.row("evidence", t0, f"gauge {site} up to {until}", ev)
+        return {"evidence": ev}
+
+    def context(s: State) -> dict:
+        t0, a = _now(), s["alert"]
+        run.event("context", "start", {"site": a["site_no"]})
+        site, until, mode = a["site_no"], a.get("as_of") or a["raised_at"], a["mode"]
+        rain = run.call("context", "get_rain", site, 6, until=until, mode=mode)
+        nb = run.call("context", "get_neighbours", site, until=until, mode=mode)
+        info = run.call("context", "get_gauge_info", site)
+        imp = run.call("context", "get_impacts", site, a["category"])
+        up = [n["rising"] for n in nb if n["relation"] == "upstream"]
+        sup = [n["rising"] for n in nb if n["relation"] in ("downstream", "nearby")]
+        rain_3h = (rain["rain_3h"] or 0.0) if rain["available"] else None
+        sig = rules.context_signals(rain_3h, up, sup)
+        cx = {"rain": rain, "neighbours": nb, "gauge": info, "impacts": imp, **sig,
+              "summary": advisory.context_summary(sig, rain, nb)}
+        run.event("context", "end", {"direction": sig["direction"], "kind": sig["kind"], "basis": sig["basis"],
+                                     "summary": cx["summary"], "rain_3h": rain.get("rain_3h"), "n_neighbours": len(nb)})
+        run.row("context", t0, f"surroundings of {site} up to {until}",
+                {k: cx[k] for k in ("direction", "kind", "basis", "rain_signal", "upstream_signal", "supporting_signal",
+                                    "summary")})
+        return {"context": cx}
+
+    def reconcile(s: State) -> dict:
+        """Conflict resolution: the coordinator does not let one worker win silently."""
+        ev, cx = s["evidence"], s["context"]
+        dis = None
+        if rules.disagreement(ev["direction"], cx["direction"], cx.get("basis", "leading")):
+            rate, fst = advisory.ft(ev["rise_rate_ft_per_h"]), advisory.ft(ev["forecast_stage"])
+            dis = {"evidence": ev["direction"] + f" (rise {advisory._num(rate)} ft/h, forecast {advisory._num(fst)} ft)",
+                   "context": cx["direction"] + (f" (rain 3h {advisory._num(advisory.ft(cx['rain']['rain_3h']))} mm)"
+                                                 if cx["rain"]["available"] else " (upstream gauges, a leading signal)")}
+            run.event("coordinator", "disagreement", dis)
+            t0 = _now()
+            run.row("coordinator", t0, "disagreement between evidence and context", dis, verdict="uncertain")
+        model_dis = advisory.forecasts_disagree(s["alert"])
+        if model_dis:   # core 1 Nov: the model's probability raised it, its own stage forecast stays below the category
+            d = {"kind": "model", "probability": s["alert"].get("probability"), "tau": s["alert"].get("tau"),
+                 "forecast_stage": s["alert"].get("forecast_stage"),
+                 "category_stage": s["alert"]["official_levels"][s["alert"]["category"]]}
+            run.event("coordinator", "disagreement", d)
+            run.row("coordinator", _now(), "model probability vs stage forecast", d, verdict="uncertain")
+        return {"disagreement": dis, "confidence": "uncertain" if (dis or model_dis) else "normal"}
+
+    def writer(s: State) -> dict:
+        t0, a = _now(), s["alert"]
+        attempt = s["attempt"] + 1
+        run.event("writer", "start", {"attempt": attempt})
+        if s["feedback"]:
+            run.event("writer", "revision", {"attempt": attempt, "feedback": s["feedback"]})
+        facts = _facts(s)
+        fallback = advisory.template_text(a, s["evidence"], s["context"], s["confidence"], s["update_n"], s["disagreement"],
+                                          s.get("episode"), s["evidence"].get("data_quality"))
+        reply = llm.complete(advisory.SYSTEM_PROMPT, advisory.llm_user_prompt(facts, s["confidence"], s["disagreement"],
+                                                                              s["feedback"], s.get("examples")),
+                             on_wait=waiter("writer"))
+        text, err = (reply.text, None) if reply.text else (fallback, reply.error)
+        text = checks.normalize(text)   # plain ASCII dashes/spaces in what is reviewed, saved and shown
+        if reply.fallback_from:
+            run.event("writer", "revision", {"llm_fallback": reply.provider, "primary": reply.fallback_from,
+                                             "primary_error": reply.primary_error, "ok": bool(reply.text)})
+        down = reply.provider != "none" and not reply.text
+        if down:   # C4.3: LLM down (no key, provider error, timeout, forced): template v1 stays, no v2 duplicate
+            run.event("writer", "revision", {"llm_failed": reply.error, "using": "template v1 stays (no agents draft)"})
+        for line in text.splitlines():
+            run.event("writer", "token_chunk", {"text": line, "llm": bool(reply.text)})
+        run.event("writer", "end", {"attempt": attempt, "max_attempts": rules.MAX_REVISIONS + 1, "chars": len(text),
+                                    "provider": reply.provider, "model": reply.model, "llm": bool(reply.text),
+                                    "tokens": reply.tokens, "prompt_tokens": reply.prompt_tokens,
+                                    "output_tokens": reply.output_tokens, "reasoning_effort": reply.reasoning_effort,
+                                    "waited_s": reply.waited_s, "latency_s": reply.latency_s,
+                                    "fallback_from": reply.fallback_from})
+        run.row("writer", t0, f"attempt {attempt}, confidence {s['confidence']}", {"text": text, "llm": bool(reply.text)}, reply.tokens)
+        return {"draft": text, "attempt": attempt, "tokens": s["tokens"] + reply.tokens, "llm_error": err or s.get("llm_error"),
+                "llm_down": (reply.error or "LLM unavailable") if down else None, "facts": facts}
+
+    def route_after_writer(s: State):
+        return "keep_v1" if s.get("llm_down") else "reviewer"
+
+    def reviewer(s: State) -> dict:
+        t0, a = _now(), s["alert"]
+        run.event("reviewer", "start", {"attempt": s["attempt"]})
+        facts = _facts(s)
+        reasons = checks.review(s["draft"], a, facts, s["confidence"])
+        tokens, judge = 0, None
+        jinfo = {"status": "not_run", "provider": None, "model": None,
+                 "why": "deterministic checks failed" if reasons else "LLM_PROVIDER none (template only)"}
+        if not reasons and llm.provider() != "none" and llm.judge_provider() == "none":
+            jinfo = {"status": "off", "provider": "none", "model": None, "why": "JUDGE_PROVIDER none"}
+        elif not reasons and llm.provider() != "none":   # LLM judgement second, only on a draft that passed the rules
+            if llm.same_model_judge():   # the writer's model would grade its own draft
+                run.event("reviewer", "revision", {"warning": "same-model judge", "attempt": s["attempt"],
+                                                   "provider": llm.judge_provider(), "model": llm.judge_model()})
+            r = llm.judge("You review flood advisories. Reply 'PASS' or 'FAIL: <one reason>'. FAIL only if the text "
+                             "is misleading, certain-sounding, or inconsistent with the facts. Numbers in FACTS are "
+                             "already rounded for the report (0.1 ft, whole %). The alert's category and the highest "
+                             "official category the forecast crosses can differ; that is correct when the text states "
+                             "both. data_source says whether the data are a replay of a historical USGS record "
+                             "(mode SIMULATION): calling such data replayed historical data is correct. Upstream "
+                             "gauges and radar rain are leading signals; downstream and nearby gauges are supporting "
+                             "context only, and saying so is correct. When the alert was raised by the model's "
+                             "probability and its stage forecast stays below the category (forecasts_disagree in "
+                             "FACTS), stating both and calling the advisory UNCERTAIN is correct, even when the stage "
+                             "forecast is below the current stage or the gauge is rising: that contradiction between "
+                             "the two model outputs is exactly what the advisory reports, so never FAIL a draft for "
+                             "it; FAIL only if the draft hides it or presents the stage forecast as reaching the "
+                             "category.",
+                             f"FACTS (JSON):\n{json.dumps(facts, default=str)}\n\nDRAFT:\n{s['draft']}",
+                             on_wait=waiter("reviewer"))
+            tokens = r.tokens
+            judge = (r.text or f"no reply ({r.error})")[:200]
+            # A failed judge call never blocks and never counts as a judge PASS: the deterministic checks decide and
+            # the run records "judge unavailable".
+            status = ("unavailable" if r.text is None else "fail" if r.text.upper().startswith("FAIL")
+                      else "pass" if r.text.upper().startswith("PASS") else "unclear")
+            jinfo = {"status": status, "provider": r.provider, "model": r.model, "tokens": r.tokens,
+                     "latency_s": r.latency_s, "fallback_from": r.fallback_from, "same_model": llm.same_model_judge()}
+            if status == "unavailable":
+                jinfo["error"] = (r.error or "")[:200]
+                judge = f"judge unavailable ({r.provider} {r.model or ''}: {r.error})"[:200]
+            if status == "fail":
+                reasons.append("LLM review: " + r.text[5:].strip(" :"))
+        verdict = "pass" if not reasons else "fail"
+        run.event("reviewer", "verdict", {"verdict": verdict, "reasons": reasons, "attempt": s["attempt"], "tokens": tokens,
+                                          "max_attempts": rules.MAX_REVISIONS + 1, "llm_judgement": judge,
+                                          "judge": jinfo, "judge_provider": jinfo["provider"],
+                                          "judge_model": jinfo["model"], "judge_status": jinfo["status"]})
+        run.event("reviewer", "end", {"attempt": s["attempt"]})
+        run.row("reviewer", t0, f"draft attempt {s['attempt']}", {"reasons": reasons, "judge": jinfo}, tokens, verdict)
+        judges = s.get("judges", []) + [{"attempt": s["attempt"], **jinfo}]
+        return {"verdict": verdict, "reasons": reasons, "feedback": reasons, "tokens": s["tokens"] + tokens,
+                "judges": judges}
+
+    def route_after_reviewer(s: State):
+        if s["verdict"] == "pass":
+            return "save_advisory"
+        return "writer" if s["attempt"] <= rules.MAX_REVISIONS else "keep_v1"
+
+    def save_advisory(s: State) -> dict:
+        res = run.call("coordinator", "save_advisory", s["alert_id"], s["draft"], s["confidence"], "pass")
+        last = (s.get("judges") or [{}])[-1]
+        jd = {"judge_status": last.get("status"), "judge_provider": last.get("provider"), "judge_model": last.get("model")}
+        if last.get("status") == "unavailable":
+            jd["note"] = "judge unavailable: deterministic checks only"
+        run.event("coordinator", "end", {"saved": res["advisory_id"], "confidence": s["confidence"], **jd})
+        run.row("coordinator", _now(), "assemble final package", {"advisory_id": res["advisory_id"], **jd}, verdict="pass")
+        return {"outcome": "saved", "advisory_id": res["advisory_id"], "version": res.get("version")}
+
+    def keep_v1(s: State) -> dict:
+        if s.get("llm_down"):
+            reasons = [f"LLM unavailable: {s['llm_down']}"]
+            run.event("coordinator", "end", {"kept": "template v1", "reasons": reasons, "llm_down": True})
+            run.row("coordinator", _now(), "LLM unavailable: template v1 stays", {"reasons": reasons}, verdict="llm_down")
+            return {"outcome": "v1_kept", "reasons": reasons}
+        run.event("coordinator", "end", {"kept": "template v1", "reasons": s["reasons"]})
+        run.row("coordinator", _now(), "reviewer failed after max revisions", {"reasons": s["reasons"]}, verdict="fail")
+        return {"outcome": "v1_kept"}
+
+    g = StateGraph(State)
+    for name, fn in (("coordinator", coordinator), ("evidence", evidence), ("context", context), ("reconcile", reconcile),
+                     ("writer", writer), ("reviewer", reviewer), ("save_advisory", save_advisory), ("keep_v1", keep_v1)):
+        g.add_node(name, fn)
+    g.add_edge(START, "coordinator")
+    g.add_conditional_edges("coordinator", route_after_coordinator, ["evidence", "context", END])
+    g.add_edge(["evidence", "context"], "reconcile")
+    g.add_edge("reconcile", "writer")
+    g.add_conditional_edges("writer", route_after_writer, ["reviewer", "keep_v1"])
+    g.add_conditional_edges("reviewer", route_after_reviewer, ["save_advisory", "writer", "keep_v1"])
+    g.add_edge("save_advisory", END)
+    g.add_edge("keep_v1", END)
+    return g.compile()
+
+
+def _trace_url(tools, run: Run) -> str | None:
+    """LangSmith link of the finished run, stored on its agent_runs rows (console link). None when tracing is off."""
+    if not run.trace_run_id:
+        return None
+    url = tracing.trace_url(run.trace_run_id, tracing.configure()["project"])
+    if url:
+        try:
+            tools.set_trace_url(run.run_id, url)
+        except Exception:  # noqa: BLE001 - a missing link never changes the outcome
+            pass
+    return url
+
+
+def run_alert(tools, alert_id: str, force: bool = False, on_event=None) -> dict:
+    """Run the graph on one alert. Never raises: any failure leaves template v1 (outcome `v1_kept`, error logged).
+    `on_event(row)` is called for every agent event as it happens (CLI progress)."""
+    tr = tracing.configure()
+    tools = mcp_client.wrap(tools)      # A4.1: tools over MCP (stdio server) by default, direct-call fallback
+    run = Run(tools, uuid.uuid4().hex[:12], alert_id, on_event)
+    app = build_graph(tools, run)
+    trace_id = uuid.uuid4()   # LangChain uses it as the root run id, so the LangSmith trace can be linked
+    run.trace_run_id = str(trace_id) if tr["enabled"] else None
+    base = {"run_id": run.run_id, "alert_id": alert_id, "trace_run_id": str(trace_id) if tr["enabled"] else None,
+            "trace_project": tr["project"], "tools_via": getattr(tools, "calls", None) or "direct"}
+    try:
+        a = tools.get_alert(alert_id)
+        cfg = {**tracing.run_config(run.run_id, alert_id, a and a["mode"]), "run_id": trace_id}
+        final = app.invoke({"run_id": run.run_id, "alert_id": alert_id, "force": force}, cfg)
+    except Exception as e:  # noqa: BLE001
+        run.event("coordinator", "end", {"error": f"{type(e).__name__}: {str(e)[:200]}", "kept": "template v1"})
+        return {**base, "outcome": "v1_kept", "error": str(e), "events": run.events,
+                "elapsed_s": round(time.monotonic() - run.t_start, 2)}
+    url = _trace_url(tools, run)
+    if url:
+        base["trace_url"] = url
+    return {**base, "outcome": final.get("outcome"), "version": final.get("version"),
+            "elapsed_s": round(time.monotonic() - run.t_start, 2),
+            "advisory_id": final.get("advisory_id"), "confidence": final.get("confidence"),
+            "verdict": final.get("verdict"), "reasons": final.get("reasons", []), "drop_reason": final.get("drop_reason"),
+            "attempts": final.get("attempt"), "tokens": final.get("tokens", 0), "draft": final.get("draft"),
+            "llm_down": final.get("llm_down"), "disagreement": final.get("disagreement"),
+            "update_n": final.get("update_n"), "facts": final.get("facts"),
+            "judges": final.get("judges", []),
+            "judge_unavailable": any(j.get("status") == "unavailable" for j in final.get("judges", [])),
+            "events": run.events}

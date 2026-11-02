@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DEWS</title>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("theme")||(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark")}catch(e){document.documentElement.dataset.theme="dark"}</script>
+<link rel="stylesheet" href="/static/theme.css">
+</head>
+<body class="landing on-map">
+<header id="hdr">
+  <button class="brand" id="brand" type="button" title="Back to the landing page"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 14.5c3-2 5.5-2 8.5 0s5.500 2 8.500 0" fill="none" stroke="currentColor" stroke-width="1.600"/></svg>DEWS</button>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tb-flow" aria-selected="false" data-tab="flow">Pipeline flow</button>
+    <button class="tab" role="tab" id="tb-map" aria-selected="false" data-tab="map">Map</button>
+    <button class="tab" role="tab" id="tb-data" aria-selected="false" data-tab="data">Readings &amp; alerts</button>
+    <button class="tab" role="tab" id="tb-metrics" aria-selected="false" data-tab="metrics">Metrics</button>
+    <button class="tab" role="tab" id="tb-agents" aria-selected="false" data-tab="agents">Agents</button>
+    <button class="tab" role="tab" id="tb-control" aria-selected="false" data-tab="control">Control</button>
+  </div>
+  <span class="chips">
+  <span class="chip" title="Kafka connection"><span class="dot" id="d-kafka"></span><span id="c-kafka">Kafka</span></span>
+  <span class="chip" title="Kafka brokers up"><span class="dot" id="d-brokers"></span><span id="c-brokers">brokers</span></span>
+  <span class="chip" title="Under-replicated and offline partitions"><span class="dot" id="d-urp"></span><span id="c-urp">URP</span></span>
+  <span class="chip" title="Messages in the dead-letter topic"><span class="dot" id="d-dlq"></span><span id="c-dlq">DLQ</span></span>
+  <span class="chip" title="PostgreSQL connection"><span class="dot" id="d-pg"></span><span id="c-pg">PG</span></span>
+  <span class="chip" id="c-demo" style="display:none">DEMO DATA</span>
+  <span class="chip" id="c-clock">connecting…</span>
+  </span>
+  <button class="themesw" id="theme-toggle" type="button" role="switch" aria-checked="true" aria-label="Dark theme" title="Switch between light (sun) and dark (moon)">
+    <svg class="ico sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    <svg class="ico moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.6A8.2 8.2 0 0 1 9.4 4 8.2 8.2 0 1 0 20 14.6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+    <span class="knob"></span></button>
+</header>
+<div class="alertbar glass" id="alert-bar" role="status" hidden><span class="pulse" id="alert-dot" aria-hidden="true"></span><button class="linkish" id="alert-text" type="button" title="Show this gauge on the map"></button><button class="btn" id="alert-go" type="button">Review</button></div>
+<section id="landing" class="l-page" aria-label="Welcome">
+  <div class="l-hero">
+    <h2 class="l-title">Disaster Early Warning System</h2>
+    <p class="l-lead">Live river gauges, streamed through Kafka, forecast against official NWS flood categories. An alert goes out only after a person approves it.</p>
+    <div class="l-stats glass">
+      <div><b id="ls-areas">–</b><span>monitored area(s)</span></div>
+      <div><b id="ls-gauges">–</b><span>gauges</span></div>
+      <div><b id="ls-reporting">–</b><span>reporting live</span></div>
+      <div><b id="ls-pending">–</b><span>awaiting approval</span></div>
+    </div>
+  </div>
+  <button class="l-scroll" id="l-enter" type="button">Scroll to enter<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9l7 7 7-7"/></svg></button>
+</section>
+<main>
+  <div class="banner" id="banner"></div>
+  <section id="tab-flow">
+  <div class="canvas">
+  <svg viewBox="0 0 1120 600" id="svg" role="img" aria-label="Live pipeline diagram">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0L10 5L0 10z" fill="#52657a"/>
+      </marker>
+    </defs>
+    <g id="edges"></g>
+    <g id="nodes"></g>
+  </svg>
+  </div>
+  <div class="legend">
+    <span><span class="dot ok"></span>running / receiving</span>
+    <span><span class="dot" style="background:var(--idle)"></span>alive, nothing flowing</span>
+    <span><span class="dot warn"></span>degraded (missing instance, lag)</span>
+    <span><span class="dot down"></span>stopped / silent</span>
+    <span><span class="dot"></span>no process yet (not built or not started)</span>
+    <span>green dashes moving = messages flowing; red = data arriving but its consumer is gone</span>
+  </div>
+  <h2>Status changes</h2>
+  <table><thead><tr><th>Time</th><th>Component</th><th>Change</th></tr></thead><tbody id="log">
+    <tr><td colspan="3" style="color:var(--muted)">Nothing yet. Stop a producer, a Faust worker or a broker and it shows up here with a timestamp.</td></tr>
+  </tbody></table>
+  </section>
+
+  <section id="tab-map" hidden>
+    <div class="map3d" id="map3d">
+      <canvas id="m-canvas" aria-label="Globe and map of every monitored gauge" role="img"></canvas>
+      <div class="topbar">
+        <span class="toolbar glass">
+          <span class="seg icons"><button id="v-globe" aria-pressed="true" aria-label="Globe view" title="Globe"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18M4.600 7h14.800M4.600 17h14.800"/></svg></button><button id="v-flat" aria-pressed="false" aria-label="Flat map view" title="Flat map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.500l6-2.500 6 2.500 6-2.500v13.500l-6 2.500-6-2.500-6 2.500z"/><path d="M9 4v13.500M15 6.500v13.500"/></svg></button></span>
+          <span class="seg"><button id="m-live" aria-pressed="true">Live</button><button id="m-replay" aria-pressed="false">Replay (SIMULATION)</button></span>
+          <span class="icons-row">
+            <button class="ic" id="m-tilt" type="button" aria-pressed="false" aria-label="Tilt the view, or back to north up" title="Tilt, or back to north up"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><g id="m-needle"><path class="n" d="M12 4.500l3 7.500h-6z"/><path d="M12 19.500l-3-7.500h6z"/></g></svg></button>
+            <button class="ic" id="m-terrain" type="button" aria-pressed="false" aria-label="Terrain" title="Terrain"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.500 19.500l6.500-11 4 6.500 2.500-3.500 6 8z"/><path d="M7.200 11.200l1.800 1.500 1.700-1.200"/></svg></button>
+            <button class="ic" id="m-imagery" type="button" aria-pressed="false" aria-label="Satellite imagery" title="Satellite imagery"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 8.500l4.500 4.500-2.500 2.500L8.500 11z"/><path d="M8.800 7.700L5.300 4.200 2.700 6.800l3.500 3.500zM16.300 15.200l3.500 3.500-2.600 2.600-3.500-3.500z"/><path d="M15.500 5.500a3 3 0 0 1 3 3M15.500 2.500a6 6 0 0 1 6 6"/></svg></button>
+            <button class="ic" id="m-time" type="button" aria-pressed="false" aria-label="Timeline" title="Timeline: scrub stored windows across the map"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 6.500V12l3.500 2.500"/></svg></button>
+          </span>
+        </span>
+        <span class="tb-r"><span id="m-clock"></span><span class="status">Status <b id="m-status">NORMAL</b></span></span>
+      </div>
+      <div class="left">
+        <div class="glass panel">
+          <div class="ph">Data layers</div>
+          <label class="lrow"><input type="checkbox" data-layer="gauges" checked><span>Gauges</span><em id="n-gauges"></em></label>
+          <label class="lrow"><input type="checkbox" data-layer="alerts" checked><span>Open alerts</span><em id="n-alerts"></em></label>
+          <label class="lrow" title="Radar rain (NOAA MRMS), mean depth over the 10 km circle around each gauge, last 3 hours. Shown on the flat map."><input type="checkbox" data-layer="rain" checked><span>Rain, last 3 h</span><em id="n-rain"></em></label>
+          <label class="lrow"><input type="checkbox" data-layer="sweep" checked><span>Radar sweep</span><em></em></label>
+          <label class="lrow"><input type="checkbox" data-layer="rings" checked><span>Range rings</span><em></em></label>
+          <label class="lrow"><input type="checkbox" data-layer="grid" checked><span>Graticule</span><em></em></label>
+          <label class="lrow"><input type="checkbox" data-layer="labels" checked><span>Labels</span><em></em></label>
+        </div>
+        <div class="glass panel">
+          <div class="ph">Official categories</div>
+          <div class="lkey"><i style="background:var(--s-normal)"></i>below action stage</div>
+          <div class="lkey"><i style="background:var(--s-action)"></i>action</div>
+          <div class="lkey"><i style="background:var(--s-minor)"></i>minor flood</div>
+          <div class="lkey"><i style="background:var(--s-moderate)"></i>moderate</div>
+          <div class="lkey"><i style="background:var(--s-major)"></i>major</div>
+          <div class="lkey"><i style="background:var(--s-nodata)"></i>no recent reading</div>
+          <div class="note" style="font-size:10.5px;margin-top:4px" title="Pillar height is the stage against that gauge's own official NWS major level. Ticks are the official stages. A dashed red beam is an open alert.">Pillar = stage vs that gauge's official major level; dashed red beam = open alert</div>
+        </div>
+        <div class="glass panel brief"><div class="ph">Scene brief</div><div id="m-brief"></div></div>
+      </div>
+      <div class="side"><div class="glass card" id="m-card"></div><div class="glass glist" id="m-list"></div></div>
+      <div class="dock glass">
+        <label class="dk"><span>Location</span><select id="m-region" aria-label="Monitored area"></select></label>
+        <button class="btn" id="m-auto" aria-pressed="false" title="slow automatic rotation">Auto-rotate</button>
+        <span class="note" id="map-note"></span>
+      </div>
+      <div class="scrub glass" id="m-scrub" hidden>
+        <button class="btn sc-play" id="sc-play" type="button" aria-label="Play">▶</button>
+        <select id="sc-ev" aria-label="Stretch of stored data"></select>
+        <div class="sc-track"><input type="range" id="sc-range" aria-label="Time"><div class="sc-ticks" id="sc-ticks"></div></div>
+        <span class="sc-t" id="sc-t"></span>
+        <button class="btn sc-x" id="sc-close" type="button" aria-label="Close the timeline, back to now" title="Back to now">✕</button>
+      </div>
+      <div class="coords" id="m-coords"></div>
+      <div class="tip" id="m-tip" hidden></div>
+    </div>
+  </section>
+
+  <section id="tab-data" hidden>
+    <div class="note" id="db-note" style="margin-bottom:8px"></div>
+    <h2 style="margin-top:4px">Advisories for approval</h2>
+    <div class="note" style="margin-bottom:6px">Nothing is sent until a person clicks Approve. Edit the text if needed. The email is a flood forecast bulletin: facts from the alert plus this approved text (long decimals rounded for display).
+      Approver: <input id="adv-by" size="16" placeholder="your name" aria-label="approver name"></div>
+    <div id="adv-list"></div>
+    <h2>Latest windows (PostgreSQL)</h2>
+    <table><thead><tr><th>Gauge</th><th>Window start</th><th>Mode</th><th>Readings</th><th>Stage (ft)</th><th>Rise (ft/h)</th><th>Rain 3 h</th></tr></thead><tbody id="db-win"></tbody></table>
+    <h2>Alerts</h2>
+    <table><thead><tr><th>Raised</th><th>Gauge</th><th>Mode</th><th>Category</th><th>Probability</th><th>Horizon (h)</th><th>Status</th><th>Delivered</th></tr></thead><tbody id="db-alerts"></tbody></table>
+  </section>
+
+  <section id="tab-metrics" hidden>
+    <h2 style="margin-top:4px">Pipeline: throughput</h2>
+    <table><thead><tr><th>Topic</th><th class="r">Messages/s</th><th>Rate, since this page opened</th><th class="r">Total</th><th>Newest message</th></tr></thead><tbody id="mx-topics"><tr><td colspan="5" class="note">waiting for the first update…</td></tr></tbody></table>
+    <h2>Pipeline: consumer lag</h2>
+    <table><thead><tr><th>Group</th><th class="r">Instances</th><th>State</th><th class="r">Lag (messages)</th><th>Lag, since this page opened</th></tr></thead><tbody id="mx-groups"></tbody></table>
+    <h2>Pipeline: latency waterfall</h2>
+    <div class="note" style="margin-bottom:6px">From the latency_waterfall view. Live and replay stay apart, and gross and net of feed delay are separate rows. A replay's gross total runs from when the replay sent the reading, not from its historical time. A stage with no timestamps yet reads "not measured yet", not zero. Bars use a log scale; read the figures for exact values.</div>
+    <div id="mx-water"></div>
+    <h2>Forecast: detection on past floods</h2>
+    <div class="note" id="mx-det-note" style="margin-bottom:6px"></div>
+    <div style="margin-bottom:6px"><label class="note">Horizon <select id="mx-det-h" aria-label="Forecast horizon"></select></label></div>
+    <table><thead><tr><th>Evaluation</th><th>Data</th><th>Model</th><th class="r">Precision</th><th class="r">Recall</th><th class="r">F1</th><th class="r">False alarms</th><th class="r">Lead, gross</th><th class="r">Lead, net of feed delay</th></tr></thead><tbody id="mx-det"></tbody></table>
+    <h2>Pipeline: fault drills</h2>
+    <div class="note" style="margin-bottom:6px">Every run of tools.fault_drill, failed ones included, newest first.</div>
+    <table><thead><tr><th>Scenario</th><th>Result</th><th class="r">Recovery</th><th>Data</th><th>Why it failed</th><th>When</th></tr></thead><tbody id="mx-drills"></tbody></table>
+    <h2>Agents</h2>
+    <div class="note" id="mx-ls" style="margin-bottom:6px"></div>
+    <div id="mx-agents"></div>
+  </section>
+
+  <section id="tab-agents" hidden>
+    <h2 style="margin-top:4px">Agent graph</h2>
+    <div class="note" id="ag-note" style="margin-bottom:8px"></div>
+    <div class="ag-scrub"><label class="note">Run <select id="ag-run" aria-label="Agent run"></select></label><input type="range" id="ag-t" min="0" max="0" value="0" aria-label="Step through this run"><span class="note" id="ag-t-l"></span></div>
+    <div class="canvas agraph" id="ag-graph"></div>
+    <div class="legend">
+      <span><span class="dot ok"></span>finished in this run</span>
+      <span><span class="dot" style="background:var(--idle)"></span>running now</span>
+      <span><span class="dot warn"></span>sent back, or waiting for a person</span>
+      <span><span class="dot"></span>not reached in this run</span>
+      <span>green dashes moving = work flowing into that step</span>
+    </div>
+    <h2>Time per agent, last run</h2>
+    <table><thead><tr><th>Agent</th><th class="r">Starts</th><th class="r">Time</th><th class="r">Tool calls</th><th class="r">Tokens</th><th>Verdict</th></tr></thead><tbody id="ag-agents"></tbody></table>
+    <h2>Events, last run (newest first, token stream left out)</h2>
+    <table><thead><tr><th>Time</th><th>Agent</th><th>Kind</th><th>Detail</th></tr></thead><tbody id="ag-events"></tbody></table>
+  </section>
+  <section id="tab-control" hidden>
+    <h2 style="margin-top:4px">Demo control</h2>
+    <div class="note" id="ct-note" style="margin-bottom:8px">Fixed actions only, each one an existing script. Every action shows in the status log on Pipeline flow.</div>
+    <div class="ct-job adv glass" id="ct-job" hidden></div>
+    <h2>Processes</h2>
+    <table><thead><tr><th>Process</th><th>State</th><th></th></tr></thead><tbody id="ct-procs"></tbody></table>
+    <h2>Replay a flood</h2>
+    <table><tbody id="ct-floods"></tbody></table>
+    <div class="note" style="margin-top:6px">Replay refuses dates already replayed since the last reset: press Reset first. Replay sends rain first and the gauges 15 s later. Reset stops Faust and the forecaster for 1.5 to 5 minutes and deletes that flood's SIMULATION rows. An email really sent stays on record.</div>
+    <h2>Fault drills</h2>
+    <table><tbody id="ct-drills"></tbody></table>
+    <h2>Verify a slice</h2>
+    <table><tbody id="ct-verify"></tbody></table>
+  </section>
+  <div class="fineprint">Prototype, not an official warning</div>
+</main>
+<script>
+// layout: x, y, w, h  (the same arrangement as the architecture diagram)
+const LAYOUT = {
+  p_usgs:[20,40,130,64], p_mrms:[20,140,130,64], p_replay:[20,240,130,64],
+  t_gauge:[200,40,150,64], t_rain:[200,140,150,64], t_replay:[200,240,150,64],
+  faust:[410,40,150,264], t_agg:[630,120,170,64],
+  sink:[880,40,190,64], pg:[880,140,190,64], bi:[880,240,190,64],
+  forecaster:[410,350,150,64], t_alerts:[630,350,170,64], agent:[880,350,190,64],
+  notifier:[200,480,150,64], t_approved:[410,480,150,64], human:[630,480,170,64]
+};
+const P = {
+  e_p_usgs:"M150 72H200", e_p_mrms:"M150 172H200", e_p_replay:"M150 272H200",
+  e_gauge_faust:"M350 72H410", e_rain_faust:"M350 172H410", e_replay_faust:"M350 272H410",
+  e_faust_agg:"M560 152H630", e_agg_sink:"M800 152H830V64H880", e_agg_fore:"M690 184V325H485V350",
+  e_fore_alerts:"M560 382H630", e_alerts_sink:"M760 350V320H850V88H880", e_alerts_agent:"M800 382H880",
+  e_sink_pg:"M975 104V140", e_pg_bi:"M975 204V240", e_agent_pg:"M1070 382H1095V172H1070",
+  e_agent_human:"M975 414V512H800", e_human_appr:"M630 512H560", e_appr_notif:"M410 512H350"
+};
+const NS = "http://www.w3.org/2000/svg";
+const el = (n, a={}, t) => { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); if (t!==undefined) e.textContent = t; return e; };
+const gE = document.getElementById("edges"), gN = document.getElementById("nodes");
+const edgeEls = {}, nodeEls = {};
+for (const id in P) { const p = el("path", {d:P[id], class:"edge inactive", "marker-end":"url(#arr)"}); gE.appendChild(p); edgeEls[id] = p; }
+function build(id, n) {
+  const [x,y,w,h] = LAYOUT[id];
+  const g = el("g", {class:"node "+n.kind});
+  g.appendChild(el("rect", {x, y, width:w, height:h, rx:10}));
+  g.appendChild(el("circle", {cx:x+w-14, cy:y+14, r:5, class:"sdot absent"}));
+  const t = el("text", {x:x+12, y: n.kind==="group"&&h>200 ? y+26 : y+22, class:"ttl"}, n.title);
+  g.appendChild(t);
+  const lns = [];
+  for (let i=0;i<2;i++){ const l = el("text", {x:x+12, y:(n.kind==="group"&&h>200 ? y+46 : y+38)+i*14, class:"ln"}, ""); g.appendChild(l); lns.push(l); }
+  gN.appendChild(g); nodeEls[id] = {g, dot:g.querySelector(".sdot"), lns};
+}
+const css = (n, s) => `node ${n.kind} ${s}`;
+function fmtTime(ts){ return new Date(ts*1000).toLocaleTimeString([], {hour12:false}); }
+function setChip(id, cls, text){ document.getElementById("d-"+id).className = "dot "+cls; document.getElementById("c-"+id).textContent = text; }
+let lastMsg = 0;
+function render(v){
+  lastMsg = Date.now(); window.lastView = v; if (window.onMetrics) window.onMetrics(v.metrics);
+  const bn = document.getElementById("banner");
+  if (v.error) { bn.style.display="block"; bn.textContent = "Monitor error: "+v.error; return; }
+  const c = v.cluster;
+  bn.style.display = c.kafka_ok ? "none" : "block";
+  if (!c.kafka_ok) bn.textContent = "Cannot reach Kafka" + (c.error ? ": "+c.error : "") + ". Is the stack up? (docker compose ps)";
+  setChip("kafka", c.kafka_ok?"ok":"down", c.kafka_ok?"Kafka":"Kafka down");
+  setChip("brokers", c.brokers_up>=c.brokers_expected?"ok":(c.brokers_up>0?"warn":"down"), `brokers ${c.brokers_up}/${c.brokers_expected}`);
+  setChip("urp", c.under_replicated+c.offline===0?"ok":(c.offline?"down":"warn"), `URP ${c.under_replicated}${c.offline?" · offline "+c.offline:""}`);
+  setChip("dlq", c.dlq>0?"warn":"ok", `DLQ ${c.dlq.toLocaleString()}`);
+  setChip("pg", c.pg===null?"":(c.pg?"ok":"down"), c.pg===null?"PG ?":(c.pg?"PG":"PG down"));
+  document.getElementById("c-demo").style.display = v.demo ? "inline-flex" : "none";
+  document.getElementById("c-clock").textContent = fmtTime(v.ts);
+  for (const id in v.nodes) {
+    const n = v.nodes[id]; if (!nodeEls[id]) build(id, n);
+    const e = nodeEls[id];
+    e.g.setAttribute("class", css(n, n.status));
+    e.dot.setAttribute("class", "sdot "+n.status);
+    n.lines.slice(0,2).forEach((t,i)=>{ e.lns[i].textContent = t; });
+    if (n.lines.length<2) e.lns[1].textContent = "";
+  }
+  for (const ed of v.edges) {
+    const p = edgeEls[ed.id]; if (!p) continue;
+    p.setAttribute("class", "edge "+ed.state);
+    const dur = Math.max(0.35, Math.min(2.4, 2.4 - Math.log10(1+ed.rate)*1.1));
+    p.style.setProperty("--dur", dur+"s");
+  }
+  const body = document.getElementById("log");
+  if (v.events && v.events.length) {
+    body.innerHTML = "";
+    for (const ev of v.events) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td class="t">${fmtTime(ev.ts)}</td><td></td><td></td>`;
+      tr.children[1].textContent = ev.node;
+      tr.children[2].innerHTML = `${ev.from} → <span class="st ${String(ev.to).split(" ")[0]}"></span>`;
+      tr.children[2].lastChild.textContent = ev.to;
+      body.appendChild(tr);
+    }
+  }
+}
+// build all nodes once from the first payload; reconnect automatically
+function connect(){
+  const es = new EventSource("/events");
+  es.onmessage = m => render(JSON.parse(m.data));
+  es.onerror = () => { document.getElementById("c-clock").textContent = "reconnecting…"; };
+}
+connect();
+setInterval(()=>{ if (lastMsg && Date.now()-lastMsg > 8000) document.getElementById("c-clock").textContent = "no update for " + Math.round((Date.now()-lastMsg)/1000) + " s"; }, 2000);
+
+// ---------------------------------------------------------------- tabs
+const TABS = window.CONSOLE_TABS = ["flow","map","data","metrics","agents","control"];
+function showTab(t){
+  for (const n of TABS){
+    document.getElementById("tab-"+n).hidden = n!==t;
+    document.getElementById("tb-"+n).setAttribute("aria-selected", n===t);
+  }
+  document.body.classList.remove("landing"); document.body.classList.toggle("on-map", t==="map");
+  try{ history.replaceState(null,"","#"+t); }catch(e){}
+  if (window.Map3D) { if (t==="map") Map3D.show(); else Map3D.hide(); }
+  if (t==="data") { loadDb(); if (typeof loadAdvisories==="function") loadAdvisories(); }
+  if (window.onTabShown) window.onTabShown(t);
+}
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>showTab(b.dataset.tab)));
+
+// ---------------------------------------------------------------- readings & alerts (PostgreSQL)
+const esc=t=>String(t??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const fmtDT=t=>t?new Date(t).toLocaleString([], {hour12:false}):"";
+async function loadDb(){
+  const note=document.getElementById("db-note");
+  try{
+    const resp=await fetch("/api/db");
+    if(!resp.ok){ note.textContent=`the console server answered ${resp.status}: restart python -m dashboard.flow_monitor`; return; }
+    const d=await resp.json();
+    if(!d.ok){ note.textContent="PostgreSQL not reachable: "+d.error; return; }
+    note.textContent = (d.windows.length||d.alerts.length) ? "Newest rows first." : "Connected. No rows yet: windows arrive once the Postgres sink (storage.sink) runs, alerts once the forecaster (streams.forecaster) runs.";
+    document.getElementById("db-win").innerHTML = d.windows.map(w=>`<tr><td>${esc(w.site_no)}</td><td>${fmtDT(w.window_start)}</td><td>${esc(w.mode)}</td><td>${esc(w.n_readings)}</td><td>${w.stage_last==null?"":(+w.stage_last).toFixed(2)}</td><td>${w.rise_rate_ft_per_h==null?"":(+w.rise_rate_ft_per_h).toFixed(2)}</td><td>${w.rain_3h==null?"":(+w.rain_3h).toFixed(1)}</td></tr>`).join("");
+    document.getElementById("db-alerts").innerHTML = d.alerts.map(a=>`<tr><td>${fmtDT(a.raised_at)}</td><td>${esc(a.site_no)}</td><td>${esc(a.mode)}</td><td>${esc(a.category)}</td><td>${a.probability==null?"":(+a.probability).toFixed(2)}</td><td>${esc(a.horizon_h)}</td><td>${esc(a.status)}</td><td>${fmtDT(a.delivered_at)}</td></tr>`).join("");
+  }catch(e){ note.textContent="cannot reach the console server"; }
+}
+setInterval(()=>{ if(!document.getElementById("tab-data").hidden) loadDb(); },5000);
+
+// ---------------------------------------------------------------- advisories: Approve / Edit / Reject
+const byInput=document.getElementById("adv-by");
+try{ byInput.value=localStorage.getItem("approver")||""; }catch(e){}
+byInput.addEventListener("input",()=>{ try{ localStorage.setItem("approver",byInput.value); }catch(e){} });
+let advEditing=false;   // do not redraw while a person is typing in a text box
+const armed={};
+function disarm(btn,id){ armed[id]=false; if(btn){ btn.disabled=false; btn.textContent="Approve"; btn.classList.remove("armed"); } }
+async function advAct(id,action){
+  const ta=document.getElementById("ta-"+id), msg=document.getElementById("msg-"+id), btn=document.getElementById("ap-"+id);
+  if(action==="approve"){
+    if(!byInput.value.trim()){ msg.textContent=" enter the approver name first (top of this section)"; byInput.focus(); return; }
+    if(!armed[id]){                                   // first click arms, second click sends
+      armed[id]=true; btn.textContent="Click again to send email"; btn.classList.add("armed"); msg.textContent="";
+      setTimeout(()=>{ if(armed[id]) disarm(btn,id); },6000); return;
+    }
+    armed[id]=false; btn.disabled=true; btn.textContent="Sending…";
+  }
+  msg.textContent=" working…";
+  let r,d;
+  try{
+    r=await fetch("/api/advisory/"+action,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({advisory_id:id,by:byInput.value,text:ta?ta.value:undefined})});
+    d=await r.json().catch(()=>({error:"bad answer from the console server"}));
+  }catch(e){ msg.textContent=" cannot reach the console server"; disarm(btn,id); return; }
+  if(!r.ok){ msg.textContent=" "+(d.error||("failed ("+r.status+")")); disarm(btn,id); return; }
+  msg.textContent = action==="edit" ? " saved" : " "+action+"d";
+  advEditing=false; if(action!=="edit") loadAdvisories();
+}
+async function loadAdvisories(){
+  if(advEditing) return;
+  const box=document.getElementById("adv-list");
+  try{
+    const d=await (await fetch("/api/advisories")).json();
+    if(!d.ok){ box.innerHTML=`<div class="note">${esc(d.error)}</div>`; return; }
+    box.innerHTML = d.advisories.length ? d.advisories.map(a=>{
+      const pending=a.status==="draft", text=a.edited_text||a.text;
+      return `<div class="adv glass">
+        <div class="advhead"><b>Arrived ${fmtDT(a.created_at)}</b> · <b style="color:var(--s-${esc(a.category)})">${esc(a.category)} flood category</b> · ${esc(a.site_no)} · ${a.mode==="SIMULATION"?"<b>SIMULATION</b>":esc(a.mode)} · v${esc(a.version)} (${esc(a.source)}) · <b>${esc(a.status)}</b>
+          ${a.confidence==="uncertain"?"· <b>uncertain</b>":""}${a.reviewer_verdict?" · reviewer: "+esc(a.reviewer_verdict):""}
+          ${a.delivered_at?" · delivered "+fmtDT(a.delivered_at):""}</div>
+        ${pending?`<textarea id="ta-${esc(a.advisory_id)}" rows="7" onfocus="advEditing=true">${esc(text)}</textarea>
+          <button class="go" id="ap-${esc(a.advisory_id)}" onclick="advAct('${esc(a.advisory_id)}','approve')">Approve</button>
+          <button onclick="advAct('${esc(a.advisory_id)}','edit')">Save edit</button>
+          <button class="no" onclick="advAct('${esc(a.advisory_id)}','reject')">Reject</button>
+          <button onclick="showTab('map');Map3D.focusAlert('${esc(a.site_no)}',${a.mode==="SIMULATION"})">Show on map</button>
+          <span id="msg-${esc(a.advisory_id)}" class="note"></span>`
+        :`<pre>${esc(text)}</pre>`}
+      </div>`; }).join("") : `<div class="note">No advisories yet: they appear within seconds of an alert.</div>`;
+  }catch(e){ box.innerHTML=`<div class="note">cannot reach the console server</div>`; }
+}
+setInterval(()=>{ if(!document.getElementById("tab-data").hidden) loadAdvisories(); },5000);
+</script>
+<script>
+(function(){
+  const btn=document.getElementById("theme-toggle"), root=document.documentElement;
+  const sync=()=>{ const dark=root.dataset.theme!=="light"; btn.setAttribute("aria-checked",dark); btn.setAttribute("aria-label",dark?"Dark theme (moon)":"Light theme (sun)"); };
+  btn.addEventListener("click",()=>{
+    root.dataset.theme=root.dataset.theme==="light"?"dark":"light";
+    try{ localStorage.setItem("theme",root.dataset.theme); }catch(e){}
+    sync(); document.dispatchEvent(new Event("themechange"));
+  });
+  sync();
+})();
+</script>
+<script>
+// alert banner: any advisory awaiting approval, on every tab
+(function(){
+  const bar=document.getElementById("alert-bar"), txt=document.getElementById("alert-text"), base=document.title;
+  let focus=null;
+  document.getElementById("alert-go").addEventListener("click",()=>showTab("data"));
+  txt.addEventListener("click",()=>{ if(!focus) return; showTab("map"); Map3D.focusAlert(focus.site_no,focus.mode==="SIMULATION"); });
+  async function poll(){
+    try{
+      const d=await (await fetch("/api/advisories")).json(); if(!d.ok) return;
+      const pend=d.advisories.filter(a=>a.status==="draft");
+      if(!pend.length){ bar.hidden=true; document.title=base; return; }
+      const top=focus=pend[0], sim=pend.every(a=>a.mode==="SIMULATION");
+      txt.textContent=`${pend.length} ${pend.length>1?"advisories":"advisory"} awaiting approval · latest ${new Date(top.created_at).toLocaleTimeString([], {hour12:false})} · ${top.category} flood category forecast · ${top.site_no}`+(sim?" · SIMULATION":"");
+      document.getElementById("alert-dot").style.background=`var(--s-${top.category})`;
+      bar.hidden=false; document.title="("+pend.length+") "+base;
+    }catch(e){}
+  }
+  poll(); setInterval(poll,6000);
+})();
+</script>
+<script src="/static/globe.js"></script>
+<script src="/static/map3d.js"></script>
+<script src="/static/console_tabs.js"></script>
+<script src="/static/landing.js"></script>
+</body>
+</html>

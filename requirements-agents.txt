@@ -1,0 +1,10 @@
+# Agents (agentic_ai/). Install on top of requirements-dev.txt:  pip install -r requirements-agents.txt
+# Pins are the versions the tests ran against (Python 3.12/3.13).
+langgraph==1.2.19
+langchain-core==1.7.3
+langchain-groq==1.1.3        # LLM_PROVIDER=groq (free tier, GROQ_MODEL default openai/gpt-oss-120b)
+langchain-google-genai==4.4.2  # LLM_PROVIDER=gemini / LLM_FALLBACK=gemini (Google AI Studio free tier)
+langchain-ollama==1.1.0      # LLM_PROVIDER=ollama (qwen2.5:7b, optional local provider)
+langsmith==0.14.16           # optional tracing: LANGSMITH_TRACING=true + LANGSMITH_API_KEY in .env
+psycopg2-binary==2.9.9        # same pin as requirements.txt (Python 3.12); on Python 3.13 use 2.9.10 or later (no 2.9.9 wheel)
+mcp==2.3.0                   # A4.1 stdio MCP server/client for the agent tools (2.x API: mcp.server.mcpserver.MCPServer)

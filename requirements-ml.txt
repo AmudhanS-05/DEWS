@@ -1,0 +1,10 @@
+tqdm
+pyarrow
+pandas
+numpy
+scikit-learn==1.9.1
+eccodes
+eccodeslib; sys_platform != "win32"
+ecmwflibs; sys_platform == "win32"
+requests
+matplotlib

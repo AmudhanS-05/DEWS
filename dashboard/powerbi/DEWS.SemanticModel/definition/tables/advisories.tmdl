@@ -1,0 +1,90 @@
+table advisories
+	lineageTag: 5dd77add-bbe4-5dc2-980c-7e60527835e2
+
+	column advisory_id
+		dataType: string
+		lineageTag: 336bd800-4cbc-5a83-8264-cad63bc807fa
+		summarizeBy: none
+		sourceColumn: advisory_id
+
+	column alert_id
+		dataType: string
+		lineageTag: 77cf7d4b-6ebe-5f73-8564-5d2f692b6e17
+		summarizeBy: none
+		sourceColumn: alert_id
+
+	column version
+		dataType: int64
+		lineageTag: 492f6251-cd13-50e4-bf37-ce5e1f5be67a
+		summarizeBy: none
+		sourceColumn: version
+
+	column source
+		dataType: string
+		lineageTag: 1955bdb5-5b3f-5739-931b-12122ab6b8c5
+		summarizeBy: none
+		sourceColumn: source
+
+	column text
+		dataType: string
+		lineageTag: 3b023f89-a70f-58af-8739-8bb15316d0a0
+		summarizeBy: none
+		sourceColumn: text
+
+	column confidence
+		dataType: string
+		lineageTag: 1155e7b8-ebb7-5a96-94cb-9ad176b3257b
+		summarizeBy: none
+		sourceColumn: confidence
+
+	column status
+		dataType: string
+		lineageTag: ed9a67e9-dceb-53ff-9d8d-9776c047cc5a
+		summarizeBy: none
+		sourceColumn: status
+
+	column reviewer_verdict
+		dataType: string
+		lineageTag: 9cd77248-b1f1-5e10-93cb-a47d591e9a09
+		summarizeBy: none
+		sourceColumn: reviewer_verdict
+
+	column edited_text
+		dataType: string
+		lineageTag: 99dd7f31-631d-5cbd-9317-ab57805a1837
+		summarizeBy: none
+		sourceColumn: edited_text
+
+	column created_at
+		dataType: dateTime
+		lineageTag: 1b6db2ad-72ac-55d1-9791-3a21d10b1020
+		summarizeBy: none
+		sourceColumn: created_at
+
+	column approved_at
+		dataType: dateTime
+		lineageTag: 2bd7149c-6d45-51c4-bcbd-2e929d6f60f2
+		summarizeBy: none
+		sourceColumn: approved_at
+
+	column approved_by
+		dataType: string
+		lineageTag: 0972b584-3119-56cf-9a79-307e04e49d24
+		summarizeBy: none
+		sourceColumn: approved_by
+
+	column delivered_at
+		dataType: dateTime
+		lineageTag: 7542bb4d-4379-545d-832b-7a8bb62feb68
+		summarizeBy: none
+		sourceColumn: delivered_at
+
+	partition advisories = m
+		mode: directQuery
+		source =
+				let
+					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
+					Data = Source{[Schema="public",Item="advisories"]}[Data]
+				in
+					Data
+

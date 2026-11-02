@@ -1,0 +1,55 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "4962e78657c180815470",
+  "position": {
+    "x": 432,
+    "y": 60,
+    "z": 310,
+    "height": 100,
+    "width": 200,
+    "tabOrder": 310
+  },
+  "visual": {
+    "visualType": "cardVisual",
+    "query": {
+      "queryState": {
+        "Data": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "agent_run_metrics"
+                    }
+                  },
+                  "Property": "Tokens per run"
+                }
+              },
+              "queryRef": "agent_run_metrics.Tokens per run",
+              "nativeQueryRef": "Tokens per run"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Measure": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "agent_run_metrics"
+                  }
+                },
+                "Property": "Tokens per run"
+              }
+            },
+            "direction": "Descending"
+          }
+        ],
+        "isDefaultSort": true
+      }
+    }
+  }
+}

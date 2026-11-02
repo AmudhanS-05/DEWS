@@ -1,0 +1,4 @@
+{"lid": "TSGA2", "usgsId": "", "name": "Tanana River at Tanacross", "latitude": 63.379444444444, "longitude": -143.34361111111,
+ "flood": {"stageUnits": "ft", "flowUnits": "cfs",
+   "categories": {"action": {"stage": 16.0, "flow": -9999}, "minor": {"stage": 16.8, "flow": -9999},
+                  "moderate": {"stage": 17.5, "flow": -9999}, "major": {"stage": 18.5, "flow": -9999}}}}

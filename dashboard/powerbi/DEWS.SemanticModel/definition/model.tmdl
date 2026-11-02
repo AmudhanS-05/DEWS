@@ -1,0 +1,38 @@
+model Model
+	culture: en-US
+	defaultPowerBIDataSourceVersion: powerBI_V3
+	sourceQueryCulture: en-US
+	dataAccessOptions
+		legacyRedirects
+		returnErrorValuesAsNull
+
+annotation PBI_QueryOrder = ["advisories","agent_events","agent_run_metrics","agent_run_summary","agent_runs","alert_overview","alerts","catchment_rain","current_advisory","evaluation_runs","feed_staleness","gauge_impacts","gauge_readings","gauges","latency_trace","latency_waterfall","past_floods","risk_scores","windowed_aggregates","mode_list","latency_stage","gauge_levels","flood_chart"]
+
+annotation __PBI_TimeIntelligenceEnabled = 1
+
+annotation PBI_ProTooling = ["DevMode"]
+
+ref table advisories
+ref table agent_events
+ref table agent_run_metrics
+ref table agent_run_summary
+ref table agent_runs
+ref table alert_overview
+ref table alerts
+ref table catchment_rain
+ref table current_advisory
+ref table evaluation_runs
+ref table feed_staleness
+ref table gauge_impacts
+ref table gauge_readings
+ref table gauges
+ref table latency_trace
+ref table latency_waterfall
+ref table past_floods
+ref table risk_scores
+ref table windowed_aggregates
+ref table mode_list
+ref table latency_stage
+ref table gauge_levels
+ref table flood_chart
+

@@ -1,0 +1,171 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "be940e7f2d4a289b7847",
+  "position": {
+    "x": 16,
+    "y": 276,
+    "z": 500,
+    "height": 210,
+    "width": 760,
+    "tabOrder": 500
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "latency_trace"
+                    }
+                  },
+                  "Property": "site_no"
+                }
+              },
+              "queryRef": "latency_trace.site_no",
+              "nativeQueryRef": "site_no"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "latency_trace"
+                    }
+                  },
+                  "Property": "reading_time"
+                }
+              },
+              "queryRef": "latency_trace.reading_time",
+              "nativeQueryRef": "reading_time"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "latency_trace"
+                    }
+                  },
+                  "Property": "fetched_at"
+                }
+              },
+              "queryRef": "latency_trace.fetched_at",
+              "nativeQueryRef": "fetched_at"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "latency_trace"
+                    }
+                  },
+                  "Property": "ingest_time"
+                }
+              },
+              "queryRef": "latency_trace.ingest_time",
+              "nativeQueryRef": "ingest_time"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "latency_trace"
+                    }
+                  },
+                  "Property": "window_close_time"
+                }
+              },
+              "queryRef": "latency_trace.window_close_time",
+              "nativeQueryRef": "window_close_time"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "latency_trace"
+                    }
+                  },
+                  "Property": "forecast_time"
+                }
+              },
+              "queryRef": "latency_trace.forecast_time",
+              "nativeQueryRef": "forecast_time"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "latency_trace"
+                    }
+                  },
+                  "Property": "alert_time"
+                }
+              },
+              "queryRef": "latency_trace.alert_time",
+              "nativeQueryRef": "alert_time"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "latency_trace"
+                    }
+                  },
+                  "Property": "approved_time"
+                }
+              },
+              "queryRef": "latency_trace.approved_time",
+              "nativeQueryRef": "approved_time"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "latency_trace"
+                    }
+                  },
+                  "Property": "delivered_time"
+                }
+              },
+              "queryRef": "latency_trace.delivered_time",
+              "nativeQueryRef": "delivered_time"
+            }
+          ]
+        }
+      }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Trace detail'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

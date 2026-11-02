@@ -1,0 +1,89 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "a2000000000000000004",
+  "position": {
+    "x": 412,
+    "y": 168,
+    "z": 330,
+    "height": 100,
+    "width": 200,
+    "tabOrder": 330
+  },
+  "visual": {
+    "visualType": "cardVisual",
+    "query": {
+      "queryState": {
+        "Data": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "evaluation_runs"
+                    }
+                  },
+                  "Property": "Drills failed"
+                }
+              },
+              "queryRef": "evaluation_runs.Drills failed",
+              "nativeQueryRef": "Drills failed"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "a2f0000000000000003",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "evaluation_runs"
+              }
+            },
+            "Property": "run_label"
+          }
+        },
+        "type": "Advanced",
+        "howCreated": "User",
+        "filter": {
+          "Version": 2,
+          "From": [
+            {
+              "Name": "t",
+              "Entity": "evaluation_runs",
+              "Type": 0
+            }
+          ],
+          "Where": [
+            {
+              "Condition": {
+                "StartsWith": {
+                  "Left": {
+                    "Column": {
+                      "Expression": {
+                        "SourceRef": {
+                          "Source": "t"
+                        }
+                      },
+                      "Property": "run_label"
+                    }
+                  },
+                  "Right": {
+                    "Literal": {
+                      "Value": "'fault_drill:'"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

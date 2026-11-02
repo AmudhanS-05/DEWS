@@ -1,0 +1,13 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/page/2.1.0/schema.json",
+  "name": "c39085e2b289905c9839",
+  "displayName": "Pipeline Health",
+  "displayOption": "FitToPage",
+  "height": 720,
+  "width": 1280,
+  "pageBinding": {
+    "name": "ad819110a1c033a63665",
+    "type": "Default",
+    "parameters": []
+  }
+}

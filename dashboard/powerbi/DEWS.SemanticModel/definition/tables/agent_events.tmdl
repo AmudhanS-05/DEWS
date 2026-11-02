@@ -1,0 +1,49 @@
+table agent_events
+	lineageTag: fb54b98a-c898-5172-940f-fd3258cee08d
+
+	column event_id
+		dataType: int64
+		lineageTag: 41835d71-10b8-5ea9-a5c1-98304d06753f
+		summarizeBy: none
+		sourceColumn: event_id
+
+	column run_id
+		dataType: string
+		lineageTag: 8ea4d8bc-0bd9-5d62-aae8-9abd7fcbefd5
+		summarizeBy: none
+		sourceColumn: run_id
+
+	column alert_id
+		dataType: string
+		lineageTag: 6eb1ea3d-10a8-526f-b09c-dbbad2225a21
+		summarizeBy: none
+		sourceColumn: alert_id
+
+	column agent
+		dataType: string
+		lineageTag: 488d80fd-fbb4-5098-a72f-6b66deae3982
+		summarizeBy: none
+		sourceColumn: agent
+
+	column kind
+		dataType: string
+		lineageTag: 68466c1c-67c2-5cde-b93d-e4ff3232c84a
+		summarizeBy: none
+		sourceColumn: kind
+
+	column ts
+		dataType: dateTime
+		lineageTag: 146d7e44-d5c0-5637-ba6d-3ec098b853af
+		summarizeBy: none
+		sourceColumn: ts
+
+	partition agent_events = m
+		mode: directQuery
+		source =
+				let
+					Source = PostgreSQL.Database("localhost:5432", "disaster_warning"),
+					Data = Source{[Schema="public",Item="agent_events"]}[Data],
+					NoJson = Table.RemoveColumns(Data, {"detail"})
+				in
+					NoJson
+

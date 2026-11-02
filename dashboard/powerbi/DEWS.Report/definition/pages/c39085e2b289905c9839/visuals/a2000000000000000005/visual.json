@@ -1,0 +1,198 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "a2000000000000000005",
+  "position": {
+    "x": 16,
+    "y": 494,
+    "z": 700,
+    "height": 210,
+    "width": 1248,
+    "tabOrder": 700
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "evaluation_runs"
+                    }
+                  },
+                  "Property": "run_label"
+                }
+              },
+              "queryRef": "evaluation_runs.run_label",
+              "nativeQueryRef": "run_label"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "evaluation_runs"
+                    }
+                  },
+                  "Property": "data_source"
+                }
+              },
+              "queryRef": "evaluation_runs.data_source",
+              "nativeQueryRef": "data_source"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "evaluation_runs"
+                    }
+                  },
+                  "Property": "status"
+                }
+              },
+              "queryRef": "evaluation_runs.status",
+              "nativeQueryRef": "status"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "evaluation_runs"
+                    }
+                  },
+                  "Property": "recovery_time_s"
+                }
+              },
+              "queryRef": "evaluation_runs.recovery_time_s",
+              "nativeQueryRef": "recovery_time_s"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "evaluation_runs"
+                    }
+                  },
+                  "Property": "failure_reason"
+                }
+              },
+              "queryRef": "evaluation_runs.failure_reason",
+              "nativeQueryRef": "failure_reason"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "evaluation_runs"
+                    }
+                  },
+                  "Property": "created_at"
+                }
+              },
+              "queryRef": "evaluation_runs.created_at",
+              "nativeQueryRef": "created_at"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Column": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "evaluation_runs"
+                  }
+                },
+                "Property": "created_at"
+              }
+            },
+            "direction": "Descending"
+          }
+        ]
+      }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Fault drills, failed runs stay in the table'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "a2f0000000000000004",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "evaluation_runs"
+              }
+            },
+            "Property": "run_label"
+          }
+        },
+        "type": "Advanced",
+        "howCreated": "User",
+        "filter": {
+          "Version": 2,
+          "From": [
+            {
+              "Name": "t",
+              "Entity": "evaluation_runs",
+              "Type": 0
+            }
+          ],
+          "Where": [
+            {
+              "Condition": {
+                "StartsWith": {
+                  "Left": {
+                    "Column": {
+                      "Expression": {
+                        "SourceRef": {
+                          "Source": "t"
+                        }
+                      },
+                      "Property": "run_label"
+                    }
+                  },
+                  "Right": {
+                    "Literal": {
+                      "Value": "'fault_drill:'"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

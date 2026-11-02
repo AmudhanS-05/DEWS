@@ -1,0 +1,114 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "f151668bbe2181947db7",
+  "position": {
+    "x": 784,
+    "y": 276,
+    "z": 600,
+    "height": 210,
+    "width": 480,
+    "tabOrder": 600
+  },
+  "visual": {
+    "visualType": "lineChart",
+    "query": {
+      "queryState": {
+        "Category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "feed_staleness"
+                    }
+                  },
+                  "Property": "reading_time"
+                }
+              },
+              "queryRef": "feed_staleness.reading_time",
+              "nativeQueryRef": "reading_time",
+              "active": true
+            }
+          ]
+        },
+        "Series": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "feed_staleness"
+                    }
+                  },
+                  "Property": "site_no"
+                }
+              },
+              "queryRef": "feed_staleness.site_no",
+              "nativeQueryRef": "site_no"
+            }
+          ]
+        },
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "feed_staleness"
+                    }
+                  },
+                  "Property": "Staleness, max (min)"
+                }
+              },
+              "queryRef": "feed_staleness.Staleness, max (min)",
+              "nativeQueryRef": "Staleness, max (min)"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Column": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "feed_staleness"
+                  }
+                },
+                "Property": "reading_time"
+              }
+            },
+            "direction": "Ascending"
+          }
+        ],
+        "isDefaultSort": true
+      }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Feed staleness, live data only: blank unless mode is LIVE'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,176 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "8ed7acfd2532d4d80a5e",
+  "position": {
+    "x": 16,
+    "y": 168,
+    "z": 500,
+    "height": 102,
+    "width": 824,
+    "tabOrder": 500
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "agent_run_metrics"
+                    }
+                  },
+                  "Property": "run_id"
+                }
+              },
+              "queryRef": "agent_run_metrics.run_id",
+              "nativeQueryRef": "run_id"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "agent_run_metrics"
+                    }
+                  },
+                  "Property": "alert_id"
+                }
+              },
+              "queryRef": "agent_run_metrics.alert_id",
+              "nativeQueryRef": "alert_id"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "agent_run_metrics"
+                    }
+                  },
+                  "Property": "duration_s"
+                }
+              },
+              "queryRef": "agent_run_metrics.duration_s",
+              "nativeQueryRef": "duration_s"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "agent_run_metrics"
+                    }
+                  },
+                  "Property": "tokens"
+                }
+              },
+              "queryRef": "agent_run_metrics.tokens",
+              "nativeQueryRef": "tokens"
+            },
+            {
+              "field": {
+                "Aggregation": {
+                  "Expression": {
+                    "Column": {
+                      "Expression": {
+                        "SourceRef": {
+                          "Entity": "agent_run_metrics"
+                        }
+                      },
+                      "Property": "tool_calls"
+                    }
+                  },
+                  "Function": 0
+                }
+              },
+              "queryRef": "Sum(agent_run_metrics.tool_calls)",
+              "nativeQueryRef": "tool_calls"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "agent_run_metrics"
+                    }
+                  },
+                  "Property": "revisions"
+                }
+              },
+              "queryRef": "agent_run_metrics.revisions",
+              "nativeQueryRef": "revisions"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "agent_run_metrics"
+                    }
+                  },
+                  "Property": "disagreements"
+                }
+              },
+              "queryRef": "agent_run_metrics.disagreements",
+              "nativeQueryRef": "disagreements"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "agent_run_summary"
+                    }
+                  },
+                  "Property": "last_verdict"
+                }
+              },
+              "queryRef": "agent_run_summary.last_verdict",
+              "nativeQueryRef": "last_verdict"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "agent_run_summary"
+                    }
+                  },
+                  "Property": "review_rounds"
+                }
+              },
+              "queryRef": "agent_run_summary.review_rounds",
+              "nativeQueryRef": "review_rounds"
+            }
+          ]
+        }
+      }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Runs'"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

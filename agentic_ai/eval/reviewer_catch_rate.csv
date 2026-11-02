@@ -1,0 +1,75 @@
+case,kind,caught,by,other_checks,reason
+drwt2_2019_major_measured,wrong_number,True,numbers,-,numbers not in the evidence: 27.0 (copy numbers exactly from FACTS)
+drwt2_2019_major_measured,wrong_category,True,"category,category_stage",-,"official category 'major' is not named (write it in capitals, e.g. MAJOR)"
+drwt2_2019_major_measured,wrong_category_stage,True,category_stage,-,MAJOR is given as 5.5 ft but the official MAJOR stage is 13.0 ft
+drwt2_2019_major_measured,invented_threshold,True,"numbers,threshold",length,numbers not in the evidence: 15.3 (copy numbers exactly from FACTS)
+drwt2_2019_major_measured,invented_threshold_known,True,threshold,length,threshold that is not an official NWPS stage: 'warning level of 8.2 ft' (use only the official ACTION/MINOR/MODERATE/MAJ
+drwt2_2019_major_measured,invented_category,True,"abbreviation,threshold",length,threshold that is not an official NWPS stage: 'SEVERE flood category' (use only the official ACTION/MINOR/MODERATE/MAJOR
+drwt2_2019_major_measured,missing_simulation,True,simulation,-,SIMULATION label missing for replayed data (write the word SIMULATION in capitals)
+drwt2_2019_major_measured,cause_downstream,True,"cause,context_kind",length,cause claim not in the facts: 'causing' (state the forecast and the signals; do not say why the water rises)
+drwt2_2019_major_measured,cause_claim,True,cause,length,"cause claim not in the facts: 'caused by', 'dam release' (state the forecast and the signals; do not say why the water r"
+drwt2_2019_major_measured,unknown_abbreviation,True,abbreviation,-,"unknown abbreviation NGS (use only: ACTION, MAJOR, MINOR, MODERATE, MRMS, NOAA, NWPS, NWS, SIMULATION, USGS, UTC, or nam"
+drwt2_2019_major_measured,certainty,True,certainty,length,certainty language: 'will flood'
+drwt2_2019_major_measured,null_value,True,missing_value,probability,missing value written as 'None' (write 'not available')
+drwt2_2019_major_measured,markdown,True,markdown,-,Markdown in a plain-text advisory (remove ** / __ / # headings)
+drwt2_2019_major_measured,wrong_update,True,update,-,first alert of the episode: no 'Update n' wording
+minor_p79_rain_sim,wrong_number,True,numbers,-,numbers not in the evidence: 9.1 (copy numbers exactly from FACTS)
+minor_p79_rain_sim,wrong_probability,True,"numbers,probability",-,numbers not in the evidence: 94% (copy numbers exactly from FACTS)
+minor_p79_rain_sim,wrong_category,True,"category,category_stage",-,"official category 'minor' is not named (write it in capitals, e.g. MINOR)"
+minor_p79_rain_sim,wrong_category_stage,True,category_stage,-,MINOR is given as 7.0 ft but the official MINOR stage is 5.5 ft
+minor_p79_rain_sim,invented_threshold,True,"numbers,threshold",-,numbers not in the evidence: 7.8 (copy numbers exactly from FACTS)
+minor_p79_rain_sim,invented_threshold_known,True,threshold,-,threshold that is not an official NWPS stage: 'warning level of 2.6 ft' (use only the official ACTION/MINOR/MODERATE/MAJ
+minor_p79_rain_sim,invented_category,True,"abbreviation,threshold",-,threshold that is not an official NWPS stage: 'SEVERE flood category' (use only the official ACTION/MINOR/MODERATE/MAJOR
+minor_p79_rain_sim,missing_simulation,True,simulation,-,SIMULATION label missing for replayed data (write the word SIMULATION in capitals)
+minor_p79_rain_sim,cause_downstream,True,"cause,context_kind",-,cause claim not in the facts: 'causing' (state the forecast and the signals; do not say why the water rises)
+minor_p79_rain_sim,cause_claim,True,cause,-,"cause claim not in the facts: 'caused by', 'dam release' (state the forecast and the signals; do not say why the water r"
+minor_p79_rain_sim,unknown_abbreviation,True,abbreviation,-,"unknown abbreviation NGS (use only: ACTION, MAJOR, MINOR, MODERATE, MRMS, NOAA, NWPS, NWS, SIMULATION, USGS, UTC, or nam"
+minor_p79_rain_sim,certainty,True,certainty,-,certainty language: 'will flood'
+minor_p79_rain_sim,missing_provisional,True,provisional,-,provisional-data note missing (use the word 'provisional')
+minor_p79_rain_sim,markdown,True,markdown,-,Markdown in a plain-text advisory (remove ** / __ / # headings)
+minor_p79_rain_sim,wrong_update,True,update,-,first alert of the episode: no 'Update n' wording
+minor_p79_rain_live,wrong_number,True,numbers,-,numbers not in the evidence: 9.1 (copy numbers exactly from FACTS)
+minor_p79_rain_live,wrong_probability,True,"numbers,probability",-,numbers not in the evidence: 94% (copy numbers exactly from FACTS)
+minor_p79_rain_live,wrong_category,True,"category,category_stage",-,"official category 'minor' is not named (write it in capitals, e.g. MINOR)"
+minor_p79_rain_live,wrong_category_stage,True,category_stage,-,MINOR is given as 7.0 ft but the official MINOR stage is 5.5 ft
+minor_p79_rain_live,invented_threshold,True,"numbers,threshold",-,numbers not in the evidence: 7.8 (copy numbers exactly from FACTS)
+minor_p79_rain_live,invented_threshold_known,True,threshold,-,threshold that is not an official NWPS stage: 'warning level of 2.6 ft' (use only the official ACTION/MINOR/MODERATE/MAJ
+minor_p79_rain_live,invented_category,True,"abbreviation,threshold",-,threshold that is not an official NWPS stage: 'SEVERE flood category' (use only the official ACTION/MINOR/MODERATE/MAJOR
+minor_p79_rain_live,simulation_on_live,True,live_label,-,SIMULATION label on live data
+minor_p79_rain_live,cause_downstream,True,"cause,context_kind",-,cause claim not in the facts: 'causing' (state the forecast and the signals; do not say why the water rises)
+minor_p79_rain_live,cause_claim,True,cause,-,"cause claim not in the facts: 'caused by', 'dam release' (state the forecast and the signals; do not say why the water r"
+minor_p79_rain_live,unknown_abbreviation,True,abbreviation,-,"unknown abbreviation NGS (use only: ACTION, MAJOR, MINOR, MODERATE, MRMS, NOAA, NWPS, NWS, SIMULATION, USGS, UTC, or nam"
+minor_p79_rain_live,certainty,True,certainty,-,certainty language: 'will flood'
+minor_p79_rain_live,missing_provisional,True,provisional,-,provisional-data note missing (use the word 'provisional')
+minor_p79_rain_live,markdown,True,markdown,-,Markdown in a plain-text advisory (remove ** / __ / # headings)
+minor_p79_rain_live,wrong_update,True,update,-,first alert of the episode: no 'Update n' wording
+moderate_update2_sim,wrong_number,True,numbers,-,numbers not in the evidence: 10.2 (copy numbers exactly from FACTS)
+moderate_update2_sim,wrong_probability,True,"numbers,probability",-,numbers not in the evidence: 77% (copy numbers exactly from FACTS)
+moderate_update2_sim,wrong_category,True,"category,category_stage",-,"official category 'moderate' is not named (write it in capitals, e.g. MODERATE)"
+moderate_update2_sim,wrong_category_stage,True,category_stage,-,MODERATE is given as 5.5 ft but the official MODERATE stage is 7.0 ft
+moderate_update2_sim,invented_threshold,True,"numbers,threshold",-,numbers not in the evidence: 4.7 (copy numbers exactly from FACTS)
+moderate_update2_sim,invented_threshold_known,True,threshold,-,threshold that is not an official NWPS stage: 'warning level of 2.6 ft' (use only the official ACTION/MINOR/MODERATE/MAJ
+moderate_update2_sim,invented_category,True,"abbreviation,threshold",-,threshold that is not an official NWPS stage: 'SEVERE flood category' (use only the official ACTION/MINOR/MODERATE/MAJOR
+moderate_update2_sim,missing_simulation,True,simulation,-,SIMULATION label missing for replayed data (write the word SIMULATION in capitals)
+moderate_update2_sim,cause_downstream,True,"cause,context_kind",-,cause claim not in the facts: 'causing' (state the forecast and the signals; do not say why the water rises)
+moderate_update2_sim,cause_claim,True,cause,-,"cause claim not in the facts: 'caused by', 'dam release' (state the forecast and the signals; do not say why the water r"
+moderate_update2_sim,unknown_abbreviation,True,abbreviation,-,"unknown abbreviation NGS (use only: ACTION, MAJOR, MINOR, MODERATE, MRMS, NOAA, NWPS, NWS, SIMULATION, USGS, UTC, or nam"
+moderate_update2_sim,certainty,True,certainty,-,certainty language: 'will flood'
+moderate_update2_sim,missing_provisional,True,provisional,-,provisional-data note missing (use the word 'provisional')
+moderate_update2_sim,markdown,True,markdown,-,Markdown in a plain-text advisory (remove ** / __ / # headings)
+moderate_update2_sim,wrong_update,True,update,-,repeat alert in the episode: start with 'Update 2:'
+minor_uncertain_sim,wrong_number,True,numbers,-,numbers not in the evidence: 9.1 (copy numbers exactly from FACTS)
+minor_uncertain_sim,wrong_probability,True,"numbers,probability",-,numbers not in the evidence: 94% (copy numbers exactly from FACTS)
+minor_uncertain_sim,wrong_category,True,"category,category_stage",-,"official category 'minor' is not named (write it in capitals, e.g. MINOR)"
+minor_uncertain_sim,wrong_category_stage,True,category_stage,-,MINOR is given as 7.0 ft but the official MINOR stage is 5.5 ft
+minor_uncertain_sim,invented_threshold,True,"numbers,threshold",-,numbers not in the evidence: 7.8 (copy numbers exactly from FACTS)
+minor_uncertain_sim,invented_threshold_known,True,threshold,-,threshold that is not an official NWPS stage: 'warning level of 2.6 ft' (use only the official ACTION/MINOR/MODERATE/MAJ
+minor_uncertain_sim,invented_category,True,"abbreviation,threshold",-,threshold that is not an official NWPS stage: 'SEVERE flood category' (use only the official ACTION/MINOR/MODERATE/MAJOR
+minor_uncertain_sim,missing_simulation,True,simulation,-,SIMULATION label missing for replayed data (write the word SIMULATION in capitals)
+minor_uncertain_sim,cause_downstream,True,"cause,context_kind",length,cause claim not in the facts: 'causing' (state the forecast and the signals; do not say why the water rises)
+minor_uncertain_sim,cause_claim,True,cause,-,"cause claim not in the facts: 'caused by', 'dam release' (state the forecast and the signals; do not say why the water r"
+minor_uncertain_sim,unknown_abbreviation,True,abbreviation,-,"unknown abbreviation NGS (use only: ACTION, MAJOR, MINOR, MODERATE, MRMS, NOAA, NWPS, NWS, SIMULATION, USGS, UTC, or nam"
+minor_uncertain_sim,certainty,True,certainty,-,certainty language: 'will flood'
+minor_uncertain_sim,missing_provisional,True,provisional,-,provisional-data note missing (use the word 'provisional')
+minor_uncertain_sim,markdown,True,markdown,-,Markdown in a plain-text advisory (remove ** / __ / # headings)
+minor_uncertain_sim,wrong_update,True,update,-,first alert of the episode: no 'Update n' wording
