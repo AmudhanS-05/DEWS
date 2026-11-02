@@ -2,10 +2,10 @@
   "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
   "name": "f31130c2eea366612623",
   "position": {
-    "x": 9.9848320693391113,
-    "y": 48.260021668472369,
+    "x": 9.984832069339111,
+    "y": 48.26002166847237,
     "z": 0,
-    "height": 654.00650054171172,
+    "height": 654.0065005417117,
     "width": 1269.7378114842902,
     "tabOrder": 0
   },
@@ -23,11 +23,11 @@
                       "Entity": "table1_us_vs_india"
                     }
                   },
-                  "Property": "Column2"
+                  "Property": "property"
                 }
               },
-              "queryRef": "table1_us_vs_india.Column2",
-              "nativeQueryRef": "Column2"
+              "queryRef": "table1_us_vs_india.property",
+              "nativeQueryRef": "property"
             },
             {
               "field": {
@@ -37,11 +37,11 @@
                       "Entity": "table1_us_vs_india"
                     }
                   },
-                  "Property": "Column1"
+                  "Property": "us_usgs"
                 }
               },
-              "queryRef": "table1_us_vs_india.Column1",
-              "nativeQueryRef": "Column1"
+              "queryRef": "table1_us_vs_india.us_usgs",
+              "nativeQueryRef": "us_usgs"
             },
             {
               "field": {
@@ -51,11 +51,11 @@
                       "Entity": "table1_us_vs_india"
                     }
                   },
-                  "Property": "Column3"
+                  "Property": "us_provenance"
                 }
               },
-              "queryRef": "table1_us_vs_india.Column3",
-              "nativeQueryRef": "Column3"
+              "queryRef": "table1_us_vs_india.us_provenance",
+              "nativeQueryRef": "us_provenance"
             },
             {
               "field": {
@@ -65,11 +65,11 @@
                       "Entity": "table1_us_vs_india"
                     }
                   },
-                  "Property": "Column4"
+                  "Property": "india_measured"
                 }
               },
-              "queryRef": "table1_us_vs_india.Column4",
-              "nativeQueryRef": "Column4"
+              "queryRef": "table1_us_vs_india.india_measured",
+              "nativeQueryRef": "india_measured"
             },
             {
               "field": {
@@ -79,11 +79,11 @@
                       "Entity": "table1_us_vs_india"
                     }
                   },
-                  "Property": "Column5"
+                  "Property": "india_literature"
                 }
               },
-              "queryRef": "table1_us_vs_india.Column5",
-              "nativeQueryRef": "Column5"
+              "queryRef": "table1_us_vs_india.india_literature",
+              "nativeQueryRef": "india_literature"
             },
             {
               "field": {
@@ -93,15 +93,37 @@
                       "Entity": "table1_us_vs_india"
                     }
                   },
-                  "Property": "Column6"
+                  "Property": "india_provenance"
                 }
               },
-              "queryRef": "table1_us_vs_india.Column6",
-              "nativeQueryRef": "Column6"
+              "queryRef": "table1_us_vs_india.india_provenance",
+              "nativeQueryRef": "india_provenance"
             }
           ]
         }
       }
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'India vs US: from a file, no live or replay data, so no mode slicer'"
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }
