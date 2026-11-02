@@ -1,6 +1,6 @@
-# 5. Multi-agent advisory writer
+# 4. Multi-agent advisory writer
 
-## 5.1 Design
+## 4.1 Design
 
 An alert holds numbers. A duty officer needs a short, checked, plain-language advisory. DEWS uses two layers:
 
@@ -24,13 +24,13 @@ instruction with the exact values.
 **Safety boundary:** the agents read PostgreSQL only, never produce to Kafka and never send email. Only a person's
 approval publishes to `alerts.approved`. Any failure (LLM, tool, reviewer) leaves v1 in place.
 
-## 5.2 Results
+## 4.2 Results
 
 All runs use the alert `08158700|major|2019-05-04T01:00:00Z` (DRWT2, May 2019 replay, SIMULATION), Groq
-`openai/gpt-oss-120b`, runs spaced 65 s apart [`docs/breadcrumbs/agents.md`, 31 Oct 2026; commits `defe0a8`,
+`openai/gpt-oss-120b`, runs spaced 65 s apart [31 Oct 2026; commits `defe0a8`,
 `b30018a`, `d4165a5`].
 
-**Table 5.**
+**Table 5.** Functional check on one alert.
 
 | Setting | Runs | Saved, reviewer pass | Passed on attempt 1 | Time per advisory | Tokens per advisory |
 |---|---|---|---|---|---|
@@ -46,13 +46,20 @@ All runs use the alert `08158700|major|2019-05-04T01:00:00Z` (DRWT2, May 2019 re
   scratch PostgreSQL 16].
 - Tests: 122 pass with PostgreSQL 16 [commit `3b72417`].
 
-## 5.3 Not measured yet (TODO)
+## 4.3 Evaluation on replayed alerts
 
-- Reviewer catch rate on deliberately corrupted drafts (wrong number, missing SIMULATION label, "will flood").
-- Faithfulness over many alerts, not just one.
-- Human approval rate and edit size on replayed floods.
-- Time to v1 vs time to v2 on real alerts from the stream.
-- Ablation: single agent vs the multi-agent graph on the same alerts.
-- MCP server for the tools (planned S4).
+Measured after the functional check above, on 9 alerts raised by the model's probability on 9 replayed USGS floods
+(mode SIMULATION, live Groq writer, runs 65 s apart) [`agentic_ai/eval/agent_eval.md`, `agentic_ai/eval/runs.jsonl`]:
 
-Five runs on one alert are a functional check, not an evaluation. Say so in the text.
+| | multi-agent | multi-agent, independent Gemini judge | single agent | template only |
+|---|---|---|---|---|
+| final text passes all deterministic checks | 9/9 | 9/9 | 6/9 | 9/9 |
+| numbers found in the evidence | 142/142 | 147/147 | 70/70 | 193/193 |
+| UNCERTAIN where the forecasts disagree | 8 of 8 | 8 of 8 | 8 of 8 | 8 of 8 |
+| tokens per alert, median | 3376 | 3346 | 2731 | 0 |
+| v1 to v2 time per alert, median | 2.7 s | 2.7 s | 1.86 s | 0.14 s |
+
+- **Reviewer on seeded errors** planted in the 9 LLM-written texts: 135 of 135 caught by the deterministic checks
+  [`agentic_ai/eval/agent_eval.md`].
+- **LLM down:** 9 of 9 alerts kept the template v1 and nothing was blocked [same file].
+- **Not measured:** human approval rate and edit size, and any result on live alerts (none occurred).

@@ -9,9 +9,8 @@ Start here if you are new to the project. Read 01 to 03 in order. The others are
 5. [Power BI](05-power-bi.md)
 6. [ML and evaluation](06-ml-and-evaluation.md)
 7. [Agents](07-agents.md)
-8. [India study](08-india-study.md)
-9. [Troubleshooting](09-troubleshooting.md)
-10. [Repo map](10-repo-map.md)
+8. [Troubleshooting](08-troubleshooting.md)
+9. [Repo map](09-repo-map.md)
 
 The guide describes the code as it is on the branch it ships with. Anything not built yet is marked as planned, and
 results appear only once they have been measured.

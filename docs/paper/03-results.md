@@ -6,20 +6,19 @@ All results are from **replayed** history (mode SIMULATION) unless marked LIVE. 
 
 | Measure | Result | Source |
 |---|---|---|
-| Broker failure | one of 3 brokers stopped: topics stayed available (ISR 3 → 2 → 3) | `docs/BUILD_PHASES.md` status board, verified 29 Oct |
+| Broker failure | one of 3 brokers stopped: topics stayed available (ISR 3 → 2 → 3) | verified 29 Oct 2026 |
 | Windows | May 2019 DRWT2 replay: 119 hourly windows, none emitted twice (`tools.check_windows` PASS) | commit `c68a9e7` |
 | Sink exactly-once effect | sink killed mid-replay and restarted: 4233/4233 readings, 0 gaps, 0 duplicates | commit `960c361` |
 | Forecaster | 3903 windows → 3903 forecasts | commit `608c4e9` |
 | Recovery after restart (one run each) | Faust worker 18.1 s, broker 21.1 s, sink 5.4 s, PostgreSQL 3.9 s, notifier 1.1 s, live producer 4.2 s; all loss/duplication checks PASS | commit `390f66d` |
 | Stage latency (replay, 167 traces) | ingest median 0.066 s, forecast 0.506 s, one alert 1.07 s | commit `bde227c` |
-| Notification | an approved replayed advisory was emailed and `delivered_at` recorded | `docs/RUNBOOK.md` step 11 closed, commit `ecd842f` |
+| Notification | an approved replayed advisory was emailed and `delivered_at` recorded | commit `ecd842f` |
 
 TODO (not measured yet):
-- throughput: `--no-sleep` replay of 2017 to 2026 (`docs/RUNBOOK.md` step 6);
+- throughput: `--no-sleep` replay of 2017 to 2026 (`tools/throughput_run.py`);
 - end-to-end latency including human approval and delivery on a real approval (`bde227c` covers these with a
   PostgreSQL test only);
-- the 48 h live feed-delay log;
-- a `verify_slice S1` re-run after the rule change to "one alert per episode, lead time reported".
+- (since measured: the live feed-delay log, see [02-data §2.5](02-data.md#25-live-data).)
 
 ## 3.2 Forecaster
 

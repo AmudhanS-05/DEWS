@@ -5,7 +5,7 @@ table). Data: USGS IV gage height (00065) cached by `python -m ml.fetch_history 
 `ml/figures/usgs_fetch_summary.csv`), official NWPS minor stages from `config/gauge_locations.csv`.
 
 ## 1. The old numbers
-FAQ.md ("What did the EDA find?") and docs/handoffs/ML_INDIA.md gave the 3 h rise-rate baseline as
+FAQ.md ("What did the EDA find?") and an earlier internal planning note gave the 3 h rise-rate baseline as
 **F1 0.65 at DRWT2, 0.26 at LCPT2, 0.64 at JNCT2, 0.41 at AHOT2**, from notebook 02, cell 27 (`baseline_scores`),
 run over the 10 years ending early October 2026.
 
@@ -91,7 +91,7 @@ the rise-rate baseline must be rescored on exactly those rows, as `ml/rain_model
 bar for the full-protocol evaluation only.
 
 ## 6. Where the old values appeared
-Corrected: FAQ.md (EDA findings, "Baselines"), docs/handoffs/ML_INDIA.md ("Baselines to beat"), and ml/harness.py
+Corrected: FAQ.md (EDA findings, "Baselines") and ml/harness.py
 (the comparison table now prints the old values labelled as such). Not corrected here (outside ml's files or
 historical output): docs/EDA_WALKTHROUGH.md lines 872 and 1095, and the saved outputs of
 notebooks/02_flood_specific_eda.ipynb cell 27 (the notebook code still uses start-labelled means; rerun it with

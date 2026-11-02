@@ -57,7 +57,7 @@ so "latest window" would be the end of the replay.
 
 **Thresholds** (in `rules.py`): evidence says rising at 0.3 ft/h or more, or when the forecast reaches the category.
 Context says rising with 10 mm or more of rain in 3 h, or an upstream rise of 0.5 ft or more in 3 h. When there is neither radar rain nor an upstream reading, context is *unknown* and never counts as a
-disagreement. Until rain is streamed into the pipeline (S2), only replayed or seeded data carries rain.
+disagreement. Rain reaches the agents only when the MRMS producer runs (live or replay).
 
 **Logged for evaluation:** every step writes `agent_events` (start, end, tool_call, verdict, disagreement, revision) and
 `agent_runs`. The view `agent_run_summary` gives duration, tool calls and review rounds per run. The console's
@@ -108,8 +108,8 @@ deterministic, used by every test). Each call has a 30 s timeout and never raise
 
 ## Measured so far
 
-All on the 2019 DRWT2 alert (replay, SIMULATION), Groq `openai/gpt-oss-120b`, runs spaced 65 s apart
-(`docs/breadcrumbs/agents.md`, 31 Oct 2026):
+First functional check, all on the 2019 DRWT2 alert (replay, SIMULATION), Groq `openai/gpt-oss-120b`, runs spaced
+65 s apart (31 Oct 2026):
 
 | Setting | Runs | Saved, reviewer pass | First attempt | Time per advisory | Tokens per advisory |
 |---|---|---|---|---|---|
@@ -124,9 +124,10 @@ All on the 2019 DRWT2 alert (replay, SIMULATION), Groq `openai/gpt-oss-120b`, ru
 - `pytest tests/agents`: 122 passed with PostgreSQL 16 and `LLM_PROVIDER=none`. The tests cover disagreement →
   UNCERTAIN, "Update 2" wording, a bad draft sent back, still failing after 2 revisions → v1 kept, and LLM or tool
   failures → v1 kept.
-- **Not measured yet:** reviewer catch rate on deliberately corrupted drafts, faithfulness over many alerts, and a
-  single-agent vs multi-agent ablation.
-- Not built yet: the MCP server (S4), episodic memory beyond "Update n", agent evaluation (faithfulness, reviewer
-  catch rate, single-agent vs multi-agent ablation).
 
-Design rationale: `docs/BUILD_PHASES.md`, section "Phase 6b". Interfaces: `docs/CONTRACTS.md`.
+Since then, the agents were evaluated on 9 alerts from 9 replayed USGS floods (multi-agent vs single agent vs
+template, an independent Gemini judge, seeded errors for the reviewer, LLM down), and the tools are also served over
+MCP (`agentic_ai/mcp_server.py`). Results: [`agentic_ai/eval/agent_eval.md`](../../agentic_ai/eval/agent_eval.md) and
+[`agentic_ai/README.md`](../../agentic_ai/README.md#evaluation-a31-a42-a51-and-the-llm-down-drill-c43).
+
+Interfaces: `docs/CONTRACTS.md`.

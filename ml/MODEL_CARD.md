@@ -1,4 +1,4 @@
-# Model card: workstream `ml` (31 Oct 2026)
+# Model card (31 Oct 2026)
 
 Two parts: the **flood-crossing forecaster** (S3 v0 stage-only, active at 3 h; v1 stage + rain) and the
 **sensor-fault rules** (physical rules; the Isolation Forest is reported as a negative result). All numbers are measured on replayed USGS history (`data_source = replay`, mode

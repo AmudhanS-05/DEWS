@@ -48,8 +48,8 @@ A WebGL globe of the monitored areas that flies down to a regional map.
 
 - **Globe / Flat map** (the sphere and map icons): the 3D globe, or a flat map that zooms out to the whole world.
 - **Location**: the monitored area. Today that is *Texas Hill Country* (38 USGS gauges with official NWS stages).
-  *India* is shown as a hollow, **planned** marker with no gauges connected. Areas come from `config/regions.json`;
-  adding one needs no code change (`dashboard/README.md`).
+  Areas come from `config/regions.json`; an area marked `"planned": true` shows as a hollow marker with no gauges.
+  Adding one needs no code change (`dashboard/README.md`).
 - **Live / Replay (SIMULATION)** switches between `gauge.usgs` and `replay.gauge`. Replay is labelled everywhere.
 - **Gauges** are pillars. **Height** is the newest stage relative to that gauge's own official *major* level, and ticks
   mark its official stages. **Colour** is the official category it is in now: below action, action, minor, moderate,
@@ -96,7 +96,7 @@ Filled from PostgreSQL once the sink runs; newest rows first.
   - **Reject** marks it rejected and sends nothing.
   - The email the notifier then sends is a bulletin: facts from the alert plus exactly the approved text.
 - **Latest windows**: gauge, window start, mode, number of readings (0 = zero-filled), stage, rise rate, 3 h rain (empty
-  until rain is joined into windows in S2).
+  when no rain has been streamed for that gauge).
 - **Alerts**: raised time, gauge, mode, category, probability (empty for the baseline, which gives none), horizon,
   status, delivered time.
 

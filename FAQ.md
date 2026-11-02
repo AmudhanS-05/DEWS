@@ -1,8 +1,8 @@
 # FAQ — flood forecasting build
 
-Answers to questions the team has asked while building, kept so reviews and new
-teammates get the same answer. `BREADCRUMBS.md` says **where the build is**; this file says
-**why things are the way they are**. Numbers come from the gate check of 3 Oct 2026
+Answers to questions asked while building DEWS. This file says **why things are the way they are**. Answers are kept
+as written at the time, so some describe plans that were built later; the current, measured state is in the
+[README](README.md#status) and [`ml/MODEL_CARD.md`](ml/MODEL_CARD.md). Numbers come from the gate check of 3 Oct 2026
 (`gate_output/gate_summary.csv`, `gate_events.csv`); rerun it and update them if they change.
 
 ---
@@ -20,7 +20,7 @@ dataset (USGS Instantaneous Values); all their flood thresholds come from anothe
 Each gauge is a **set of rows inside** those datasets, identified by its site number.
 
 ### How many datasets do we use?
-Four, as named in the deck:
+Four:
 
 | # | Dataset | What it gives us | Per gauge? |
 |---|---|---|---|
@@ -112,30 +112,30 @@ means treating flood events from **all gauges together** as one evaluation set, 
 123 slow events from 36 gauges instead of 15 events from one. The gate check prints both verdicts:
 2/40 pass per gauge; the **pooled set passes** (123 ≥ 10).
 
-Caveat to state in reviews: pooled events are **not fully independent**. One storm can flood several
+Caveat: pooled events are **not fully independent**. One storm can flood several
 gauges on the same day (e.g. 4 May 2019 hit both DRWT2 and LCPT2). Report the number of
-distinct storm days alongside the number of events. **Status:** pooled evaluation still needs team/faculty confirmation.
+distinct storm days alongside the number of events. Pooled evaluation is what the model card reports ([`ml/MODEL_CARD.md`](ml/MODEL_CARD.md)).
 
 ---
 
 ## Model and wording
 
 ### What are the options for the "anomaly / event detection" stage?
-The brief asks for "ML-based anomaly/event detection". Four ways to read it:
+The project goal asks for "ML-based anomaly/event detection". Four ways to read it:
 
 | Option | What the model outputs | Labels needed | Fit for us |
 |---|---|---|---|
-| **A. Forecast stage, then threshold** | stage 1–6 h ahead (regression: gradient-boosted trees or LSTM); the alert fires when the forecast crosses the official minor stage | past stage only (self-labelling) | matches Objective 2 word for word — **primary** |
+| **A. Forecast stage, then threshold** | stage 1–6 h ahead (regression: gradient-boosted trees or LSTM); the alert fires when the forecast crosses the official minor stage | past stage only (self-labelling) | matches the project goal word for word — **primary** |
 | **B. Event classifier** | probability that the gauge reaches minor flood stage within the next N hours | crossings derived from NWPS categories + history | closest to "detect a flood event"; good second head or alternative to A |
 | **C. Unsupervised anomaly detection** (Isolation Forest, rolling z-score of rise rate) | "this reading or rise is unusual" | none | cannot predict a stage or a flood; use it for **sensor faults** (spikes, flat lines, primary vs backup disagreement) and as an "abnormal rise" flag |
 | **D. Rule / statistical baselines** | persistence, rise-rate extrapolation, CUSUM change detection | none | the **baselines** A/B must beat (already built: `ml/baselines.py`) |
 
-Recommended deck wording (replaces "A supervised model (Isolation forest) predicts river stage"):
+Wording we use:
 > *A supervised model forecasts river stage several hours ahead and raises an alert when the forecast
 > crosses the official flood category; an Isolation Forest flags abnormal sensor readings before they reach the model.*
 
-This keeps Objective 2's wording, uses Isolation Forest for what it can actually do, and covers the
-brief's "anomaly/event detection" (event = a forecast category crossing; anomaly = an abnormal reading or rise).
+This keeps the goal's wording, uses Isolation Forest for what it can actually do, and covers the
+goal's "anomaly/event detection" (event = a forecast category crossing; anomaly = an abnormal reading or rise).
 
 ### So is there a supervised model *and* an Isolation Forest? What exactly do we predict?
 Two models with two different jobs. Only the first one is required.
@@ -180,7 +180,7 @@ instead of going out. It must **not** use flood features (rise, rainfall), becau
 is also "unusual" and it would flag floods as faults. It has no labelled faults to be scored
 against, so it is tested by injecting spikes and flat lines into a replay (fault injection, not fake river data).
 
-Why keep it: the brief asks for "ML-based anomaly/event detection". The forecaster covers
+Why keep it: the project goal asks for "ML-based anomaly/event detection". The forecaster covers
 *event* detection (a forecast category crossing); the Isolation Forest covers *anomaly*
 detection literally, at little cost. If time runs short, drop it; the forecaster alone still meets the objectives.
 
@@ -226,15 +226,12 @@ the 8-digit code (e.g. `08158700`) is the USGS site number. Both appear on the N
   NOAA's flood categories are filed under this id.
 - **USGS site number** (8 digits, e.g. `08158700`): the first two digits are the hydrologic region (08 = Texas–Gulf
   basins); the rest orders the station along its river, upstream to downstream. Readings are filed under this number.
-- The notebooks label plots by USGS number. `docs/EDA_WALKTHROUGH.md` starts with a key; the deck's EDA charts use
-  "DRWT2 · Onion Creek near Driftwood" style labels.
+- The notebooks label plots by USGS number. `docs/EDA_WALKTHROUGH.md` starts with a key.
 
-### Why US data and not Indian data?
+### Why US data?
 Of the sources we checked, only the US offers all of these openly, free of charge and with archives: live gauge readings
-every 5–15 min going back 10+ years, official flood levels for each gauge, and hourly 1-km radar rainfall. India's CWC
-publishes warning and danger levels on its forecasting portal, but has no open real-time API or downloadable archive.
-CAMELS-IND is daily and access-restricted, and GloFAS is a modelled daily product. The deck states this on the
-"EDA Results – Data at a glance" slide.
+every 5–15 min going back 10+ years, official flood levels for each gauge, and hourly 1-km radar rainfall. GloFAS is a
+modelled daily product.
 
 ### Which rainfall product should the pipeline stream (notebook 03)?
 On 2 Oct 2026, the gauge-corrected hourly MRMS (Pass 2) appeared about 58 min after its hour, Pass 1 about 16 min after,

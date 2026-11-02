@@ -1,15 +1,15 @@
 # Paper draft (markdown)
 
-Working draft of the technical paper's main sections. It is **not** the submitted paper: wording, citations and the
-title page are finished outside the repository.
+Working draft of a technical write-up's main sections, frozen on 2 Nov 2026. It is **not** a published paper.
+Sources in brackets are committed files or commit hashes; items marked `TODO` were not measured when the draft was
+written. The [README](../../README.md) has the current status.
 
 | File | Section |
 |---|---|
 | [01-method.md](01-method.md) | system architecture and method (with the architecture figure) |
 | [02-data.md](02-data.md) | data sources, gauges, history, labels |
 | [03-results.md](03-results.md) | pipeline, forecaster and sensor-fault results |
-| [04-india.md](04-india.md) | why the live system uses US data, and what India would need |
-| [05-agents.md](05-agents.md) | the multi-agent advisory writer and its evaluation |
+| [04-agents.md](04-agents.md) | the multi-agent advisory writer and its evaluation |
 
 ## Rules for this draft
 

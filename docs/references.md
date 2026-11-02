@@ -15,10 +15,6 @@
 - Open-Meteo Flood API (GloFAS v4, daily discharge, from 1984). https://open-meteo.com/en/docs/flood-api
 - Global Flood Database v1 (913 events, 2000–2018).
   https://developers.google.com/earth-engine/datasets/catalog/GLOBAL_FLOOD_DB_MODIS_EVENTS_V1
-- CAMELS-IND (ESSD 2025): daily, 1980–2020, 472 catchments, 228 with >30% streamflow.
-  https://essd.copernicus.org/articles/17/461/2025/ · data https://doi.org/10.5281/zenodo.14005378
-- GUARDIAN sub-daily river discharge over India (Scientific Data 2024): WRIS history to 2020.
-  https://www.nature.com/articles/s41597-024-03923-8
 - WMO, Global Flash Flood Guidance System overview (FFG signals "potential flash flooding").
   https://wmo.int/media/magazine-article/overview-of-global-flash-flood-guidance-system-and-its-application-worldwide
 - Iowa Environmental Mesonet archive (NWS products; access not yet verified).
@@ -28,14 +24,14 @@
 
 ---
 
-## Earlier reference implementations (27 Sep, from the weather/seismic phase)
+## Earlier reference implementations (27 Sep 2026)
 
 
 Curated from a web search on 2026-09-27. Use these to see working patterns —
 don't copy wholesale, but they save time on plumbing (Docker setup, Kafka↔Spark
 wiring, anomaly-detection scoring, alert generation) so effort goes into the
-parts that are actually graded (windowing correctness, fault tolerance, your
-own evaluation numbers).
+parts that matter (windowing correctness, fault tolerance, our own evaluation
+numbers).
 
 ## Closest matches to this project's shape
 
@@ -104,7 +100,7 @@ own evaluation numbers).
 ## What we are *not* copying
 
 None of the above use Apache Kafka's official Java Kafka Streams DSL end to
-end with PostgreSQL + Power BI exactly as our brief specifies — that
+end with PostgreSQL + Power BI exactly as our design specifies — that
 combination is what makes this our own project. We're borrowing the anomaly
 scoring pattern (#1, #2) and the windowing mechanics (#6, #7), and writing the
 producer/consumer, schema, and alerting logic ourselves.

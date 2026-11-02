@@ -32,7 +32,7 @@ flowchart LR
   MRMS --> TR
   HIST --> TRP
   TG & TRP --> FA[Faust: event-time hourly windows<br/>group flood-windowing x3]
-  TR -.-> FA
+  TR --> FA
   FA --> TA --> FC[Forecaster<br/>s3_v0 at 3 h, rise-rate otherwise]
   FC --> TF & TAL
   TAL --> AG[LangGraph agents<br/>draft v2, never send]
@@ -45,19 +45,17 @@ flowchart LR
   NT -. failure .-> DLQ
 ```
 
-*Figure 1. DEWS pipeline. Solid arrows run in the merged code. The MRMS producer exists on branch `claude/rain`
-[`b9d2821`] but is not yet merged, and rain is not yet joined into windows (dashed). Topic and group names:
-`common/config.py`.*
+*Figure 1. DEWS pipeline. Topic and group names: `common/config.py`.*
 
 ## 1.3 Ingestion
 
 - **Live producer** (`producers/usgs_iv_producer.py`): polls all 38 gauges every 5 min for the last 6 h, publishes only
   new or revised readings, deduplicated by site, sensor series and timestamp, keyed by `site_no`. It sends one
   heartbeat per gauge per poll and backfills from the last published reading after an outage longer than 6 h
-  [verified after a 34 h outage, `docs/BUILD_PHASES.md` status board].
+  (verified after a 34 h outage).
 - **Replay producer** (`producers/replay_producer.py`): publishes cached history in event-time order to separate topics
   with `mode = SIMULATION`, at a chosen speed.
-- **Rain producer** (`producers/mrms_qpe_producer.py`, branch `claude/rain`): mean MRMS depth over 5/10/25 km circles
+- **Rain producer** (`producers/mrms_qpe_producer.py`): mean MRMS depth over 5/10/25 km circles
   per gauge. The live default is the RadarOnly product; replay uses Pass 2.
 - Producer settings: `acks=all`, idempotence, lz4 (`common/kafka_io.py`).
 
@@ -87,7 +85,7 @@ higher category, and `retract` when the forecast falls back before the crossing.
 - **Sink** (`storage/sink.py`): writes readings, windows, forecasts and alerts with idempotent upserts and commits
   Kafka offsets only after the PostgreSQL commit (at least once, effectively once). It writes the template advisory
   (v1) when an alert lands.
-- **Agents** (LangGraph, [05-agents](05-agents.md)) may write v2. They read PostgreSQL only and never produce to Kafka
+- **Agents** (LangGraph, [04-agents](04-agents.md)) may write v2. They read PostgreSQL only and never produce to Kafka
   or send anything.
 - **Approval:** a person approves, edits or rejects in the console. Approval publishes to `alerts.approved`, and the
   database change is rolled back if the publish fails (`alerting/approval.py`).
@@ -101,5 +99,7 @@ Every record carries its timestamps: reading, fetched, ingest, window close, for
 (`storage/views.sql`). Fault tolerance is measured by `tools/fault_drill.py`, which breaks one component during a
 replay, restarts it, times recovery and checks for loss or duplication.
 
-TODO: one sentence on why Faust and not Kafka Streams, citing the faculty decision (`docs/BUILD_PHASES.md`, decision 2),
-in the final wording.
+Why Faust and not Kafka Streams: Faust is not a wrapper around Kafka Streams (a Java library); it re-implements the
+same ideas in Python (stream processors, state tables backed by changelog topics, windows, co-partitioning, consumer
+groups) over the `aiokafka` client. That keeps the stream processor in the same language as the producers, the ML
+code and the agents, and lets it share the window functions with the training code.

@@ -1,7 +1,7 @@
-# Demo guide (grows one scene per slice)
+# Demo guide
 
-Read this when you come back to the project: it says how to start everything, what to show, what to say, and what
-to do if something breaks. The core session adds one scene at the end of each slice, after it has run twice.
+How to start everything, what to show, what to say, and what to do if something breaks. Every scene below was run
+twice in a row before it was written down.
 
 ## The story in one paragraph
 Flash floods rise in hours, and the public river feed arrives about an hour late. Our pipeline streams live USGS
@@ -15,7 +15,7 @@ only then is it emailed, and every step is timed. We can kill any component and 
 |---|---|---|
 | Duty officer (county emergency management, river authority; our stand-in: the team mailbox) | Map, Readings & alerts | sees each gauge against its official level; reads the advisory; approves, edits or rejects. Nothing is sent without approval. |
 | Pipeline operator (us) | Pipeline flow, Metrics | checks every producer, consumer group and broker; reads latency and recovery times |
-| Reviewer / faculty | all tabs, Power BI | live mode (real gauges, usually calm), then a replayed past flood marked SIMULATION, then a failure and its recovery |
+| Visitor or reviewer | all tabs, Power BI | live mode (real gauges, usually calm), then a replayed past flood marked SIMULATION, then a failure and its recovery |
 The system supports officials; it is not an official warning authority.
 
 ## Starting everything
@@ -30,10 +30,10 @@ faust -A streams.faust_app worker -l info --web-port 6066   # and 6067, 6068
 ## Roles on demo day
 One person narrates, one drives the console and terminals, one handles questions and the Power BI screen.
 
-**Dropped (decided 1 Nov):** Story mode and the AAI video. The demo is a replay with narration across Map, Pipeline flow and Agents.
+The demo is a replay with narration across Map, Pipeline flow and Agents.
 
 ## Scenes
-(Each scene: what to run, what appears, what to say, fallback. Added at the end of each slice.)
+(Each scene: what to run, what appears, what to say, fallback.)
 
 **Scene 0 (available now): live pipeline and map.** Console → Pipeline flow: USGS live green, `gauge.usgs`
 receiving. Map → 38 gauges, all below action stage (it is dry). Say: "Every dot is a real gauge in Texas, coloured
@@ -51,7 +51,7 @@ to the bundled world image by itself (gauges and alerts keep working; sharper ti
 | Approve, edit or reject a draft (sends the email) | Readings & alerts → Approve, then click again |
 | Stop and restart a component | Control → Processes |
 | Fault drill | Control → Fault drills |
-| Check the slice | Control → Verify a slice |
+| Run the acceptance checks | Control → Verify (stages S1 to S5) |
 
 Never start the gauge replay by hand on dates already replayed: Faust's position is past them and the readings go to the dead-letter topic.
 
@@ -62,7 +62,7 @@ The first reading at minor came at 10:20 UTC (LLAT2) and 15:25 UTC (AHOT2). Then
 category, in SIMULATION; about 2.3 to 2.4 hours gross and 1.3 to 1.4 hours net of the one-hour feed delay". Where the model's probability is above its threshold but its own stage forecast stays below minor, the draft and email say UNCERTAIN: read that out.
 LLAT2 also raises a second alert on 27 Oct that is withdrawn: show it, it is a real false alarm. Use the Map's clock to step back through the rise.
 
-**S1 check and the honest limit: DRWT2, 2 to 6 May 2019 (no radar rain, the archive starts in 2020).** Same pipeline, no alert: the river went from 3.05 ft to 8.16 ft
+**Acceptance check and the honest limit: DRWT2, 2 to 6 May 2019 (no radar rain, the archive starts in 2020).** Same pipeline, no alert: the river went from 3.05 ft to 8.16 ft
 between one hourly window and the next, and the model's probability in the last window below minor was 0.546, under its threshold of 0.827. Say: "this one was too fast to
 warn with an hourly feed. We report it; we did not tune the threshold to catch it."
 
@@ -92,6 +92,5 @@ gauge, step through it with the Map's clock, approve a draft in Readings & alert
 | Power BI will not open | Use the console's Metrics tab; state the substitution |
 
 ## Questions to prepare for
-Why US data (only open source with live gauges, official levels and hourly radar, plus archives; India study shows
-what is missing); why pooled evaluation; why Faust instead of Kafka Streams; what "forecast of crossing an official
+Why US data (the only open source we found with live gauges, official flood levels and hourly radar, plus archives); why pooled evaluation; why Faust instead of Kafka Streams; what "forecast of crossing an official
 category" means; lead time gross vs net of the feed delay; what happens if the LLM is down (the template draft stays).

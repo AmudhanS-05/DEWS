@@ -1,16 +1,16 @@
 # Contributing
 
-DEWS is a student project with three people and three parallel workstreams, so a few rules keep it coherent. The
-authoritative version is [`CLAUDE.md`](CLAUDE.md), which every human and Claude Code session follows.
+Thanks for looking at DEWS. Issues and pull requests are welcome. A few rules keep the project honest and coherent.
 
 ## Before you change anything
 
-- Read [`docs/guide/`](docs/guide/README.md) (what the system does), `docs/SLICES.md` (what is planned) and
-  `docs/CONTRACTS.md` (the interfaces).
-- **Stay in your workstream's folders** ([repo map](docs/guide/10-repo-map.md)). Core owns the pipeline, console and
-  tools. ML + India owns `ml/`, `india/` and `notebooks/`. Agents owns `agentic_ai/`. Docs owns `README.md`,
-  `docs/guide/` and this file.
-- **Interfaces change only through `docs/CONTRACTS.md`**, together with a note to every affected workstream.
+- Read [`docs/guide/`](docs/guide/README.md) (what the system does) and [`docs/CONTRACTS.md`](docs/CONTRACTS.md) (the
+  record fields, tables and function signatures between the parts).
+- The code is split into three parts that meet only at those contracts: the **pipeline** (`common/`, `producers/`,
+  `streams/`, `storage/`, `alerting/`, `dashboard/`, `docker/`, `tools/`, `scripts/`), **ML** (`ml/`, `notebooks/`)
+  and the **agents** (`agentic_ai/`). See the [repo map](docs/guide/09-repo-map.md).
+- **Interfaces change only through `docs/CONTRACTS.md`**: update it in the same change, and update every part that
+  reads the interface.
 
 ## Rules that are not negotiable
 
@@ -27,13 +27,11 @@ authoritative version is [`CLAUDE.md`](CLAUDE.md), which every human and Claude 
 
 1. Set up as in [02 Setup](docs/guide/02-setup.md) and run `pytest -q`; it must stay green. Add tests for pure logic.
    Tests never need a network or an LLM (`LLM_PROVIDER=none`). PostgreSQL tests run when `AGENTS_TEST_DSN` is set.
-2. Dependencies: add them to your workstream's file (`requirements.txt`, `requirements-ml.txt` or
+2. Dependencies: add them to the part's file (`requirements.txt`, `requirements-ml.txt` or
    `requirements-agents.txt`) with a pinned version. `requirements-dev.txt` pulls them all in. Check that
    `pip install -r requirements-dev.txt` still resolves on Python 3.12.
-3. Commit only your own folders (`git add <folder>`), with a message that says what was tested and how, including the
-   measured numbers.
-4. If you change a command, flag or module path, update the guide page that shows it (`docs/guide/`), or tell the docs
-   workstream.
+3. Write a commit message that says what was tested and how, including the measured numbers.
+4. If you change a command, flag or module path, update the guide page that shows it (`docs/guide/`).
 
 ## Reporting a problem
 

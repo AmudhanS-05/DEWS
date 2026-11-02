@@ -1,9 +1,9 @@
-# Agentic AI layer: multi-agent flood advisories (workstream `agents`)
+# Agentic AI layer: multi-agent flood advisories
 
 Turns a forecaster alert (`alerts.flood` / the `alerts` table) into a checked, plain-language advisory **draft**
 (version 2+, the template text from the sink is version 1). Agents draft and check only: they never produce to
 Kafka and never send email. A person approves a draft in the console; only approved text goes to `alerts.approved`,
-and only the notifier sends. Design: `docs/BUILD_PHASES.md` "Phase 6b"; interfaces: `docs/CONTRACTS.md`.
+and only the notifier sends. Interfaces: `docs/CONTRACTS.md`.
 
 ## What runs (LangGraph, Coordinator-Worker-Delegator)
 

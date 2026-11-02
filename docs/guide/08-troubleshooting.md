@@ -90,8 +90,8 @@ gauges still show.
 ## Agents and LLMs
 
 <a id="groq-model-choice"></a>
-**Groq model choice.** The default `GROQ_MODEL` is `openai/gpt-oss-120b`. Earlier planning documents mention Llama
-3.3 70B; the agents workstream changed the default on 31 Oct 2026. Groq retires and renames models, so if you get a
+**Groq model choice.** The default `GROQ_MODEL` is `openai/gpt-oss-120b`. It replaced Llama 3.3 70B as the
+default on 31 Oct 2026. Groq retires and renames models, so if you get a
 "model not found" or "decommissioned" error, pick a current chat model from your Groq console and set `GROQ_MODEL` in
 `.env`. Free-tier rate limits apply per model. On a rate limit the call is retried once on `LLM_FALLBACK`, and then the
 template advisory stays.

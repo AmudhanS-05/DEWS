@@ -28,8 +28,7 @@ pip install -r requirements-dev.txt
 pytest -q
 ```
 
-`requirements-dev.txt` is the single entry point. It pulls in `requirements.txt` (pipeline), `requirements-ml.txt` (ML
-and India study) and `requirements-agents.txt` (agents), plus pytest. Upgrade `setuptools` first: an old one fails to
+`requirements-dev.txt` is the single entry point. It pulls in `requirements.txt` (pipeline), `requirements-ml.txt` (ML) and `requirements-agents.txt` (agents), plus pytest. Upgrade `setuptools` first: an old one fails to
 build faust-streaming's `opentracing` dependency.
 
 **Expected test result:** everything passes. Tests that need PostgreSQL are skipped unless `AGENTS_TEST_DSN` is set.
@@ -125,7 +124,7 @@ into `SMTP_PASSWORD`. Revoke it there when the project ends. Test without sendin
 |---|---|---|
 | `LLM_PROVIDER` | `groq` | `groq`, `gemini`, `ollama`, or `none`. `none` means no LLM: deterministic text, used by all tests |
 | `GROQ_API_KEY` | | free key from <https://console.groq.com> (API Keys) |
-| `GROQ_MODEL` | `openai/gpt-oss-120b` | any chat model your Groq account lists. See [Troubleshooting](09-troubleshooting.md#groq-model-choice) |
+| `GROQ_MODEL` | `openai/gpt-oss-120b` | any chat model your Groq account lists. See [Troubleshooting](08-troubleshooting.md#groq-model-choice) |
 | `GROQ_REASONING_EFFORT` | `low` | `low`, `medium` or `high`; only sent to `openai/gpt-oss-*` models. In the team's runs, `low` about halved time and tokens with no extra revisions |
 | `LLM_FALLBACK` | `gemini` | tried once if the primary call fails, times out or is rate limited: `gemini`, `groq` or `none`. If that also fails, the template advisory (v1) stays |
 | `GEMINI_API_KEY` | | free key from Google AI Studio (<https://aistudio.google.com/apikey>) |
@@ -199,4 +198,4 @@ python -m ml.fetch_history --start-year 2015                                    
 `python -m tools.gate_check --years 10` also fills this cache (all candidate gauges, 10 years) and writes the gate
 summary. History older than about 120 days is served by `nwis.waterservices.usgs.gov` through a redirect. If your
 network blocks that host, the fetch stops with a clear message
-([Troubleshooting](09-troubleshooting.md#usgs-history-redirect)).
+([Troubleshooting](08-troubleshooting.md#usgs-history-redirect)).

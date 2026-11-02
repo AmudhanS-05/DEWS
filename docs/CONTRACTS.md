@@ -1,7 +1,7 @@
-# Contracts between workstreams (v1, 30 Oct 2026)
+# Contracts between the parts (v1, 30 Oct 2026)
 
-The core pipeline, ML and agent workstreams are built in parallel. They meet only at the interfaces below.
-Change one only together with a `BREADCRUMBS.md` line tagged with every affected workstream. All Kafka records are
+The core pipeline, ML and the agents are built separately. They meet only at the interfaces below.
+Change one only together with every part that reads it, in the same change. All Kafka records are
 JSON, keyed by `site_no` (USGS site number, text), and carry `mode` = `LIVE` or `SIMULATION`.
 
 ## Kafka records

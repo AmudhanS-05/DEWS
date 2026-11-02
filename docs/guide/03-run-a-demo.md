@@ -78,7 +78,7 @@ What you should see, in order:
 ```powershell
 python -m tools.check_windows --mode SIMULATION --site 08158700   # PASS = no window emitted twice
 python -m tools.check_sink --mode SIMULATION                      # exit 0 = no gaps, no duplicates
-python -m tools.verify_slice S1 --part core                       # the slice's acceptance checks against the running stack
+python -m tools.verify_slice S1 --part core                       # acceptance checks for stage S1 against the running stack
 ```
 
 `verify_slice` prints PASS or FAIL per check with what it measured, and lists the steps only a person can confirm as
@@ -140,9 +140,9 @@ Remove-Item -Recurse -Force *-data, state -ErrorAction SilentlyContinue      # F
 
 ## A flood with radar rain
 
-The MRMS rain producer (`producers/mrms_qpe_producer.py`) is on branch `claude/rain` and is **not yet merged**. Rain is
-not yet joined into the windows, so it shows on `replay.rain` and the Pipeline flow, not in the forecast. Once the
-branch is merged:
+The MRMS rain producer (`producers/mrms_qpe_producer.py`) publishes radar rain per gauge to `rain.mrms` (live) or
+`replay.rain` (replay, SIMULATION). Faust joins it into the hourly windows (`rain_1h` to `rain_24h`) and the sink writes
+it to `catchment_rain`. Replay the rain a little ahead of the stage:
 
 ```powershell
 python -m producers.mrms_qpe_producer --replay --start 2023-10-26T00 --end 2023-10-26T18 --speed 1800

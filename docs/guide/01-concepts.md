@@ -54,7 +54,7 @@ DEWS runs three brokers (Docker, KRaft mode, no ZooKeeper).
 | Topic | Written by | Read by | Content |
 |---|---|---|---|
 | `gauge.usgs` | live USGS producer | Faust, sink | one record per new reading, plus a heartbeat per poll |
-| `rain.mrms` | MRMS producer (planned, S2) | Faust | rain over a 10 km circle around each gauge |
+| `rain.mrms` | MRMS producer | Faust | rain over a 10 km circle around each gauge |
 | `replay.gauge`, `replay.rain` | replay producer | Faust, sink | historical readings, always `mode = SIMULATION` |
 | `aggregates.window` | Faust | forecaster, sink | one hourly window per gauge |
 | `forecasts.stage` | forecaster | sink | every forecast |
@@ -131,7 +131,7 @@ trace. The ML training code uses the same window functions (`ml/backtest.py`), s
 
 - `LIVE` means real gauges right now. Usually it is dry, so live mode shows that the pipeline runs and how fast it is,
   not detection skill.
-- `SIMULATION` covers replayed history, the seeded agent alert and synthetic India data. Replays show floods as they
+- `SIMULATION` covers replayed history, and the seeded agent alert. Replays show floods as they
   unfolded and are used for evaluation on held-out years.
 - Results are reported per mode and never merged. Detection is scored per event (precision, recall, F1, false
   alarms, lead time), never by accuracy, because flood readings are 0.05 to 0.3% of all readings.

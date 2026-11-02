@@ -8,7 +8,7 @@ Two front ends read the same pipeline:
 | | What it is | Used for |
 |---|---|---|
 | Console (`dashboard/flow_monitor.py`) | Python standard-library HTTP server plus `dashboard/flow.html` and `dashboard/static/`, no framework | watching the pipeline, approving advisories, the demo |
-| Power BI (`dashboard/powerbi/README.md`) | Power BI Desktop on the PostgreSQL views | the dashboard named in the brief |
+| Power BI (`dashboard/powerbi/README.md`) | Power BI Desktop on the PostgreSQL views | the analytics report |
 
 ## Console
 
