@@ -72,6 +72,25 @@ Row-level precision-recall at 3 h: `ml/figures/s3_pr_3h.png` (`python -m ml.plot
   `predict()` now returns `tau` and `alert_by_model`; the stream should alert on `alert_by_model` (docs/CONTRACTS.md).
   Alerts raised from `forecast_stage` crossing minor are not what was evaluated.
 
+### Why the stage forecast and the alert often disagree (validation check, 1 Nov 2026)
+On live replays, 8 of 9 model alerts came with a 3 h stage forecast below minor (LLAT2, 2023-10-26 08:00 UTC: 8.38 ft
+rising 2.8 ft/h, p_minor 0.89, forecast 5.42 ft; reproduced here). The classifier answers "will it cross within 3 h";
+the mean regressor answers "where will it be on average", and after a sharp one-hour jump the average outcome at
+flashy gauges is a fall. Variants compared on validation only (fit 2015-2020, validate 2021-2023, h = 3; test
+untouched; `python -m ml.s3_model reg-variants`, `ml/figures/s3_reg_variants_validation.csv`):
+
+| variant | forecast >= minor on the 180 alert windows | MAE all | MAE above minor | mean under-prediction, 2,768 rising windows |
+|---|---|---|---|---|
+| mean, uniform sample (shipped) | 7 % | 0.038 ft | 1.22 ft | 0.37 ft |
+| 0.9 quantile, uniform sample | 61 % | 0.062 ft | 2.35 ft | 0.13 ft |
+| mean, event-weighted rows | 91 % | 0.87 ft | 2.56 ft | 0.04 ft |
+| 0.9 quantile, event-weighted rows | 100 % | 2.25 ft | 4.41 ft | 0.01 ft |
+
+Rule fixed before looking: ship a variant only if agreement and under-prediction improve clearly AND MAE (all and
+above minor) stays within 1.25x of the shipped one. None qualifies: agreement is bought with 1.6x to 59x the error.
+The shipped forecast_stage is unchanged; the disagreement is a property of the model, not a bug. Option for the team
+(not shipped): add the 0.9-quantile as an extra upper-bound field (e.g. `forecast_stage_p90`) next to forecast_stage.
+
 ### Radius sensitivity (M3.3, ml/figures/s3_radius.csv)
 Same v1 design and protocol at 5, 10 and 25 km, identical rows. Row-level AP at 3 h: 0.065 / 0.063 / 0.058; event F1
 at 3 h 0.25 / 0.24 / no alert. No consistent effect of the radius; 10 km stays.

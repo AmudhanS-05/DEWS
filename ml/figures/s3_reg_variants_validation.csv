@@ -1,0 +1,5 @@
+variant,horizon_h,agree_on_alert_windows,mae_ft,mae_above_minor_ft,mean_underprediction_rising_ft,median_error_rising_ft,n_alert,n_rising
+mean_uniform,3,0.072,0.038,1.223,0.371,0.504,180,2768
+q90_uniform,3,0.606,0.0624,2.3487,0.125,1.892,180,2768
+mean_event,3,0.911,0.8712,2.5647,0.039,3.511,180,2768
+q90_event,3,1.0,2.2535,4.4056,0.012,7.242,180,2768
