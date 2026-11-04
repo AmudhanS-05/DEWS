@@ -1,6 +1,7 @@
 """Demo control panel: fixed actions only, each one an existing script. No free-text command reaches a process.
 
-    POST /api/control  {"action": "start" | "stop" | "replay" | "reset" | "drill", "target": <an id from the lists below>}
+    POST /api/control  {"action": "start" | "stop" | "replay" | "reset" | "drill" | "halt", "target": <an id from the lists below>}
+    POST /api/replay_clock  {"speed": one of SPEEDS} or {"seek": data time, epoch s}: the running replay's pace, or skip ahead
 
 The console binds to 127.0.0.1. A request must also carry the X-DEWS-Control header and, if it has an Origin, come from this
 console: a web page elsewhere cannot send that, so it cannot press these buttons. Nothing here runs docker compose; the broker and
@@ -31,12 +32,16 @@ FLOODS = {
     "oct_2023": {"label": "Main scene: Shoal Creek (AHOT2) and Llano (LLAT2), 25 to 27 Oct 2023, with radar rain", "sites": ["08156800", "08151500"], "start": "2023-10-25", "end": "2023-10-27", "speed": 1800, "rain": True},
     "drwt2_2019": {"label": "Too fast to warn: Onion Creek (DRWT2), 2 to 6 May 2019, no radar rain", "sites": ["08158700"], "start": "2019-05-02", "end": "2019-05-06", "speed": 3600, "rain": False},
 }
-DRILLS = {"faust": "Kill a Faust worker", "broker": "Stop a Kafka broker", "sink": "Kill the sink", "postgres": "Stop PostgreSQL",
-          "notifier": "Kill the notifier", "producer": "Kill the live producer", "llm": "LLM down"}
+DRILLS = {"faust": "Kill a Faust worker", "broker": "Stop a Kafka broker", "sink": "Kill the sink"}
 RAIN_HEAD_S = 15     # a window takes only the rain already in when it closes; the rain producer starts slower, so it goes first
-ACTIONS = {"start": PROCESSES, "stop": PROCESSES, "replay": FLOODS, "reset": FLOODS, "agents": FLOODS, "drill": DRILLS}
+ACTIONS = {"start": PROCESSES, "stop": PROCESSES, "replay": FLOODS, "reset": FLOODS, "agents": FLOODS, "drill": DRILLS,
+           "halt": {"job": "Stop the running replay or drill"}}
 DRILL_KILL_S = 20                      # tools.fault_drill --kill-after default
-DRILL_DOWN_S = {"faust": 70, "broker": 30, "sink": 60, "postgres": 30, "notifier": 60, "producer": 20}   # its per-scenario --down defaults
+DRILL_DOWN_S = {"faust": 70, "broker": 30, "sink": 60}   # its per-scenario --down defaults
+CLOCK = LOGS / "replay_clock.json"     # the shared replay clock (producers/replay_clock.py)
+RAIN_AT = LOGS / "replay_rain_at.json"
+DRILL_STATE = LOGS / "drill_state.json"
+SPEEDS = [60, 300, 900, 1800, 3600, 7200, 14400]   # data seconds per real second: 1 min/s .. 4 h/s
 
 
 def allowed(action, target) -> str | None:
@@ -63,10 +68,39 @@ def job_commands(action: str, target: str, py: str) -> list[list[str]]:
     f = FLOODS[target]
     if action == "reset":
         return [[py, "-m", "tools.reset_replay", "--site", ",".join(f["sites"]), "--start", f["start"], "--end", f["end"], "--yes"]]
-    cmds = [[py, "-m", "producers.replay_producer", "--site", s, "--start", f["start"], "--end", f["end"], "--speed", str(f["speed"])] for s in f["sites"]]
+    wait = ["--wait-rain", str(RAIN_AT)] if f["rain"] else []
+    cmds = [[py, "-m", "producers.replay_producer", "--site", s, "--start", f["start"], "--end", f["end"], "--speed", str(f["speed"]),
+             "--clock", str(CLOCK), *wait] for s in f["sites"]]
     if f["rain"]:
-        cmds.insert(0, [py, "-m", "producers.mrms_qpe_producer", "--replay", "--start", f["start"], "--end", f["end"], "--speed", str(f["speed"])])
+        cmds.insert(0, [py, "-m", "producers.mrms_qpe_producer", "--replay", "--start", f["start"], "--end", f["end"], "--speed", str(f["speed"]),
+                        "--clock", str(CLOCK), "--progress", str(RAIN_AT)])
     return cmds
+
+
+def flood_range(f: dict) -> tuple[float, float]:
+    import datetime as dt
+    t0 = dt.datetime.fromisoformat(f["start"] + "T00:00:00+00:00").timestamp()
+    return t0, dt.datetime.fromisoformat(f["end"] + "T00:00:00+00:00").timestamp() + 86400
+
+
+def kill_tree(p) -> None:
+    """The job's process and everything it started (a drill's replay too)."""
+    import os
+    if p.poll() is not None:
+        return
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/PID", str(p.pid), "/T", "/F"], capture_output=True)
+    else:
+        p.kill()
+
+
+def read_json(path: Path) -> dict | None:
+    import json
+    try:
+        d = json.loads(path.read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else None
+    except (OSError, ValueError):
+        return None
 
 
 def _last_line(path: Path) -> str:
@@ -137,7 +171,8 @@ class Control:
         if not j:
             return None
         codes = [p.poll() for p in j["procs"]]
-        return {"label": j["label"], "action": j.get("action"), "target": j.get("target"), "running": any(c is None for c in codes), "ok": all(c == 0 for c in codes), "started": j["started"], "elapsed_s": round((j.get("ended") or time.time()) - j["started"], 1), "log": j["log"], "result": _last_line(ROOT / j["log"])}
+        return {"label": j["label"], "action": j.get("action"), "target": j.get("target"), "running": any(c is None for c in codes) and not j.get("stopped"),
+                "stopped": bool(j.get("stopped")), "ok": all(c == 0 for c in codes) and not j.get("stopped"), "started": j["started"], "elapsed_s": round((j.get("ended") or time.time()) - j["started"], 1), "log": j["log"], "result": _last_line(ROOT / j["log"])}
 
     def act(self, action, target) -> tuple[int, dict]:
         why = allowed(action, target)
@@ -145,6 +180,8 @@ class Control:
             return 400, {"error": why}
         if action in ("start", "stop"):
             return self._process(action, target)
+        if action == "halt":
+            return self.halt()
         return self._start_job(action, target)
 
     def _process(self, action: str, target: str) -> tuple[int, dict]:
@@ -186,6 +223,12 @@ class Control:
                 cmds = [[sys.executable, "-m", "agentic_ai.run", "--alert-id", i] for i in ids]
             else:
                 cmds = job_commands(action, target, sys.executable)
+            if action == "replay":
+                from producers import replay_clock
+                RAIN_AT.unlink(missing_ok=True)
+                replay_clock.write(CLOCK, flood_range(spec)[0], 0 if spec["rain"] else spec["speed"], target=target)   # held until the gauges start
+            if action == "drill":
+                DRILL_STATE.unlink(missing_ok=True)
             first = 1 if action == "replay" and FLOODS[target]["rain"] else len(cmds)
             self.job = {"label": label, "action": action, "target": target, "started": time.time(), "log": f"gate_output/control_{name}_0.log",
                         "procs": [spawn(c, LOGS / f"control_{name}_{i}.log") for i, c in enumerate(cmds[:first])]}
@@ -198,8 +241,93 @@ class Control:
         from tools.fault_drill import spawn
         if later:
             time.sleep(RAIN_HEAD_S)
+            if job.get("stopped"):
+                return
+            from producers import replay_clock
+            f = FLOODS[job["target"]]
+            replay_clock.write(CLOCK, flood_range(f)[0], job.get("speed") or f["speed"], target=job["target"])
             job["procs"].extend(spawn(c, log) for c, log in later)
         for p in job["procs"]:
             p.wait()
+        if job.get("stopped"):
+            return
         job["ended"] = time.time()
         self.note("Control panel", job["label"], "ok finished" if all(p.returncode == 0 for p in job["procs"]) else "down failed, see the log")
+
+    def clock(self) -> dict | None:
+        """The running replay's clock: data time now and speed."""
+        j = self.job
+        if not j or j.get("action") != "replay":
+            return None
+        from producers import replay_clock
+        c = replay_clock.read(CLOCK)
+        if not c or c.get("target") != j["target"]:
+            return None
+        t1 = flood_range(FLOODS[j["target"]])[1]
+        return {"now": min(replay_clock.now_of(c, j.get("ended")), t1), "speed": c["speed"], "speeds": SPEEDS}
+
+    def set_clock(self, speed=None, seek=None) -> tuple[int, dict]:
+        """Change the running replay's speed, or skip ahead (never back: those readings are already out)."""
+        from producers import replay_clock
+        with self.lock:
+            v = self._job_view()
+            if not v or not v["running"] or v["action"] != "replay":
+                return 409, {"error": "no replay is running"}
+            c = replay_clock.read(CLOCK)
+            if not c or c.get("target") != v["target"]:
+                return 409, {"error": "the replay has no clock yet"}
+            t0, t1 = flood_range(FLOODS[v["target"]])
+            now = replay_clock.now_of(c)
+            new_speed = c["speed"]
+            if speed is not None:
+                if speed not in SPEEDS:
+                    return 400, {"error": "speed must be one of " + ", ".join(map(str, SPEEDS))}
+                if c["speed"] > 0:          # held while the rain head start runs: keep it held, the new speed applies after
+                    new_speed = speed
+                self.job["speed"] = speed
+            d0 = now
+            if seek is not None:
+                if not isinstance(seek, (int, float)) or not t0 <= seek <= t1:
+                    return 400, {"error": "seek must be a time inside the replay"}
+                if seek < now:
+                    return 409, {"error": "a replay cannot go back: those readings are already sent"}
+                d0 = seek
+            replay_clock.write(CLOCK, d0, new_speed, target=v["target"])
+            self.note("Control panel", v["label"], f"speed {new_speed:g}x" + (f", skipped ahead {(d0 - now) / 3600:.1f} h" if d0 > now else ""))
+            return 200, {"ok": True, "now": d0, "speed": new_speed}
+
+    def halt(self) -> tuple[int, dict]:
+        """Stop the running job mid-way. A drill also brings back what it took down."""
+        with self.lock:
+            j = self.job
+            v = self._job_view()
+            if not v or not v["running"]:
+                return 409, {"error": "nothing is running"}
+            j["stopped"] = True
+            for p in j["procs"]:
+                kill_tree(p)
+            j["ended"] = time.time()
+            restored = self._restore() if j["action"] == "drill" else None
+            if j["action"] == "replay":
+                CLOCK.unlink(missing_ok=True)
+        self.note("Control panel", j["label"], "stopped" + (f", {restored}" if restored else ""))
+        return 200, {"ok": True, "label": j["label"], "restored": restored}
+
+    def _restore(self) -> str | None:
+        """Restart the part a stopped drill left down (what tools.fault_drill's finally blocks would have done)."""
+        import json
+        st = read_json(DRILL_STATE)
+        if not st or not st.get("killed_at") or st.get("restarted_at"):
+            return None
+        from tools.fault_drill import docker, start_module, start_worker
+        node = st.get("node")
+        if node == "faust":
+            start_worker(int(st.get("port", 6068)), LOGS / f"faust_{st.get('port', 6068)}_drill.log")
+        elif node == "sink":
+            start_module("storage.sink", LOGS / "sink_drill.log")
+        elif node == "broker":
+            docker("start", st.get("name", "flood-kafka-2"))
+        else:
+            return None
+        DRILL_STATE.write_text(json.dumps({**st, "restarted_at": time.time()}), encoding="utf-8")
+        return f"restarted {node}"

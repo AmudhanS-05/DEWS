@@ -36,18 +36,7 @@ async function loadMetrics(){
     }).join("");
   }catch(e){ box.innerHTML='<div class="note">cannot reach the console server</div>'; }
 }
-let detRows=[], detKey="";
-function drawDetection(det){
-  if(!det) return; detRows=det.rows||[];
-  const hs=[...new Set(detRows.map(r=>r.horizon_h))].sort((a,b)=>a-b), sel=$("mx-det-h"), k=hs.join();
-  if(k!==detKey){ detKey=k; const cur=sel.value||"3"; sel.innerHTML=hs.map(h=>`<option value="${h}">${h} h</option>`).join(""); sel.value=hs.includes(+cur)?cur:(hs[0]||""); }
-  const keep={rise_rate:"Rise-rate rule (baseline)",s3_v0:"Trained model s3_v0"+(det.active&&det.active.name==="s3_v0"?" (in use at "+(det.active.horizons||[]).join(", ")+" h)":"")};
-  const pct=v=>v==null?"":(+v).toFixed(2), rows=detRows.filter(r=>String(r.horizon_h)===sel.value&&r.run==="m3.1-s3"&&keep[r.model]);
-  $("mx-det").innerHTML=rows.map(r=>`<tr><td>${esc(keep[r.model])}</td><td class="r">${pct(r.recall)}</td><td class="r">${pct(r.precision)}</td><td class="r">${pct(r.f1)}</td><td class="r">${r.false_alarms==null?"":num(r.false_alarms)}</td><td class="r">${r.lead_net_h==null?"":(+r.lead_net_h).toFixed(2)+" h"}</td></tr>`).join("")||'<tr><td colspan="6" class="note">no evaluation rows for this horizon</td></tr>';
-}
-$("mx-det-h").addEventListener("change",()=>loadMetrics());
 function drawAgentMetrics(d){
-  drawDetection(d.detection);
   const ls=d.langsmith||{};
   $("mx-ls").innerHTML=`Measured from agent_events in PostgreSQL. LangSmith is separate: when tracing is on, it keeps the full trace of each run (prompts, tool calls, tokens) in the cloud; these figures do not depend on it. Tracing is <b>${ls.enabled?"on, project "+esc(ls.project):"off"}</b>${ls.enabled?' · <a href="https://smith.langchain.com" target="_blank" rel="noopener">open LangSmith</a>':""}.`;
   $("mx-drills").innerHTML=(d.drills||[]).map(r=>`<tr><td>${esc(r.scenario)}</td><td class="${r.status==="failed"?"tag-bad":"tag-ok"}">${esc(r.status)}</td><td class="r">${r.recovery_s==null||r.recovery_s<0?"":r.recovery_s.toFixed(1)+" s"}</td><td>${esc(r.data_source)}</td><td>${esc(r.reason||"")}</td><td class="t">${new Date(r.at).toLocaleString([], {hour12:false})}</td></tr>`).join("")||'<tr><td colspan="6" class="note">no drills recorded</td></tr>';

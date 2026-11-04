@@ -35,8 +35,8 @@ def render_v1(alert: dict) -> str:
     lines.append(f"Gauge now: {_ft(cur)} ft" + (f" (already at {now_cat.upper()})." if now_cat else "."))
     fc, lv = alert.get("forecast_stage"), levels.get(cat)
     if by_model and isinstance(fc, (int, float)) and isinstance(lv, (int, float)) and fc < lv:
-        lines.append(f"UNCERTAIN: the two forecasts disagree. The model's probability of crossing {cat.upper()} within {h} h is {pct}, "
-                     f"but its stage forecast is {_ft(fc)} ft, below the {cat.upper()} stage ({_ft(lv)} ft). Treat as uncertain and re-check at the next window.")
+        lines.append(f"The model's classifier head puts the probability of crossing {cat.upper()} within {h} h at {pct}. Its regression head forecasts the stage "
+                     f"at {_ft(fc)} ft, below the {cat.upper()} stage ({_ft(lv)} ft). Re-check at the next window.")
     prob = (f"probability of reaching {cat.upper()}: {p * 100:.0f}%" if isinstance(p, (int, float))
             else "no probability from this model")
     lines.append(f"Forecast: {_ft(alert.get('forecast_stage'))} ft in {h} h; {prob} ({alert.get('model')} model).")

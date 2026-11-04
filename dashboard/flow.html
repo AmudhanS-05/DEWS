@@ -150,9 +150,6 @@
     <table><thead><tr><th>Group</th><th class="r">Instances</th><th>State</th><th class="r">Lag (messages)</th><th class="r">Peak lag</th><th>Lag, since this page opened</th></tr></thead><tbody id="mx-groups"></tbody></table>
     <h2>Pipeline: time per stage</h2>
     <div id="mx-water"></div>
-    <h2>Forecast: detection on past floods</h2>
-    <div style="margin-bottom:6px"><label class="note">Horizon <select id="mx-det-h" aria-label="Forecast horizon"></select></label></div>
-    <table><thead><tr><th>Forecaster</th><th class="r">Floods caught (recall)</th><th class="r">Alerts that were right (precision)</th><th class="r">F1</th><th class="r">False alarms</th><th class="r">Warning before crossing</th></tr></thead><tbody id="mx-det"></tbody></table>
     <h2>Pipeline: fault drills</h2>
     <table><thead><tr><th>Scenario</th><th>Result</th><th class="r">Recovery</th><th>Data</th><th>Why it failed</th><th>When</th></tr></thead><tbody id="mx-drills"></tbody></table>
     <h2>Agents</h2>
@@ -190,9 +187,11 @@
     <table><tbody id="ct-drills"></tbody></table>
   </section>
   <div class="fineprint">Prototype, not an official warning</div>
-  <div class="jobbar glass" id="jobbar" hidden><div class="jb-head"><b id="jb-label"></b> <span class="note" id="jb-state"></span></div>
-    <div class="jb-track" id="jb-track"><div class="jb-fill" id="jb-fill"></div><div id="jb-marks"></div></div>
-    <div class="jb-foot note"><span id="jb-start"></span><span id="jb-now"></span><span id="jb-end"></span></div></div>
+  <div class="jobbar glass" id="jobbar" hidden><div class="jb-head"><span><b id="jb-label"></b> <span class="note" id="jb-state"></span></span>
+    <span class="jb-ctl"><label class="note" id="jb-speed-w" hidden>Speed <select id="jb-speed" aria-label="Replay speed"></select></label><button class="btn" id="jb-stop" hidden>Stop</button></span></div>
+    <div class="jb-track" id="jb-track"><div class="jb-fill" id="jb-fill"></div><div class="jb-knob" id="jb-knob" hidden></div><div id="jb-marks"></div></div>
+    <div class="jb-foot note"><span id="jb-start"></span><span id="jb-now"></span><span id="jb-end"></span></div>
+    <div class="note jb-msg" id="jb-msg"></div></div>
 </main>
 <script>
 // layout: x, y, w, h  (the same arrangement as the architecture diagram)
@@ -351,7 +350,7 @@ async function loadAdvisories(){
       const pending=a.status==="draft", text=a.edited_text||a.text;
       return `<div class="adv glass">
         <div class="advhead"><b>Arrived ${fmtDT(a.created_at)}</b> · <b style="color:var(--s-${esc(a.category)})">${esc(a.category)} flood category</b> · ${esc(a.site_no)} · ${a.mode==="SIMULATION"?"<b>SIMULATION</b>":esc(a.mode)} · v${esc(a.version)} (${esc(a.source)}) · <b>${esc(a.status)}</b>
-          ${a.confidence==="uncertain"?"· <b>uncertain</b>":""}${a.reviewer_verdict?" · reviewer: "+esc(a.reviewer_verdict):""}
+          ${a.reviewer_verdict?" · reviewer: "+esc(a.reviewer_verdict):""}
           ${a.delivered_at?" · delivered "+fmtDT(a.delivered_at):""}</div>
         ${pending?`<textarea id="ta-${esc(a.advisory_id)}" rows="7" onfocus="advEditing=true">${esc(text)}</textarea>
           <button class="go" id="ap-${esc(a.advisory_id)}" onclick="advAct('${esc(a.advisory_id)}','approve')">Approve</button>
@@ -377,29 +376,68 @@ setInterval(()=>{ if(!document.getElementById("tab-data").hidden) loadAdvisories
   document.getElementById("gm-replay").onclick=()=>window.setConsoleMode("replay");
   sync();
 })();
-// overlay on every tab while a replay, reset or drill runs: where it is now, and markers at the events of interest
+// overlay on every tab while a replay, reset or drill runs: where it is now, markers at the events of interest (grey until
+// reached), a scrubber to skip a replay ahead, its speed, and Stop
 (function(){
-  const $=id=>document.getElementById(id), bar=$("jobbar");
+  const $=id=>document.getElementById(id), bar=$("jobbar"), track=$("jb-track");
   const utc=t=>new Date(t*1000).toISOString().slice(0,16).replace("T"," ")+" UTC";
-  let doneAt=0;
+  const spd=s=>s<3600?`${s/60} min of data per s`:`${s/3600} h of data per s`;
+  const post=(url,body)=>fetch(url,{method:"POST",headers:{"Content-Type":"application/json","X-DEWS-Control":"1"},body:JSON.stringify(body)}).then(async r=>({ok:r.ok,d:await r.json()}));
+  let doneAt=0, last=null, drag=null, armed=false, speedsKey="";
+  const msg=t=>{ $("jb-msg").textContent=t||""; };
+  const frac=e=>{ const r=track.getBoundingClientRect(); return Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)); };
+  const canSeek=()=>last&&last.unit==="data"&&last.job.running&&last.speeds;
+  async function seek(t,speed){
+    if(!canSeek()) return;
+    if(t<=last.now+60){ msg("A replay only skips ahead: the readings before now are already sent."); return; }
+    const r=await post("/api/replay_clock",{seek:Math.min(t,last.end)});
+    msg(r.ok?"skipped ahead to "+utc(r.d.now):r.d.error);
+    if(r.ok&&speed){ const q=await post("/api/replay_clock",{speed}); if(q.ok) msg("skipped to "+utc(r.d.now)+", now "+spd(speed)); }
+    poll();
+  }
+  track.addEventListener("pointerdown",e=>{ if(!canSeek()||e.target.closest(".jb-m")) return; drag=frac(e); track.setPointerCapture(e.pointerId); show(); });
+  track.addEventListener("pointermove",e=>{ if(drag==null) return; drag=frac(e); show(); });
+  track.addEventListener("pointerup",e=>{ if(drag==null) return; const t=last.start+drag*(last.end-last.start); drag=null; seek(t); });
+  $("jb-marks").addEventListener("click",e=>{ const m=e.target.closest(".jb-m"); if(!m||!canSeek()) return; const at=+m.dataset.at;
+    if(at<=last.now){ msg("already reached"); return; } seek(Math.max(last.now+61,at-3600),300); });
+  $("jb-speed").addEventListener("change",async e=>{ const r=await post("/api/replay_clock",{speed:+e.target.value}); msg(r.ok?"speed "+spd(+e.target.value):r.d.error); poll(); });
+  $("jb-stop").addEventListener("click",async e=>{
+    if(!armed){ armed=true; e.target.textContent="Click again to stop"; setTimeout(()=>{ armed=false; e.target.textContent="Stop"; },5000); return; }
+    armed=false; e.target.textContent="Stop"; e.target.disabled=true;
+    try{ const r=await post("/api/control",{action:"halt",target:"job"}); msg(r.ok?"stopped"+(r.d.restored?", "+r.d.restored:""):r.d.error); }catch(x){ msg("cannot reach the console server"); }
+    e.target.disabled=false; poll();
+  });
+  function show(){
+    const d=last; if(!d) return;
+    const span=Math.max(1,(d.end??1)-(d.start??0)), pos=v=>Math.max(0,Math.min(100,(v-d.start)/span*100)), now=d.now;
+    $("jb-fill").style.width=(now==null?(d.job.running?0:100):pos(now)).toFixed(2)+"%";
+    const k=$("jb-knob"); k.hidden=!canSeek(); if(!k.hidden) k.style.left=(drag!=null?drag*100:pos(now)).toFixed(2)+"%";
+    const lastX={}, ms=(d.markers||[]).slice().sort((a,b)=>a.at-b.at);
+    $("jb-marks").innerHTML=ms.map(m=>{ const x=pos(m.at), row=m.kind==="alert"?"lo":"hi", lab=!(row in lastX)||x-lastX[row]>9; if(lab) lastX[row]=x;
+      const when=d.unit==="data"?utc(m.at):"+"+Math.round(m.at)+" s";
+      return `<i class="jb-m ${m.kind} ${m.cat||""} ${m.past?"past":"future"} ${row}" data-at="${m.at}" style="left:${x.toFixed(2)}%" title="${m.label} · ${when}${canSeek()&&!m.past?" · click: skip to 1 h before it, 5 min of data per s":""}">${lab?`<span>${m.label}</span>`:""}</i>`; }).join("");
+    if(d.unit==="data"){ $("jb-start").textContent=utc(d.start); $("jb-end").textContent=utc(d.end);
+      $("jb-now").textContent=drag!=null?"skip to "+utc(d.start+drag*span):(now==null?"":"replay at "+utc(now)+(d.speed?" · "+spd(d.speed):"")); }
+    else if(d.unit==="s"){ $("jb-start").textContent="start"; $("jb-end").textContent=""; $("jb-now").textContent=""; }
+    else { $("jb-start").textContent=""; $("jb-end").textContent=""; $("jb-now").textContent=""; }
+  }
   async function poll(){
     try{
       const d=await (await fetch("/api/progress")).json(), j=d.job;
-      if(!j){ bar.hidden=true; return; }
+      if(!j){ bar.hidden=true; last=null; return; }
       if(!j.running){ if(!doneAt) doneAt=Date.now(); if(Date.now()-doneAt>60000){ bar.hidden=true; return; } } else doneAt=0;
-      bar.hidden=false;
+      bar.hidden=false; last=d;
       $("jb-label").textContent=j.label;
-      $("jb-state").textContent=j.running?`running · ${Math.round(j.elapsed_s)} s`:(j.ok?"finished":"failed, see the Control tab");
-      const span=Math.max(1,(d.end??1)-(d.start??0)), pos=v=>Math.max(0,Math.min(100,(v-d.start)/span*100));
-      const now=d.now==null?null:d.now;
-      $("jb-fill").style.width=(now==null?(j.running?0:100):pos(now)).toFixed(1)+"%";
-      $("jb-marks").innerHTML=(d.markers||[]).map(m=>`<i class="jb-m ${m.kind}" style="left:${pos(m.at).toFixed(1)}%" title="${m.label}${d.unit==="data"?" · "+utc(m.at):" · +"+Math.round(m.at)+" s"}"><span>${m.label}</span></i>`).join("");
-      if(d.unit==="data"){ $("jb-start").textContent=utc(d.start); $("jb-end").textContent=utc(d.end); $("jb-now").textContent=now==null?"":"replay at "+utc(now); }
-      else if(d.unit==="s"){ $("jb-start").textContent="0 s"; $("jb-end").textContent="~"+Math.round(d.end)+" s"; $("jb-now").textContent=now==null?"":"+"+Math.round(now)+" s"; }
-      else { $("jb-start").textContent=""; $("jb-end").textContent=""; $("jb-now").textContent=""; }
+      $("jb-state").textContent=j.running?(d.held?"starting the rain first":"running"):j.stopped?"stopped":(j.ok?"finished":"failed, see the Control tab");
+      $("jb-stop").hidden=!d.stoppable;
+      const sw=$("jb-speed-w"), sel=$("jb-speed"); sw.hidden=!(d.speeds&&j.running);
+      if(d.speeds){ const key=d.speeds.join(); if(key!==speedsKey){ speedsKey=key; sel.innerHTML=d.speeds.map(s=>`<option value="${s}">${spd(s)}</option>`).join(""); }
+        if(document.activeElement!==sel&&d.speed) sel.value=String(d.speed); }
+      if(!j.running) msg("");
+      show();
     }catch(e){}
   }
-  poll(); setInterval(poll,2000);
+  poll(); setInterval(()=>{ if(drag==null) poll(); },1000);
 })();
 </script>
 <script>

@@ -24,6 +24,7 @@ import time
 from common import config, usgs
 from common.kafka_io import JsonProducer
 from common.timeutil import now_epoch, to_epoch
+from producers import replay_clock
 from producers.tracking import make_envelope
 
 
@@ -68,6 +69,8 @@ def main(argv=None):
     p.add_argument("--speed", type=float, default=3600.0, help="simulated seconds per real second")
     p.add_argument("--no-sleep", action="store_true", help="publish as fast as possible (throughput test)")
     p.add_argument("--force", action="store_true", help="send even if these dates were already replayed since the last reset")
+    p.add_argument("--clock", help="follow this shared replay clock file (the console's speed and skip-ahead) instead of --speed")
+    p.add_argument("--wait-rain", help="with --clock: send a reading only after the rain replay reported its hour in this file")
     a = p.parse_args(argv)
     done = 0 if a.force else already_replayed(a.site, a.start, a.end)
     if done:
@@ -79,8 +82,15 @@ def main(argv=None):
     print(f"replaying {len(rs)} readings for {a.site} ({a.start}..{a.end}) -> {config.TOPIC_REPLAY_GAUGE}")
     prod = JsonProducer("replay-producer")
     wall0, prev_ts = time.perf_counter(), None
+    clock = replay_clock.Clock(a.clock, to_epoch(a.start + "T00:00:00+00:00"), a.speed) if a.clock else None
+    gate = bool(clock and a.wait_rain)
     for r in rs:
-        if not a.no_sleep and prev_ts is not None and r["reading_ts"] > prev_ts:
+        if clock:
+            clock.wait_until(r["reading_ts"])
+            if gate and not replay_clock.wait_rain(a.wait_rain, r["reading_ts"]):
+                gate = False
+                print("the rain replay stopped reporting: gauges carry on without waiting for it", flush=True)
+        elif not a.no_sleep and prev_ts is not None and r["reading_ts"] > prev_ts:
             time.sleep((r["reading_ts"] - prev_ts) / a.speed)
         prev_ts = r["reading_ts"]
         prod.send(config.TOPIC_REPLAY_GAUGE, r["site_no"], make_envelope(r, now_epoch(), "SIMULATION"))

@@ -54,7 +54,7 @@ NODE_SPECS = {
     "p_replay":   {"kind": "producer", "title": "Replay", "topics": [config.TOPIC_REPLAY_GAUGE, config.TOPIC_REPLAY_RAIN], "live": False},
     "t_gauge":    {"kind": "topic", "title": config.TOPIC_GAUGE, "topics": [config.TOPIC_GAUGE]},
     "t_rain":     {"kind": "topic", "title": config.TOPIC_RAIN, "topics": [config.TOPIC_RAIN]},
-    "t_replay":   {"kind": "topic", "title": "replay.* (2 topics)", "topics": [config.TOPIC_REPLAY_GAUGE, config.TOPIC_REPLAY_RAIN]},
+    "t_replay":   {"kind": "topic", "title": "replay (2 topics)", "topics": [config.TOPIC_REPLAY_GAUGE, config.TOPIC_REPLAY_RAIN]},
     "faust":      {"kind": "group", "title": "Faust windowing", "group": config.GROUP_WINDOWING, "expected": 3},
     "t_agg":      {"kind": "topic", "title": config.TOPIC_AGG, "topics": [config.TOPIC_AGG]},
     "forecaster": {"kind": "group", "title": "Forecaster", "group": config.GROUP_FORECASTER, "expected": 1},
@@ -725,56 +725,102 @@ def rain_api(mode: str) -> dict:
         return {"ok": False, "error": (str(e).strip().splitlines() or ["error"])[0][:120]}
 
 
+FLOOD_MARKS: dict = {}      # flood id -> the official crossings in its source readings (known before the replay reaches them)
+
+
+def flood_crossings(f: dict, cur) -> list[dict]:
+    """First time each gauge of a flood reaches each official flood category (minor and up), from the cached USGS readings
+    the replay sends, so the overlay can show them before the replay gets there."""
+    from producers.replay_producer import load_readings
+    cur.execute("SELECT site_no, nwps_lid, minor_stage, moderate_stage, major_stage FROM gauges WHERE site_no = ANY(%s)", (f["sites"],))
+    out = []
+    for site, lid, *levels in cur.fetchall():
+        try:
+            rs = load_readings(site, f["start"], f["end"])
+        except SystemExit:
+            continue
+        for cat, lv in zip(("minor", "moderate", "major"), levels):
+            if lv is None:
+                continue
+            t = next((r["reading_ts"] for r in rs if r["value"] is not None and r["value"] >= lv), None)
+            if t is not None:
+                out.append({"at": float(t), "kind": "flood", "cat": cat, "label": f"{cat.upper()} {lid or site}"})
+    return out
+
+
+def apply_drill_state(raw: dict, st: dict | None, now: float, max_age_s: float = 900) -> dict:
+    """A drill reports what it took down the moment it does it: show that at once, not after Kafka's session timeout
+    (45 to 60 s) drops the dead member from its group."""
+    if not st or not st.get("killed_at") or st.get("restarted_at") or now - st["killed_at"] > max_age_s:
+        return raw
+    raw = {**raw, "groups": {k: dict(v) for k, v in raw.get("groups", {}).items()}}
+    node = st.get("node")
+    if node == "faust" and config.GROUP_WINDOWING in raw["groups"]:
+        g = raw["groups"][config.GROUP_WINDOWING]
+        g["members"] = min(g.get("members", 0), NODE_SPECS["faust"]["expected"] - 1)
+    elif node == "sink" and config.GROUP_SINK in raw["groups"]:
+        raw["groups"][config.GROUP_SINK]["members"] = 0
+    elif node == "broker":
+        raw["brokers_up"] = min(raw.get("brokers_up", 3), raw.get("brokers_expected", 3) - 1)
+    return raw
+
+
 def progress_api() -> dict:
-    """The control job now running (or just finished), for the overlay on every tab. Replay: data time reached so far in the
-    flood's date range, with markers at each alert and each official minor crossing. Drill: seconds since start, with markers
-    at the kill and the restart (the drill tool's defaults)."""
+    """The control job now running (or just finished), for the overlay on every tab. Replay: data time from the shared replay
+    clock, its speed, and markers at each official flood crossing (known from the source readings, so they show before the
+    replay gets there) and at each alert raised. Drill: seconds since start, markers at the kill and the restart. A marker
+    is `past` once the job has reached it."""
     ctl = CTX.get("control")
     job = ctl._job_view() if ctl else None
     if not job or not job.get("action"):
         return {"ok": True, "job": None}
     from dashboard import control as C
-    out = {"ok": True, "job": job, "kind": job["action"], "markers": []}
+    out = {"ok": True, "job": job, "kind": job["action"], "markers": [], "stoppable": job["running"] and job["action"] in ("replay", "drill")}
     if job["action"] == "drill":
-        down = C.DRILL_DOWN_S.get(job["target"])
-        total = C.DRILL_KILL_S + (down or 30) + 45
-        out.update(unit="s", start=0, end=total, now=min(job["elapsed_s"], total))
-        out["markers"].append({"at": C.DRILL_KILL_S, "kind": "kill", "label": "killed"})
-        if down:
-            out["markers"].append({"at": C.DRILL_KILL_S + down, "kind": "restart", "label": "restarted"})
+        down = C.DRILL_DOWN_S.get(job["target"], 30)
+        st = C.read_json(C.DRILL_STATE) or {}
+        el = job["elapsed_s"]
+        kill_at = st["killed_at"] - job["started"] if st.get("killed_at") else C.DRILL_KILL_S
+        back_at = st["restarted_at"] - job["started"] if st.get("restarted_at") else kill_at + down
+        total = max(C.DRILL_KILL_S + down + 45, back_at + 30, el if not job["running"] else 0)
+        out.update(unit="s", start=0, end=total, now=min(el, total))
+        out["markers"] += [{"at": kill_at, "kind": "kill", "label": "killed", "past": bool(st.get("killed_at"))},
+                           {"at": back_at, "kind": "restart", "label": "restarted", "past": bool(st.get("restarted_at"))}]
         return out
     f = C.FLOODS.get(job["target"])
     if not f:
         return out
-    import datetime as dt
-    t0 = dt.datetime.fromisoformat(f["start"] + "T00:00:00+00:00").timestamp()
-    t1 = dt.datetime.fromisoformat(f["end"] + "T00:00:00+00:00").timestamp() + 86400
+    t0, t1 = C.flood_range(f)
     out.update(unit="data", start=t0, end=t1, now=None)
     if job["action"] != "replay":
         return out
+    clk = ctl.clock()
+    if clk:
+        out.update(now=clk["now"], speed=clk["speed"], speeds=clk["speeds"], held=clk["speed"] == 0)
     try:
         conn = pg_conn()
         try:
             with conn.cursor() as cur:
-                cur.execute("""SELECT EXTRACT(EPOCH FROM max(window_end)) FROM windowed_aggregates WHERE mode = 'SIMULATION'
-                               AND site_no = ANY(%s) AND window_start >= to_timestamp(%s) AND window_start < to_timestamp(%s)""", (f["sites"], t0, t1))
-                r = cur.fetchone()
-                out["now"] = float(r[0]) if r and r[0] is not None else t0
-                cur.execute("""SELECT site_no, category, EXTRACT(EPOCH FROM COALESCE((details->>'window_start')::timestamptz,
-                               split_part(alert_id, '|', 3)::timestamptz)) FROM alerts WHERE mode = 'SIMULATION' AND site_no = ANY(%s)""", (f["sites"],))
-                for site, cat, t in cur.fetchall():
+                if job["target"] not in FLOOD_MARKS:
+                    FLOOD_MARKS[job["target"]] = flood_crossings(f, cur)
+                out["markers"] += [dict(m) for m in FLOOD_MARKS[job["target"]]]
+                if out["now"] is None:
+                    cur.execute("""SELECT EXTRACT(EPOCH FROM max(window_end)) FROM windowed_aggregates WHERE mode = 'SIMULATION'
+                                   AND site_no = ANY(%s) AND window_start >= to_timestamp(%s) AND window_start < to_timestamp(%s)""", (f["sites"], t0, t1))
+                    r = cur.fetchone()
+                    out["now"] = float(r[0]) if r and r[0] is not None else t0
+                cur.execute("""SELECT a.category, COALESCE(g.nwps_lid, a.site_no), EXTRACT(EPOCH FROM COALESCE((a.details->>'window_start')::timestamptz,
+                               split_part(a.alert_id, '|', 3)::timestamptz)) FROM alerts a LEFT JOIN gauges g USING (site_no)
+                               WHERE a.mode = 'SIMULATION' AND a.site_no = ANY(%s) AND a.created_at >= to_timestamp(%s)""", (f["sites"], job["started"] - 5))
+                for cat, lid, t in cur.fetchall():
                     if t0 <= float(t) < t1:
-                        out["markers"].append({"at": float(t), "kind": "alert", "label": f"alert {cat} {site}"})
-                cur.execute("""SELECT w.site_no, EXTRACT(EPOCH FROM min(w.window_start)) FROM windowed_aggregates w JOIN gauges g USING (site_no)
-                               WHERE w.mode = 'SIMULATION' AND w.site_no = ANY(%s) AND w.window_start >= to_timestamp(%s)
-                               AND w.window_start < to_timestamp(%s) AND g.minor_stage IS NOT NULL AND w.stage_last >= g.minor_stage
-                               GROUP BY w.site_no""", (f["sites"], t0, t1))
-                for site, t in cur.fetchall():
-                    out["markers"].append({"at": float(t), "kind": "flood", "label": f"minor flood {site}"})
+                        out["markers"].append({"at": float(t), "kind": "alert", "cat": cat, "label": f"alert {cat} {lid}"})
         finally:
             conn.close()
     except Exception as e:
         out["error"] = (str(e).strip().splitlines() or ["error"])[0][:120]
+    for m in out["markers"]:
+        m["past"] = out["now"] is not None and m["at"] <= out["now"]
     return out
 
 
@@ -973,6 +1019,18 @@ def make_handler():
                     return self._send(400, "application/json", b'{"error":"bad json"}')
                 code, out = CTX["control"].act(body.get("action"), body.get("target"))
                 return self._send(code, "application/json", json.dumps(out).encode())
+            if path == "/api/replay_clock":
+                from dashboard import control
+                if CTX["demo"] or not control.origin_ok(self.headers, self.server.server_address[1]):
+                    return self._send(403, "application/json", b'{"error":"not allowed"}')
+                try:
+                    body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+                    speed = int(body["speed"]) if body.get("speed") is not None else None
+                    seek = float(body["seek"]) if body.get("seek") is not None else None
+                except (ValueError, TypeError, json.JSONDecodeError):
+                    return self._send(400, "application/json", b'{"error":"bad json"}')
+                code, out = CTX["control"].set_clock(speed, seek)
+                return self._send(code, "application/json", json.dumps(out).encode())
             if not path.startswith("/api/advisory/"):
                 return self._send(404, "text/plain", b"not found")
             try:
@@ -1082,6 +1140,9 @@ def main(argv=None):
         while True:
             try:
                 raw = demo_raw(time.time(), t0) if a.demo else probe.snapshot()
+                if not a.demo:
+                    from dashboard.control import DRILL_STATE, read_json
+                    raw = apply_drill_state(raw, read_json(DRILL_STATE), time.time())
                 view = build_view(raw, a.live_stale_s, a.lag_warn)
                 view["events"] = log.update(view)
                 view["demo"] = a.demo

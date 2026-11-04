@@ -239,3 +239,14 @@ def test_groups_read_fresh_lag_and_drop_a_group_that_is_really_gone():
     p = _probe(_Admin(ids=[config.GROUP_SINK]), last)
     out = p._groups({("t", 0): 10})
     assert out[config.GROUP_SINK]["lag"] == 6 and config.GROUP_NOTIFIER not in out and p.resets == 0
+
+
+def test_a_drill_kill_shows_at_once_not_after_the_session_timeout():
+    from common import config
+    from dashboard.flow_monitor import apply_drill_state
+    raw = {"groups": {config.GROUP_WINDOWING: {"members": 3}, config.GROUP_SINK: {"members": 1}}, "brokers_up": 3, "brokers_expected": 3}
+    assert apply_drill_state(raw, {"node": "faust", "killed_at": 100}, 110)["groups"][config.GROUP_WINDOWING]["members"] == 2
+    assert apply_drill_state(raw, {"node": "sink", "killed_at": 100}, 110)["groups"][config.GROUP_SINK]["members"] == 0
+    assert apply_drill_state(raw, {"node": "broker", "killed_at": 100}, 110)["brokers_up"] == 2
+    assert apply_drill_state(raw, {"node": "sink", "killed_at": 100, "restarted_at": 105}, 110) is raw
+    assert raw["groups"][config.GROUP_SINK]["members"] == 1

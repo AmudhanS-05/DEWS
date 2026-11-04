@@ -292,6 +292,20 @@ def finish(t: Task, checks: list[tuple[str, bool]], recovery: float | None, note
     return {"ok": not failed, "recovery_time_s": recovery, "notes": notes, **extra}
 
 
+DRILL_STATE = ROOT / "gate_output" / "drill_state.json"
+
+
+def mark(node: str, **kw) -> None:
+    """What the drill has taken down right now, for the console: it shows the part as down at once instead of waiting
+    for Kafka's session timeout, and Stop on the console restarts it. kw: killed_at / restarted_at plus how to restart."""
+    try:
+        old = json.loads(DRILL_STATE.read_text(encoding="utf-8")) if kw.get("restarted_at") else {}
+    except (OSError, ValueError):
+        old = {}
+    DRILL_STATE.parent.mkdir(exist_ok=True)
+    DRILL_STATE.write_text(json.dumps({**old, "node": node, **kw}), encoding="utf-8")
+
+
 def replay_range(a) -> tuple[str, str]:
     return (a.start, a.end) if a.start and a.end else next_range(newest_replayed(a.site))
 
@@ -323,6 +337,7 @@ def faust_drill(a) -> dict:
         wait_phase(t, t0, t0 + a.kill_after, lambda: f"replay running, windows +{topic_count(config.TOPIC_AGG) - n0}")
         n_kill = topic_count(config.TOPIC_AGG)
         kill(find_pids(a.port))
+        mark("faust", port=a.port, killed_at=time.time())
         t_kill = time.monotonic()
         t.update(t_kill - t0, f"KILLED worker {a.port}; windows so far +{n_kill - n0}")
         log = ROOT / "gate_output" / f"faust_{a.port}_drill.log"
@@ -332,6 +347,7 @@ def faust_drill(a) -> dict:
         finally:
             t_restart = time.monotonic()
             start_worker(a.port, log)
+            mark("faust", restarted_at=time.time())
         ready = wait_ready(log, a.ready_timeout)
         recovery = time.monotonic() - t_restart if ready else None
         t.update(time.monotonic() - t0, f"worker restarted, Ready={ready} after {time.monotonic() - t_restart:.1f}s")
@@ -357,6 +373,7 @@ def broker_drill(a) -> dict:
         t0 = time.monotonic()
         wait_phase(t, t0, t0 + a.kill_after, lambda: f"replay running, windows +{topic_count(config.TOPIC_AGG) - n0}")
         n_kill = topic_count(config.TOPIC_AGG)
+        mark("broker", name=name, killed_at=time.time())
         docker("stop", name)
         t_stop = time.monotonic()
         t.update(t_stop - t0, f"STOPPED {name}; windows so far +{n_kill - n0}")
@@ -366,6 +383,7 @@ def broker_drill(a) -> dict:
             ur_down = under_replicated()
         finally:
             docker("start", name)
+            mark("broker", restarted_at=time.time())
         recovery = wait_until(lambda: brokers_up() == 3 and under_replicated() == 0, a.ready_timeout, 2)
         t.update(time.monotonic() - t0, f"{name} back, all ISRs full after {recovery}s" if recovery else f"{name} NOT recovered")
         out = replay.communicate(timeout=600)[0].strip().splitlines()
@@ -405,6 +423,7 @@ def sink_drill(a) -> dict:
         t0 = time.monotonic()
         wait_phase(t, t0, t0 + a.kill_after, lambda: f"replay running, sink lag {group_lag(config.GROUP_SINK, sink_topics())}")
         kill(module_pids("storage.sink"))
+        mark("sink", killed_at=time.time())
         t_kill = time.monotonic()
         t.update(t_kill - t0, "KILLED the sink")
         try:
@@ -412,6 +431,7 @@ def sink_drill(a) -> dict:
             lag_down = group_lag(config.GROUP_SINK, sink_topics())
         finally:
             start_module("storage.sink", log)
+            mark("sink", restarted_at=time.time())
         recovery = wait_until(lambda: group_lag(config.GROUP_SINK, sink_topics()) <= a.caught_up, a.ready_timeout)
         t.update(time.monotonic() - t0, f"sink restarted, caught up after {recovery}s" if recovery else "sink did NOT catch up")
         good, verdict = sink_check_after_replay(t, a, replay, t0)

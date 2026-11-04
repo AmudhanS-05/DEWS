@@ -283,7 +283,7 @@ def _forecast_category(draft: str, alert: dict) -> list[tuple[str, str]]:
 
 def _model_rule(draft: str, alert: dict, facts: dict) -> list[tuple[str, str]]:
     """Core 1 Nov: an alert raised by the model's probability whose stage forecast stays below the category must say
-    the two forecasts disagree (UNCERTAIN, the probability, the stage forecast below the category stage) and must never
+    state both model heads (the classifier's probability, the regression head's stage forecast below the category stage) and must never
     present the stage forecast as reaching the category."""
     if not facts.get("forecasts_disagree"):
         return []
@@ -292,10 +292,10 @@ def _model_rule(draft: str, alert: dict, facts: dict) -> list[tuple[str, str]]:
     out = []
     fs = ft(alert.get("forecast_stage"))
     low = draft.lower()
-    ok = ("UNCERTAIN" in draft and "disagree" in low and "below" in low and fs is not None
+    ok = ("classifier" in low and "regression" in low and "below" in low and fs is not None
           and any(abs(n - fs) <= 0.06 for n in _nums(draft)) and "probab" in low)
     if not ok:
-        out.append(("model_rule", "the model's probability and its stage forecast disagree: write UNCERTAIN, the "
+        out.append(("model_rule", "state the classifier head's probability and the regression head's stage forecast: the "
                                   f"probability, and the stage forecast {fs} ft below the {cat} stage (copy: "
                                   f"{facts['forecasts_disagree'][:160]})"))
     if re.search(rf"forecast(?:ed)?\s+(?:to\s+)?(?:reach|cross|exceed|rise\s+(?:to|above))\w*\s+(?:the\s+)?"

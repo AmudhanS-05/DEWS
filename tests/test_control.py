@@ -5,7 +5,7 @@ from dashboard import control as ctl
 
 
 def test_only_fixed_actions_and_targets_pass():
-    assert ctl.allowed("start", "sink") is None and ctl.allowed("drill", "llm") is None and ctl.allowed("reset", "oct_2023") is None
+    assert ctl.allowed("start", "sink") is None and ctl.allowed("drill", "faust") is None and ctl.allowed("reset", "oct_2023") is None
     for action, target in (("run", "sink"), ("start", "docker compose down"), ("drill", "rm -rf ."), ("start", None), (["start"], "sink"), ("replay", "sink")):
         assert ctl.allowed(action, target)
 
@@ -28,7 +28,7 @@ def test_commands_are_built_from_the_tables_and_rain_only_where_it_exists():
     oct23 = ctl.job_commands("replay", "oct_2023", "py")
     assert len(oct23) == 3 and "producers.mrms_qpe_producer" in oct23[0]      # rain first, or windows close without it
     assert ctl.job_commands("reset", "oct_2023", "py")[0][-1] == "--yes"
-    assert ctl.job_commands("drill", "llm", "py") == [["py", "-m", "tools.fault_drill", "--scenario", "llm"]]
+    assert ctl.job_commands("drill", "faust", "py") == [["py", "-m", "tools.fault_drill", "--scenario", "faust"]]
 
 
 def test_agents_is_a_fixed_action_and_verify_is_gone():
@@ -52,3 +52,28 @@ def test_no_compose_down_anywhere_in_the_panel():
     src = Path(ctl.__file__).read_text(encoding="utf-8")
     code = src.split('"""', 2)[2]
     assert "compose" not in code and "shell=True" not in code
+
+
+def test_three_drills_and_stop_needs_a_running_job():
+    assert list(ctl.DRILLS) == ["faust", "broker", "sink"] and ctl.allowed("drill", "llm")
+    c = ctl.Control()
+    assert c.act("halt", "job")[0] == 409 and c.set_clock(speed=300)[0] == 409
+
+
+def test_replays_follow_the_shared_clock_and_gauges_wait_for_rain():
+    oct23 = ctl.job_commands("replay", "oct_2023", "py")
+    assert all("--clock" in c for c in oct23) and "--progress" in oct23[0] and all("--wait-rain" in c for c in oct23[1:])
+    assert "--wait-rain" not in ctl.job_commands("replay", "drwt2_2019", "py")[0]
+
+
+def test_clock_speed_change_and_skip_ahead(tmp_path):
+    from producers import replay_clock as rc
+    p = tmp_path / "c.json"
+    c = rc.write(p, 1000.0, 60, w0=50.0)
+    assert rc.now_of(c, 60.0) == 1600.0 and rc.read(p)["speed"] == 60
+    rc.write(p, 5000.0, 0)
+    clk = rc.Clock(p, 0, 1)
+    clk.wait_until(4000.0)                                  # already past: returns at once, even while held
+    assert abs(clk.now() - 5000.0) < 1e-6
+    rc.write_progress(tmp_path / "r.json", 7200.0)
+    assert rc.wait_rain(tmp_path / "r.json", 7100.0) and rc.wait_rain(tmp_path / "r.json", 9000.0, give_up_s=0) is False

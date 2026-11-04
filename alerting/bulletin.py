@@ -37,7 +37,7 @@ def when(iso: str | None) -> str:
 
 
 def model_wording(alert: dict) -> tuple[str, str | None]:
-    """Headline and UNCERTAIN sentence of a model-probability alert: the v1 draft's probability headline and the agents' sentence
+    """Headline and two-heads sentence of a model-probability alert: the v1 draft's probability headline and the agents' sentence
     (agentic_ai/advisory.py), so draft, advisory and email say the same thing. Never "forecast to reach": the probability raised
     this alert, not the stage forecast."""
     from agentic_ai import advisory

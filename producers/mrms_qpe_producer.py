@@ -42,6 +42,7 @@ from email.utils import parsedate_to_datetime
 from common import config, mrms
 from common.progress import Task
 from common.timeutil import epoch_to_iso, now_epoch, to_epoch
+from producers import replay_clock
 
 STATE_FILE = os.path.join(config.STATE_DIR, "mrms_producer_state.json")
 GAUGES_CSV = "config/gauge_locations.csv"
@@ -373,6 +374,8 @@ def run_replay(a, gauges, producer, fetcher=fetch_hour, sleep=time.sleep, clock=
             q[0][1].result()                           # the clock starts when the first hour is in hand
         wall0 = clock()
         n = 0
+        shared = replay_clock.Clock(a.clock, t0, a.speed) if getattr(a, "clock", None) else None
+        progress = getattr(a, "progress", None)
         while q:
             h, fut = q.popleft()
             nxt = next(it, None)
@@ -380,13 +383,17 @@ def run_replay(a, gauges, producer, fetcher=fetch_hour, sleep=time.sleep, clock=
                 q.append((nxt, ex.submit(fetcher, product, nxt)))
             got = fut.result()
             n += 1
+            if shared:
+                shared.wait_until(h - replay_clock.RAIN_LEAD_S, sleep)
             if got is None:
+                if progress:
+                    replay_clock.write_progress(progress, h)
                 stats["missing"] += 1
                 task.update(n, f"{epoch_to_iso(h)} missing in the archive")
                 continue
             body, file_ts = got
             recs = hour_records(body, file_ts, h, product, gauges, "SIMULATION", now_epoch(), cache)
-            if not a.no_sleep:
+            if not a.no_sleep and not shared:
                 due = wall_target(h, t0, a.speed, wall0)
                 lag = due - clock()
                 if lag > 0:
@@ -394,12 +401,17 @@ def run_replay(a, gauges, producer, fetcher=fetch_hour, sleep=time.sleep, clock=
                 elif lag < -1.0:
                     stats["behind"] += 1
             publish(producer, topic, recs)
+            if progress:
+                producer.flush(30)
+                replay_clock.write_progress(progress, h)
             stats["ok"] += 1
             stats["records"] += len(recs)
             r10 = [r["rain_mm_10km"] for r in recs if r["rain_mm_10km"] is not None]
             task.update(n, f"{epoch_to_iso(h)} max 10 km mean {max(r10) if r10 else float('nan'):.2f} mm"
                            + (f" ({recs[0]['site_no']})" if len(recs) == 1 else ""))
         producer.flush(60)
+        if progress:
+            replay_clock.write_progress(progress, hours[-1] if hours else None, done=True)
         stats["sent"], stats["failed"] = producer.sent, producer.failed
         task.summary(f"{stats['ok']}/{stats['hours']} hours, {stats['records']} records, missing {stats['missing']}, "
                      f"behind schedule {stats['behind']}, sent={producer.sent} failed={producer.failed}")
@@ -422,6 +434,8 @@ def main(argv=None):
     p.add_argument("--speed", type=float, default=3600.0, help="replay: simulated seconds per real second")
     p.add_argument("--no-sleep", action="store_true", help="replay: publish as fast as downloads allow")
     p.add_argument("--workers", type=int, default=4, help="replay: parallel downloads")
+    p.add_argument("--clock", help="replay: follow this shared replay clock file (speed, skip-ahead) instead of --speed")
+    p.add_argument("--progress", help="replay: write the newest published hour here, for gauge replays that wait for rain")
     a = p.parse_args(argv)
 
     if a.probe:

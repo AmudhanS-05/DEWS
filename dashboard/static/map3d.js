@@ -394,7 +394,10 @@ function drawCard(){
       Object.keys(SEV).filter(k=>c[k]).map(k=>`<span class="pill" style="color:${TH.sc[k]};border-color:${TH.sc[k]}">${c[k]} ${k}</span>`).join("")+
       `<div class="note" style="margin-top:8px">drag to ${cam.pitch>1.45?"pan":"orbit, shift-drag to pan"} · wheel to zoom · click a gauge<br>pillar height = stage vs that gauge's own official major level; ticks mark the official stages</div>`; return; }
   const cs=g.cats||{}, top=Math.max(cs.major||0,cs.moderate||0,g.stage||0)*1.08||10, pct=v=>clamp(v/top*100,0,100);
-  const ticks=CATS.filter(c=>cs[c]!=null).map(c=>`<u style="left:${pct(cs[c])}%;color:${TH.sc[c]}">${c.slice(0,3)} ${cs[c]}</u>`).join("");
+  let lastLow=-99;   // labels closer than ~14% of the bar alternate below and above it, so they never overlap
+  const ticks=CATS.filter(c=>cs[c]!=null).map(c=>{ const x=+pct(cs[c]), up=x-lastLow<14; if(!up) lastLow=x;
+    const tx=x>88?"-100%":x<8?"0":"-50%";
+    return `<u style="left:${x}%;color:${TH.sc[c]};transform:translateX(${tx})${up?";top:-17px":""}">${c.slice(0,3)} ${cs[c]}</u>`; }).join("");
   card.innerHTML=`<div class="sub">${g.lid} · ${g.site_no}${g.county?" · "+g.county+" Co.":""}</div><div class="nm">${g.name}</div>`+
     `<div class="val" style="color:${TH.sc[g.status]}">${g.stage==null?"—":g.stage.toFixed(2)}<small> ft</small></div>`+
     `<div class="sub" style="color:${TH.sc[g.status]}">${g.status.toUpperCase()}${g.provisional?" · provisional":""}${g.age_s!=null?" · "+ageTxt(g.age_s):""}</div>`+

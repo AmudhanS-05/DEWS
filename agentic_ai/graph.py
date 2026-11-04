@@ -293,7 +293,7 @@ def build_graph(tools, run: Run):
                              "gauges and radar rain are leading signals; downstream and nearby gauges are supporting "
                              "context only, and saying so is correct. When the alert was raised by the model's "
                              "probability and its stage forecast stays below the category (forecasts_disagree in "
-                             "FACTS), stating both and calling the advisory UNCERTAIN is correct, even when the stage "
+                             "FACTS), stating both heads (the classifier head's probability and the regression head's stage forecast) is correct, even when the stage "
                              "forecast is below the current stage or the gauge is rising: that contradiction between "
                              "the two model outputs is exactly what the advisory reports, so never FAIL a draft for "
                              "it; FAIL only if the draft hides it or presents the stage forecast as reaching the "

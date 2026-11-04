@@ -84,13 +84,13 @@ def test_model_alert_bulletin_leads_with_the_probability_and_never_says_forecast
     text, html = bulletin.render_text(f), bulletin.render_html(f)
     for out in (text, html):
         assert "probability of crossing MINOR flood stage (10.0 ft) within 3 h: 90%" in out and "forecast to reach" not in out.lower()
-        assert "UNCERTAIN: the two forecasts disagree" in out and "5.4 ft" in out
+        assert "classifier head" in out and "regression head" in out and "5.4 ft" in out and "UNCERTAIN" not in out
 
 
 def test_model_alert_with_the_stage_forecast_at_the_category_has_no_uncertain_sentence():
     row = dict(MODEL_ROW, details=dict(MODEL_DETAILS, forecast_stage=10.5))
     text = bulletin.render_text(bulletin.facts(MODEL_REC, row, None))
-    assert "probability of crossing MINOR" in text and "UNCERTAIN" not in text
+    assert "probability of crossing MINOR" in text and "regression head" not in text
 
 
 def test_rise_rate_alert_keeps_the_stage_forecast_headline():
@@ -99,7 +99,7 @@ def test_rise_rate_alert_keeps_the_stage_forecast_headline():
 
 def test_v1_draft_under_the_model_rule_uses_the_same_wording():
     t = template.render_v1({**MODEL_DETAILS, "mode": "SIMULATION", "alert_id": "x"})
-    assert "probability of crossing MINOR" in t and "forecast to reach" not in t and "UNCERTAIN" in t and "83%" in t
+    assert "probability of crossing MINOR" in t and "forecast to reach" not in t and "regression head" in t and "83%" in t
 
 
 def test_advisories_carry_the_time_they_arrived_newest_first(conn):

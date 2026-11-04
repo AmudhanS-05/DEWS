@@ -147,10 +147,9 @@ def disagreement_sentence(alert: dict) -> str | None:
     cat, lv, h = alert["category"].upper(), alert["official_levels"][alert["category"]], alert.get("horizon_h")
     p = pct(alert.get("probability"))
     within = f" within {h:g} h" if h is not None else ""
-    return (f"UNCERTAIN: the two forecasts disagree. The model's probability of crossing {cat}{within} is "
-            f"{p if p is not None else NA}{'%' if p is not None else ''}, but its stage forecast is "
-            f"{ft(alert['forecast_stage']):.1f} ft, below the {cat} stage ({lv:.1f} ft). Treat as uncertain and "
-            f"re-check at the next window.")
+    return (f"The model's classifier head puts the probability of crossing {cat}{within} at "
+            f"{p if p is not None else NA}{'%' if p is not None else ''}. Its regression head forecasts the stage at {ft(alert['forecast_stage']):.1f} ft, "
+            f"below the {cat} stage ({lv:.1f} ft). Re-check at the next window.")
 
 
 def lead_time(evidence: dict, alert: dict):
@@ -161,7 +160,7 @@ def lead_time(evidence: dict, alert: dict):
       and the current rise rate alone would be slower (or is not rising);
     - None ("not available") otherwise (e.g. the gauge is already above the category)."""
     if forecasts_disagree(alert):   # live LLAT2 run 1 Nov: a rise-rate lead time next to a stage forecast that
-        return "not available (the two forecasts disagree)"   # never reaches the category was judged misleading
+        return "not available (the regression head stays below the category stage)"   # never reaches the category was judged misleading
     lt = lead_time_h(evidence, alert)
     h = alert.get("horizon_h")
     if lt is not None and (h is None or lt <= h):
@@ -401,8 +400,9 @@ def requirements(facts: dict, confidence: str) -> list[tuple[str, str]]:
                     f"({lv[fc.lower()]:.1f} ft) and that the alert category is {cat.upper()}; never write that the "
                     f"forecast reaches {cat.upper()}."))
     if facts.get("forecasts_disagree"):
-        req.append(("model_rule", "This alert was raised by the model's probability, and its stage forecast stays below "
-                    f"the {cat.upper()} stage. Say so plainly, in these words or very close: \"{facts['forecasts_disagree']}\" "
+        req.append(("model_rule", "This alert was raised by the model's probability (classifier head), and its stage "
+                    f"forecast (regression head) stays below the {cat.upper()} stage. State both heads, in these words or very close, "
+                    f"without the word uncertain and without calling it a disagreement: \"{facts['forecasts_disagree']}\" "
                     f"Never write that the forecast reaches {cat.upper()}; the stage forecast is not the reason for the alert."))
     elif str(a.get("alert_rule", "")).startswith("the model's"):
         req.append(("model_rule", f"Lead with the model's probability of crossing {cat.upper()} within "
