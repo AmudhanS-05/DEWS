@@ -1,13 +1,13 @@
-# DEWS: real-time flood and flash-flood forecasting and alerting on Apache Kafka
+# Real-time flood and flash-flood forecasting and alerting on Apache Kafka
 
-DEWS (Disaster Early Warning System) streams live river-gauge readings and radar rainfall through Apache Kafka,
+The system streams live river-gauge readings and radar rainfall through Apache Kafka,
 forecasts whether each gauge will cross one of its **official NWS flood categories** within the next few hours, and
 turns each alert into a checked, plain-language advisory that **a person must approve** before anything is sent.
 Every step is timestamped, so the end-to-end delay, including the public feed's own delay, is measured, not assumed.
 
 By Aaditey Chalva, Amudhan S and Dhaksha Muthukumaran. MIT licensed.
 
-![The DEWS console: flat map during a replay of the October 2023 Texas floods, with radar rain and a minor-flood alert](docs/figures/console/map_flat_replay_light.jpg)
+![The console: flat map during a replay of the October 2023 Texas floods, with radar rain and a minor-flood alert](docs/figures/console/map_flat_replay_light.jpg)
 
 *The console's map during a replay (mode SIMULATION) of 26 Oct 2023: radar rain discs around the gauges, and LLAT2's
 minor-category alert raised while its stage was still below minor. More screenshots: [`docs/figures/console/`](docs/figures/console/README.md).*
@@ -15,7 +15,7 @@ minor-category alert raised while its stage was still below minor. More screensh
 ## What it does
 
 Flash floods rise in hours. A river gauge records the water level every 5 to 15 minutes, but the public feed sends
-those readings in batches, so part of any warning is gone before the data even arrives. DEWS:
+those readings in batches, so part of any warning is gone before the data even arrives. The system:
 
 1. **Streams** live USGS river-gauge readings for 38 Texas Hill Country gauges and NOAA MRMS radar rainfall around
    each gauge into Kafka as soon as they are published.
@@ -27,8 +27,8 @@ those readings in batches, so part of any warning is gone before the data even a
    every number against the evidence. **A person approves, edits or rejects it** in the console; only then does the
    notifier send the email.
 
-**Wording we keep to:** DEWS gives a *forecast that a gauge will cross an official flood category* within a horizon,
-with a probability when the model has one. It does not "predict a flood", flooded areas or damage, and it does not
+**Wording we keep to:** The system gives a *forecast that a gauge will cross an official flood category* within a horizon,
+with a probability when the model has one. It does not predict flooded areas or damage, and it does not
 issue official warnings. It is a decision-support prototype, not an official warning service.
 [Concepts](docs/guide/01-concepts.md) explains why.
 
@@ -112,7 +112,7 @@ most of the lead time. **The bar** any model must beat is rise-rate extrapolatio
 gauges, 2015 to 2025, 310 minor crossings): pooled F1 0.28, median warning 0.8 h gross, −0.2 h net
 ([`ml/REFERENCE_BASELINES.md`](ml/REFERENCE_BASELINES.md)).
 
-DEWS is not compared with, and makes no claim against, NWS, NSSL FLASH or GloFAS forecasts.
+This system is not compared with, and makes no claim against, NWS, NSSL FLASH or GloFAS forecasts.
 
 ## Quick start
 
@@ -167,7 +167,7 @@ The data are not part of this repository's code and come under their providers' 
   their providers' terms; the offline fallback is NASA's Blue Marble (public domain). Leaflet is bundled under its
   own licence (`dashboard/static/leaflet/LICENSE`).
 
-DEWS is not affiliated with or endorsed by any of these agencies or providers, and it is not an official warning
+This system is not affiliated with or endorsed by any of these agencies or providers, and it is not an official warning
 service.
 
 ## Licence
