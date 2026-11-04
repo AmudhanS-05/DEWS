@@ -207,7 +207,7 @@ def build_view(raw: dict, live_stale_s: float = 900.0, lag_warn: int = 500) -> d
         "pg": None if raw.get("pg") is None else bool(raw["pg"].get("ok")),
     }
     metrics = {"topics": [{"name": t, "rate": round(v.get("rate", 0.0), 3), "total": v.get("total", 0),
-                           "age_s": (now - v["last_ts"]) if v.get("last_ts") else None} for t, v in sorted(topics.items())],
+                           "age_s": (now - v["last_ts"]) if v.get("last_ts") else None} for t, v in sorted(topics.items()) if t != config.TOPIC_DLQ],
                "groups": [{"id": g, "members": v.get("members", 0), "state": v.get("state", ""), "lag": v.get("lag", 0)}
                           for g, v in sorted(groups.items())]}
     return {"ts": now, "nodes": nodes, "edges": edges, "cluster": cluster, "metrics": metrics}
@@ -492,7 +492,8 @@ class LatestReadings:
                 time.sleep(5)           # broker down or restarting: reconnect and re-read the tail
 
 
-def probe_db() -> dict:
+def probe_db(mode: str = "live") -> dict:
+    db_mode = "SIMULATION" if mode == "replay" else "LIVE"
     try:
         import psycopg2
         with psycopg2.connect(config.PG_DSN, connect_timeout=2) as con, con.cursor() as cur:
@@ -501,10 +502,14 @@ def probe_db() -> dict:
                 cols = [d[0] for d in cur.description]
                 return [{k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in zip(cols, r)} for r in cur.fetchall()]
             return {"ok": True,
-                    "windows": rows("SELECT site_no, window_start, mode, n_readings, stage_last, rise_rate_ft_per_h, rain_3h "
-                                    "FROM windowed_aggregates ORDER BY window_start DESC LIMIT 30"),
+                    # rain: the window's own rain sums, else the catchment rain stored for the 3 h ending at the window end
+                    "windows": rows("SELECT w.site_no, w.window_start, w.mode, w.n_readings, w.stage_last, w.rise_rate_ft_per_h, "
+                                    "COALESCE(w.rain_3h, (SELECT sum(x.mm) FROM (SELECT max(c.rain_mm) AS mm FROM catchment_rain c WHERE c.site_no = w.site_no "
+                                    "AND c.mode = w.mode AND c.accum_hours = 1 AND c.window_end > w.window_end - interval '3 hours' "
+                                    "AND c.window_end <= w.window_end GROUP BY c.window_end) x)) AS rain_3h "
+                                    f"FROM windowed_aggregates w WHERE w.mode = '{db_mode}' ORDER BY w.window_start DESC LIMIT 30"),
                     "alerts": rows("SELECT alert_id, site_no, mode, category, probability, horizon_h, status, raised_at, delivered_at "
-                                   "FROM alerts ORDER BY raised_at DESC LIMIT 30")}
+                                   f"FROM alerts WHERE mode = '{db_mode}' ORDER BY raised_at DESC LIMIT 30")}
     except Exception as e:
         return {"ok": False, "error": (str(e).strip().splitlines() or ["error"])[0][:120]}
 
@@ -718,6 +723,59 @@ def rain_api(mode: str) -> dict:
             conn.close()
     except Exception as e:
         return {"ok": False, "error": (str(e).strip().splitlines() or ["error"])[0][:120]}
+
+
+def progress_api() -> dict:
+    """The control job now running (or just finished), for the overlay on every tab. Replay: data time reached so far in the
+    flood's date range, with markers at each alert and each official minor crossing. Drill: seconds since start, with markers
+    at the kill and the restart (the drill tool's defaults)."""
+    ctl = CTX.get("control")
+    job = ctl._job_view() if ctl else None
+    if not job or not job.get("action"):
+        return {"ok": True, "job": None}
+    from dashboard import control as C
+    out = {"ok": True, "job": job, "kind": job["action"], "markers": []}
+    if job["action"] == "drill":
+        down = C.DRILL_DOWN_S.get(job["target"])
+        total = C.DRILL_KILL_S + (down or 30) + 45
+        out.update(unit="s", start=0, end=total, now=min(job["elapsed_s"], total))
+        out["markers"].append({"at": C.DRILL_KILL_S, "kind": "kill", "label": "killed"})
+        if down:
+            out["markers"].append({"at": C.DRILL_KILL_S + down, "kind": "restart", "label": "restarted"})
+        return out
+    f = C.FLOODS.get(job["target"])
+    if not f:
+        return out
+    import datetime as dt
+    t0 = dt.datetime.fromisoformat(f["start"] + "T00:00:00+00:00").timestamp()
+    t1 = dt.datetime.fromisoformat(f["end"] + "T00:00:00+00:00").timestamp() + 86400
+    out.update(unit="data", start=t0, end=t1, now=None)
+    if job["action"] != "replay":
+        return out
+    try:
+        conn = pg_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""SELECT EXTRACT(EPOCH FROM max(window_end)) FROM windowed_aggregates WHERE mode = 'SIMULATION'
+                               AND site_no = ANY(%s) AND window_start >= to_timestamp(%s) AND window_start < to_timestamp(%s)""", (f["sites"], t0, t1))
+                r = cur.fetchone()
+                out["now"] = float(r[0]) if r and r[0] is not None else t0
+                cur.execute("""SELECT site_no, category, EXTRACT(EPOCH FROM COALESCE((details->>'window_start')::timestamptz,
+                               split_part(alert_id, '|', 3)::timestamptz)) FROM alerts WHERE mode = 'SIMULATION' AND site_no = ANY(%s)""", (f["sites"],))
+                for site, cat, t in cur.fetchall():
+                    if t0 <= float(t) < t1:
+                        out["markers"].append({"at": float(t), "kind": "alert", "label": f"alert {cat} {site}"})
+                cur.execute("""SELECT w.site_no, EXTRACT(EPOCH FROM min(w.window_start)) FROM windowed_aggregates w JOIN gauges g USING (site_no)
+                               WHERE w.mode = 'SIMULATION' AND w.site_no = ANY(%s) AND w.window_start >= to_timestamp(%s)
+                               AND w.window_start < to_timestamp(%s) AND g.minor_stage IS NOT NULL AND w.stage_last >= g.minor_stage
+                               GROUP BY w.site_no""", (f["sites"], t0, t1))
+                for site, t in cur.fetchall():
+                    out["markers"].append({"at": float(t), "kind": "flood", "label": f"minor flood {site}"})
+        finally:
+            conn.close()
+    except Exception as e:
+        out["error"] = (str(e).strip().splitlines() or ["error"])[0][:120]
+    return out
 
 
 TIMELINE_MAX_S = 21 * 86400
@@ -960,6 +1018,8 @@ def make_handler():
                 latest = {} if CTX["demo"] or not CTX["latest"] else (CTX["latest"].live if live else CTX["latest"].replay)
                 self._send(200, "application/json", json.dumps({"mode": "live" if live else "replay",
                            "regions": regions_summary(load_regions(), latest, live, time.time(), CTX["stale_s"])}).encode())
+            elif self.path == "/api/progress":
+                self._send(200, "application/json", json.dumps(progress_api(), default=str).encode())
             elif self.path == "/api/metrics":
                 self._send(200, "application/json", json.dumps(metrics_api()).encode())
             elif self.path == "/api/control":
@@ -975,8 +1035,9 @@ def make_handler():
                 self._send(200, "application/json", json.dumps(agents_api(run), default=str).encode())
             elif self.path == "/api/advisories":
                 self._send(200, "application/json", json.dumps(advisories_api()).encode())
-            elif self.path == "/api/db":
-                self._send(200, "application/json", json.dumps(demo_db() if CTX["demo"] else probe_db()).encode())
+            elif self.path.startswith("/api/db"):
+                m = parse_qs(urlparse(self.path).query).get("mode", ["live"])[0]
+                self._send(200, "application/json", json.dumps(demo_db() if CTX["demo"] else probe_db("replay" if m == "replay" else "live")).encode())
             elif self.path == "/events":
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")

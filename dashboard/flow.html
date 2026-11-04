@@ -22,7 +22,7 @@
   <span class="chip" title="Kafka connection"><span class="dot" id="d-kafka"></span><span id="c-kafka">Kafka</span></span>
   <span class="chip" title="Kafka brokers up"><span class="dot" id="d-brokers"></span><span id="c-brokers">brokers</span></span>
   <span class="chip" title="Under-replicated and offline partitions"><span class="dot" id="d-urp"></span><span id="c-urp">URP</span></span>
-  <span class="chip" title="Messages in the dead-letter topic"><span class="dot" id="d-dlq"></span><span id="c-dlq">DLQ</span></span>
+  <span class="chip gmode" role="group" aria-label="Data shown on every tab"><button type="button" id="gm-live" aria-pressed="true">Live</button><button type="button" id="gm-replay" aria-pressed="false">Replay</button></span>
   <span class="chip" title="PostgreSQL connection"><span class="dot" id="d-pg"></span><span id="c-pg">PG</span></span>
   <span class="chip" id="c-demo" style="display:none">DEMO DATA</span>
   <span class="chip" id="c-clock">connecting…</span>
@@ -147,16 +147,13 @@
     <h2 style="margin-top:4px">Pipeline: throughput</h2>
     <table><thead><tr><th>Topic</th><th class="r">Messages/s</th><th>Rate, since this page opened</th><th class="r">Total</th><th>Newest message</th></tr></thead><tbody id="mx-topics"><tr><td colspan="5" class="note">waiting for the first update…</td></tr></tbody></table>
     <h2>Pipeline: consumer lag</h2>
-    <table><thead><tr><th>Group</th><th class="r">Instances</th><th>State</th><th class="r">Lag (messages)</th><th>Lag, since this page opened</th></tr></thead><tbody id="mx-groups"></tbody></table>
-    <h2>Pipeline: latency waterfall</h2>
-    <div class="note" style="margin-bottom:6px">From the latency_waterfall view. Live and replay stay apart, and gross and net of feed delay are separate rows. A replay's gross total runs from when the replay sent the reading, not from its historical time. A stage with no timestamps yet reads "not measured yet", not zero. Bars use a log scale; read the figures for exact values.</div>
+    <table><thead><tr><th>Group</th><th class="r">Instances</th><th>State</th><th class="r">Lag (messages)</th><th class="r">Peak lag</th><th>Lag, since this page opened</th></tr></thead><tbody id="mx-groups"></tbody></table>
+    <h2>Pipeline: time per stage</h2>
     <div id="mx-water"></div>
     <h2>Forecast: detection on past floods</h2>
-    <div class="note" id="mx-det-note" style="margin-bottom:6px"></div>
     <div style="margin-bottom:6px"><label class="note">Horizon <select id="mx-det-h" aria-label="Forecast horizon"></select></label></div>
-    <table><thead><tr><th>Evaluation</th><th>Data</th><th>Model</th><th class="r">Precision</th><th class="r">Recall</th><th class="r">F1</th><th class="r">False alarms</th><th class="r">Lead, gross</th><th class="r">Lead, net of feed delay</th></tr></thead><tbody id="mx-det"></tbody></table>
+    <table><thead><tr><th>Forecaster</th><th class="r">Floods caught (recall)</th><th class="r">Alerts that were right (precision)</th><th class="r">F1</th><th class="r">False alarms</th><th class="r">Warning before crossing</th></tr></thead><tbody id="mx-det"></tbody></table>
     <h2>Pipeline: fault drills</h2>
-    <div class="note" style="margin-bottom:6px">Every run of tools.fault_drill, failed ones included, newest first.</div>
     <table><thead><tr><th>Scenario</th><th>Result</th><th class="r">Recovery</th><th>Data</th><th>Why it failed</th><th>When</th></tr></thead><tbody id="mx-drills"></tbody></table>
     <h2>Agents</h2>
     <div class="note" id="mx-ls" style="margin-bottom:6px"></div>
@@ -191,10 +188,11 @@
     <div class="note" style="margin-top:6px">Replay refuses dates already replayed since the last reset: press Reset first. Replay sends rain first and the gauges 15 s later. Reset stops Faust and the forecaster for 1.5 to 5 minutes and deletes that flood's SIMULATION rows. An email really sent stays on record.</div>
     <h2>Fault drills</h2>
     <table><tbody id="ct-drills"></tbody></table>
-    <h2>Verify a slice</h2>
-    <table><tbody id="ct-verify"></tbody></table>
   </section>
   <div class="fineprint">Prototype, not an official warning</div>
+  <div class="jobbar glass" id="jobbar" hidden><div class="jb-head"><b id="jb-label"></b> <span class="note" id="jb-state"></span></div>
+    <div class="jb-track" id="jb-track"><div class="jb-fill" id="jb-fill"></div><div id="jb-marks"></div></div>
+    <div class="jb-foot note"><span id="jb-start"></span><span id="jb-now"></span><span id="jb-end"></span></div></div>
 </main>
 <script>
 // layout: x, y, w, h  (the same arrangement as the architecture diagram)
@@ -244,7 +242,6 @@ function render(v){
   setChip("kafka", c.kafka_ok?"ok":"down", c.kafka_ok?"Kafka":"Kafka down");
   setChip("brokers", c.brokers_up>=c.brokers_expected?"ok":(c.brokers_up>0?"warn":"down"), `brokers ${c.brokers_up}/${c.brokers_expected}`);
   setChip("urp", c.under_replicated+c.offline===0?"ok":(c.offline?"down":"warn"), `URP ${c.under_replicated}${c.offline?" · offline "+c.offline:""}`);
-  setChip("dlq", c.dlq>0?"warn":"ok", `DLQ ${c.dlq.toLocaleString()}`);
   setChip("pg", c.pg===null?"":(c.pg?"ok":"down"), c.pg===null?"PG ?":(c.pg?"PG":"PG down"));
   document.getElementById("c-demo").style.display = v.demo ? "inline-flex" : "none";
   document.getElementById("c-clock").textContent = fmtTime(v.ts);
@@ -305,12 +302,12 @@ const fmtDT=t=>t?new Date(t).toLocaleString([], {hour12:false}):"";
 async function loadDb(){
   const note=document.getElementById("db-note");
   try{
-    const resp=await fetch("/api/db");
+    const resp=await fetch("/api/db?mode="+(window.consoleMode||"live"));
     if(!resp.ok){ note.textContent=`the console server answered ${resp.status}: restart python -m dashboard.flow_monitor`; return; }
     const d=await resp.json();
     if(!d.ok){ note.textContent="PostgreSQL not reachable: "+d.error; return; }
     note.textContent = (d.windows.length||d.alerts.length) ? "Newest rows first." : "Connected. No rows yet: windows arrive once the Postgres sink (storage.sink) runs, alerts once the forecaster (streams.forecaster) runs.";
-    document.getElementById("db-win").innerHTML = d.windows.map(w=>`<tr><td>${esc(w.site_no)}</td><td>${fmtDT(w.window_start)}</td><td>${esc(w.mode)}</td><td>${esc(w.n_readings)}</td><td>${w.stage_last==null?"":(+w.stage_last).toFixed(2)}</td><td>${w.rise_rate_ft_per_h==null?"":(+w.rise_rate_ft_per_h).toFixed(2)}</td><td>${w.rain_3h==null?"":(+w.rain_3h).toFixed(1)}</td></tr>`).join("");
+    document.getElementById("db-win").innerHTML = d.windows.map(w=>`<tr><td>${esc(w.site_no)}</td><td>${fmtDT(w.window_start)}</td><td>${esc(w.mode)}</td><td>${esc(w.n_readings)}</td><td>${w.stage_last==null?"":(+w.stage_last).toFixed(2)}</td><td>${w.rise_rate_ft_per_h!=null?(+w.rise_rate_ft_per_h).toFixed(2):(+w.n_readings?"first reading":'<span class="note">no readings yet</span>')}</td><td>${w.rain_3h==null?'<span class="note">no rain data</span>':(+w.rain_3h).toFixed(1)}</td></tr>`).join("");
     document.getElementById("db-alerts").innerHTML = d.alerts.map(a=>`<tr><td>${fmtDT(a.raised_at)}</td><td>${esc(a.site_no)}</td><td>${esc(a.mode)}</td><td>${esc(a.category)}</td><td>${a.probability==null?"":(+a.probability).toFixed(2)}</td><td>${esc(a.horizon_h)}</td><td>${esc(a.status)}</td><td>${fmtDT(a.delivered_at)}</td></tr>`).join("");
   }catch(e){ note.textContent="cannot reach the console server"; }
 }
@@ -349,6 +346,7 @@ async function loadAdvisories(){
   try{
     const d=await (await fetch("/api/advisories")).json();
     if(!d.ok){ box.innerHTML=`<div class="note">${esc(d.error)}</div>`; return; }
+    const wantM=(window.consoleMode==="replay")?"SIMULATION":"LIVE"; d.advisories=d.advisories.filter(a=>a.mode===wantM);
     box.innerHTML = d.advisories.length ? d.advisories.map(a=>{
       const pending=a.status==="draft", text=a.edited_text||a.text;
       return `<div class="adv glass">
@@ -366,6 +364,43 @@ async function loadAdvisories(){
   }catch(e){ box.innerHTML=`<div class="note">cannot reach the console server</div>`; }
 }
 setInterval(()=>{ if(!document.getElementById("tab-data").hidden) loadAdvisories(); },5000);
+</script>
+<script>
+// one Live / Replay switch for every tab: tables show only the mode chosen here; the Map follows it
+(function(){
+  let m="live"; try{ m=localStorage.getItem("consoleMode")==="replay"?"replay":"live"; }catch(e){}
+  window.consoleMode=m;
+  const sync=()=>{ document.getElementById("gm-live").setAttribute("aria-pressed",window.consoleMode==="live"); document.getElementById("gm-replay").setAttribute("aria-pressed",window.consoleMode==="replay"); };
+  window.setConsoleMode=(x,fromMap)=>{ x=x==="replay"?"replay":"live"; const changed=x!==window.consoleMode; window.consoleMode=x; try{ localStorage.setItem("consoleMode",x); }catch(e){}
+    sync(); if(!fromMap&&window.Map3D&&Map3D.setMode) Map3D.setMode(x); if(changed){ document.dispatchEvent(new Event("modechange")); if(typeof loadDb==="function"&&!document.getElementById("tab-data").hidden){ loadDb(); loadAdvisories(); } } };
+  document.getElementById("gm-live").onclick=()=>window.setConsoleMode("live");
+  document.getElementById("gm-replay").onclick=()=>window.setConsoleMode("replay");
+  sync();
+})();
+// overlay on every tab while a replay, reset or drill runs: where it is now, and markers at the events of interest
+(function(){
+  const $=id=>document.getElementById(id), bar=$("jobbar");
+  const utc=t=>new Date(t*1000).toISOString().slice(0,16).replace("T"," ")+" UTC";
+  let doneAt=0;
+  async function poll(){
+    try{
+      const d=await (await fetch("/api/progress")).json(), j=d.job;
+      if(!j){ bar.hidden=true; return; }
+      if(!j.running){ if(!doneAt) doneAt=Date.now(); if(Date.now()-doneAt>60000){ bar.hidden=true; return; } } else doneAt=0;
+      bar.hidden=false;
+      $("jb-label").textContent=j.label;
+      $("jb-state").textContent=j.running?`running · ${Math.round(j.elapsed_s)} s`:(j.ok?"finished":"failed, see the Control tab");
+      const span=Math.max(1,(d.end??1)-(d.start??0)), pos=v=>Math.max(0,Math.min(100,(v-d.start)/span*100));
+      const now=d.now==null?null:d.now;
+      $("jb-fill").style.width=(now==null?(j.running?0:100):pos(now)).toFixed(1)+"%";
+      $("jb-marks").innerHTML=(d.markers||[]).map(m=>`<i class="jb-m ${m.kind}" style="left:${pos(m.at).toFixed(1)}%" title="${m.label}${d.unit==="data"?" · "+utc(m.at):" · +"+Math.round(m.at)+" s"}"><span>${m.label}</span></i>`).join("");
+      if(d.unit==="data"){ $("jb-start").textContent=utc(d.start); $("jb-end").textContent=utc(d.end); $("jb-now").textContent=now==null?"":"replay at "+utc(now); }
+      else if(d.unit==="s"){ $("jb-start").textContent="0 s"; $("jb-end").textContent="~"+Math.round(d.end)+" s"; $("jb-now").textContent=now==null?"":"+"+Math.round(now)+" s"; }
+      else { $("jb-start").textContent=""; $("jb-end").textContent=""; $("jb-now").textContent=""; }
+    }catch(e){}
+  }
+  poll(); setInterval(poll,2000);
+})();
 </script>
 <script>
 (function(){

@@ -17,7 +17,7 @@ window.onMetrics=function(m){
   m.topics.forEach(t=>push("t:"+t.name,t.rate)); m.groups.forEach(g=>push("g:"+g.id,g.lag));
   if($("tab-metrics").hidden) return;
   $("mx-topics").innerHTML=m.topics.map(t=>`<tr><td>${esc(t.name)}</td><td class="r">${t.rate.toFixed(1)}</td><td>${spark("t:"+t.name,"msg/s")}</td><td class="r">${num(t.total)}</td><td>${age(t.age_s)}</td></tr>`).join("")||'<tr><td colspan="5" class="note">no topics seen: is Kafka up?</td></tr>';
-  $("mx-groups").innerHTML=m.groups.map(g=>`<tr><td>${esc(g.id)}</td><td class="r">${g.members}</td><td>${esc(g.state)}</td><td class="r">${num(g.lag)}</td><td>${spark("g:"+g.id,"messages behind")}</td></tr>`).join("")||'<tr><td colspan="5" class="note">no consumer groups running</td></tr>';
+  $("mx-groups").innerHTML=m.groups.map(g=>`<tr><td>${esc(g.id)}</td><td class="r">${g.members}</td><td>${esc(g.state)}</td><td class="r">${num(g.lag)}</td><td class="r">${num(Math.max(0,...(hist["g:"+g.id]||[0])))}</td><td>${spark("g:"+g.id,"messages behind")}</td></tr>`).join("")||'<tr><td colspan="5" class="note">no consumer groups running</td></tr>';
 };
 const fmtS=s=>s==null?"":(Math.abs(s)<1?s.toFixed(3)+" s":Math.abs(s)<90?s.toFixed(1)+" s":Math.abs(s)<5400?(s/60).toFixed(1)+" min":Math.abs(s)<172800?(s/3600).toFixed(1)+" h":(s/86400).toFixed(0)+" days");
 async function loadMetrics(){
@@ -27,9 +27,11 @@ async function loadMetrics(){
     if(!d.ok){ box.innerHTML=`<div class="note">${esc(d.error)}</div>`; return; }
     drawAgentMetrics(d);
     if(!d.waterfall.length){ box.innerHTML='<div class="note">no traces yet: they appear once the forecaster has run</div>'; return; }
-    box.innerHTML=d.waterfall.map(w=>{
+    const want=(window.consoleMode==="replay")?"SIMULATION":"LIVE", wf=d.waterfall.filter(w=>w.mode===want);
+    if(!wf.length){ box.innerHTML=`<div class="note">no ${want==="LIVE"?"live":"replay"} traces yet</div>`; return; }
+    box.innerHTML=wf.map(w=>{
       const vals=w.stages.filter(s=>s.n&&s.median_s>0).map(s=>s.median_s), top=Math.max(...vals,1), lg=v=>Math.log10(1+Math.max(0,v))/Math.log10(1+top)*100;
-      return `<h3>${w.mode==="SIMULATION"?"Replay (SIMULATION)":"Live"} <span class="note">${num(w.traces)} traces${w.older_traces?`, ${num(w.older_traces)} older ones without full timing left out`:""}</span></h3><table><thead><tr><th>Stage</th><th>Median, log scale</th><th class="r">Median</th><th class="r">p95</th><th class="r">Traces measured</th></tr></thead><tbody>`+
+      return `<h3>${w.mode==="SIMULATION"?"Replay (SIMULATION)":"Live"} <span class="note">median over ${num(w.traces)} readings followed through the pipeline</span></h3><table><thead><tr><th>Stage</th><th>Median, log scale</th><th class="r">Median</th><th class="r">p95</th><th class="r">Traces measured</th></tr></thead><tbody>`+
         w.stages.map(s=>`<tr><td>${esc(s.label)}</td><td>${s.n?`<span class="wbar" style="width:${lg(s.median_s).toFixed(1)}%"></span>`:`<span class="note">${s.applies?"not measured yet":"does not apply to a replay"}</span>`}</td><td class="r">${fmtS(s.median_s)}</td><td class="r">${fmtS(s.p95_s)}</td><td class="r">${num(s.n)}</td></tr>`).join("")+"</tbody></table>";
     }).join("");
   }catch(e){ box.innerHTML='<div class="note">cannot reach the console server</div>'; }
@@ -39,10 +41,9 @@ function drawDetection(det){
   if(!det) return; detRows=det.rows||[];
   const hs=[...new Set(detRows.map(r=>r.horizon_h))].sort((a,b)=>a-b), sel=$("mx-det-h"), k=hs.join();
   if(k!==detKey){ detKey=k; const cur=sel.value||"3"; sel.innerHTML=hs.map(h=>`<option value="${h}">${h} h</option>`).join(""); sel.value=hs.includes(+cur)?cur:(hs[0]||""); }
-  const a=det.active, used=(det.used||[]).map(u=>`${u.mode==="SIMULATION"?"replay":"live"}: ${esc(u.model)} at ${u.horizon_h} h`).join(", ");
-  $("mx-det-note").innerHTML=`Forecast of crossing an official category, pooled over the gauges, from evaluation_runs. Active model: <b>${a?esc(a.name)+" at "+(a.horizons||[]).join(", ")+" h":"none (rise-rate rule)"}</b>${used?". Last forecast: "+used:""}. Other horizons use the rise-rate rule.`;
-  const pct=v=>v==null?"":(+v).toFixed(2), hrs=v=>v==null?"":(+v).toFixed(2)+" h", rows=detRows.filter(r=>String(r.horizon_h)===sel.value);
-  $("mx-det").innerHTML=rows.map(r=>`<tr><td>${esc(r.run)}</td><td>${esc(r.data_source)}</td><td>${esc(r.model)}</td><td class="r">${pct(r.precision)}</td><td class="r">${pct(r.recall)}</td><td class="r">${pct(r.f1)}</td><td class="r">${r.false_alarms==null?"":num(r.false_alarms)}</td><td class="r">${hrs(r.lead_gross_h)}</td><td class="r">${hrs(r.lead_net_h)}</td></tr>`).join("")||'<tr><td colspan="9" class="note">no evaluation rows: python -m ml.import_runs</td></tr>';
+  const keep={rise_rate:"Rise-rate rule (baseline)",s3_v0:"Trained model s3_v0"+(det.active&&det.active.name==="s3_v0"?" (in use at "+(det.active.horizons||[]).join(", ")+" h)":"")};
+  const pct=v=>v==null?"":(+v).toFixed(2), rows=detRows.filter(r=>String(r.horizon_h)===sel.value&&r.run==="m3.1-s3"&&keep[r.model]);
+  $("mx-det").innerHTML=rows.map(r=>`<tr><td>${esc(keep[r.model])}</td><td class="r">${pct(r.recall)}</td><td class="r">${pct(r.precision)}</td><td class="r">${pct(r.f1)}</td><td class="r">${r.false_alarms==null?"":num(r.false_alarms)}</td><td class="r">${r.lead_net_h==null?"":(+r.lead_net_h).toFixed(2)+" h"}</td></tr>`).join("")||'<tr><td colspan="6" class="note">no evaluation rows for this horizon</td></tr>';
 }
 $("mx-det-h").addEventListener("change",()=>loadMetrics());
 function drawAgentMetrics(d){
@@ -50,7 +51,7 @@ function drawAgentMetrics(d){
   const ls=d.langsmith||{};
   $("mx-ls").innerHTML=`Measured from agent_events in PostgreSQL. LangSmith is separate: when tracing is on, it keeps the full trace of each run (prompts, tool calls, tokens) in the cloud; these figures do not depend on it. Tracing is <b>${ls.enabled?"on, project "+esc(ls.project):"off"}</b>${ls.enabled?' · <a href="https://smith.langchain.com" target="_blank" rel="noopener">open LangSmith</a>':""}.`;
   $("mx-drills").innerHTML=(d.drills||[]).map(r=>`<tr><td>${esc(r.scenario)}</td><td class="${r.status==="failed"?"tag-bad":"tag-ok"}">${esc(r.status)}</td><td class="r">${r.recovery_s==null||r.recovery_s<0?"":r.recovery_s.toFixed(1)+" s"}</td><td>${esc(r.data_source)}</td><td>${esc(r.reason||"")}</td><td class="t">${new Date(r.at).toLocaleString([], {hour12:false})}</td></tr>`).join("")||'<tr><td colspan="6" class="note">no drills recorded</td></tr>';
-  const rows=d.agents||[];
+  const wantA=(window.consoleMode==="replay")?"SIMULATION":"LIVE", rows=(d.agents||[]).filter(m=>m.mode===wantA);
   $("mx-agents").innerHTML=rows.length?rows.map(m=>{
     const lab=m.mode==="SIMULATION"?"Replay (SIMULATION)":m.mode==="LIVE"?"Live":"Runs with no alert row (seed or test data)";
     const kv=[["Runs",num(m.runs)],["Duration, median",fmtS(m.median_s)],["Duration, p95",fmtS(m.p95_s)],["Reviewer passed",m.judged?`${m.passed} of ${m.judged}`:"not measured yet"],["Review rounds per run",m.avg_review_rounds==null?"":(+m.avg_review_rounds).toFixed(1)],["Revisions",num(m.revisions)],["Disagreements",num(m.disagreements)],["Tool calls",num(m.tool_calls)],["Tokens per run",m.tokens_per_run==null?"":num(m.tokens_per_run)],["v1 to v2, median",m.v1_to_v2_n?fmtS(m.v1_to_v2_s)+` (${m.v1_to_v2_n})`:"not measured yet"]];
@@ -135,6 +136,7 @@ async function ctAct(action,target,btn,confirm){
   CT_ARMED[key]=false; btn.disabled=true;
   try{
     const r=await fetch("/api/control",{method:"POST",headers:{"Content-Type":"application/json","X-DEWS-Control":"1"},body:JSON.stringify({action,target})}), d=await r.json();
+    if(r.ok&&action==="reset"){ for(const k in hist) delete hist[k]; agLast=null; }
     $("ct-note").textContent=r.ok?`${action} ${target}: ${d.label||(d.changed?"done":"no change")}`:`${action} ${target}: ${d.error}`;
   }catch(e){ $("ct-note").textContent="cannot reach the console server"; }
   loadControl();
@@ -148,11 +150,11 @@ async function loadControl(){
     const b=(a,t,txt,conf,dis)=>`<button class="btn ct-btn" data-a="${a}" data-t="${esc(t)}" data-c="${conf?1:""}"${dis?" disabled":""}>${esc(txt)}</button>`;
     setHtml("ct-procs",d.processes.map(p=>`<tr><td>${esc(p.label)}</td><td class="${p.running?"tag-ok":"note"}">${p.running?"running":"stopped"}</td><td class="r">${p.running?b("stop",p.id,"Stop",false):b("start",p.id,"Start",false)}</td></tr>`).join(""));
     setHtml("ct-floods",d.floods.map(f=>`<tr><td>${esc(f.label)}</td><td class="r">${b("replay",f.id,"Replay",false,busy)}${b("agents",f.id,"Run agents",true,busy)}${b("reset",f.id,"Reset",true,busy)}</td></tr>`).join(""));
-    setHtml("ct-verify",(d.slices||[]).map(s=>`<tr><td>verify_slice ${esc(s)}</td><td class="r">${b("verify",s,"Verify",false,busy)}</td></tr>`).join(""));
     setHtml("ct-drills",d.drills.map(x=>`<tr><td>${esc(x.label)}</td><td class="r">${b("drill",x.id,"Run drill",true,busy)}</td></tr>`).join(""));
   }catch(e){ $("ct-note").textContent="cannot reach the console server"; }
 }
 $("tab-control").addEventListener("click",e=>{ const x=e.target.closest("button[data-a]"); if(x) ctAct(x.dataset.a,x.dataset.t,x,!!x.dataset.c); });
+document.addEventListener("modechange",()=>{ if(!$("tab-metrics").hidden) loadMetrics(); if(!$("tab-agents").hidden) loadAgents(); });
 window.onTabShown=t=>{ if(t==="control") loadControl(); if(t==="metrics"){ loadMetrics(); if(window.lastView) window.onMetrics(window.lastView.metrics); } if(t==="agents") loadAgents(); };
 setInterval(()=>{ if(!$("tab-metrics").hidden) loadMetrics(); },8000);
 setInterval(()=>{ if(!$("tab-agents").hidden) loadAgents(); },2500);

@@ -34,8 +34,9 @@ FLOODS = {
 DRILLS = {"faust": "Kill a Faust worker", "broker": "Stop a Kafka broker", "sink": "Kill the sink", "postgres": "Stop PostgreSQL",
           "notifier": "Kill the notifier", "producer": "Kill the live producer", "llm": "LLM down"}
 RAIN_HEAD_S = 15     # a window takes only the rain already in when it closes; the rain producer starts slower, so it goes first
-SLICES = {f"S{n}": f"verify_slice S{n}" for n in range(1, 6)}
-ACTIONS = {"start": PROCESSES, "stop": PROCESSES, "replay": FLOODS, "reset": FLOODS, "agents": FLOODS, "drill": DRILLS, "verify": SLICES}
+ACTIONS = {"start": PROCESSES, "stop": PROCESSES, "replay": FLOODS, "reset": FLOODS, "agents": FLOODS, "drill": DRILLS}
+DRILL_KILL_S = 20                      # tools.fault_drill --kill-after default
+DRILL_DOWN_S = {"faust": 70, "broker": 30, "sink": 60, "postgres": 30, "notifier": 60, "producer": 20}   # its per-scenario --down defaults
 
 
 def allowed(action, target) -> str | None:
@@ -59,8 +60,6 @@ def job_commands(action: str, target: str, py: str) -> list[list[str]]:
     """The argument lists for a replay, reset or drill. Every value comes from the tables above."""
     if action == "drill":
         return [[py, "-m", "tools.fault_drill", "--scenario", target]]
-    if action == "verify":
-        return [[py, "-m", "tools.verify_slice", target]]
     f = FLOODS[target]
     if action == "reset":
         return [[py, "-m", "tools.reset_replay", "--site", ",".join(f["sites"]), "--start", f["start"], "--end", f["end"], "--yes"]]
@@ -131,14 +130,14 @@ class Control:
         except (OSError, subprocess.SubprocessError):
             lines = []
         return {"ok": True, "processes": [{"id": k, "label": v["label"], "running": is_running(v, lines)} for k, v in PROCESSES.items()],
-                "floods": [{"id": k, "label": v["label"]} for k, v in FLOODS.items()], "drills": [{"id": k, "label": v} for k, v in DRILLS.items()], "slices": list(SLICES), "job": self._job_view()}
+                "floods": [{"id": k, "label": v["label"]} for k, v in FLOODS.items()], "drills": [{"id": k, "label": v} for k, v in DRILLS.items()], "job": self._job_view()}
 
     def _job_view(self):
         j = self.job
         if not j:
             return None
         codes = [p.poll() for p in j["procs"]]
-        return {"label": j["label"], "running": any(c is None for c in codes), "ok": all(c == 0 for c in codes), "started": j["started"], "elapsed_s": round((j.get("ended") or time.time()) - j["started"], 1), "log": j["log"], "result": _last_line(ROOT / j["log"])}
+        return {"label": j["label"], "action": j.get("action"), "target": j.get("target"), "running": any(c is None for c in codes), "ok": all(c == 0 for c in codes), "started": j["started"], "elapsed_s": round((j.get("ended") or time.time()) - j["started"], 1), "log": j["log"], "result": _last_line(ROOT / j["log"])}
 
     def act(self, action, target) -> tuple[int, dict]:
         why = allowed(action, target)
@@ -179,7 +178,7 @@ class Control:
                 from producers.replay_producer import already_replayed
                 done = [s for s in spec["sites"] if already_replayed(s, spec["start"], spec["end"])]
                 if done:
-                    return 409, {"error": f"{', '.join(done)} already replayed since the last reset: press Reset first, or these readings go to the dead-letter topic"}
+                    return 409, {"error": f"{', '.join(done)} already replayed since the last reset: press Reset first, or the pipeline drops them as too late"}
             if action == "agents":
                 ids = _flood_alerts(spec)
                 if not ids:
@@ -188,7 +187,7 @@ class Control:
             else:
                 cmds = job_commands(action, target, sys.executable)
             first = 1 if action == "replay" and FLOODS[target]["rain"] else len(cmds)
-            self.job = {"label": label, "started": time.time(), "log": f"gate_output/control_{name}_0.log",
+            self.job = {"label": label, "action": action, "target": target, "started": time.time(), "log": f"gate_output/control_{name}_0.log",
                         "procs": [spawn(c, LOGS / f"control_{name}_{i}.log") for i, c in enumerate(cmds[:first])]}
             self.note("Control panel", label, "started")
             later = [(c, LOGS / f"control_{name}_{i + first}.log") for i, c in enumerate(cmds[first:])]

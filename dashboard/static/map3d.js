@@ -268,10 +268,11 @@ function drawGauge(g,t,sw){
 }
 function drawRain(){                                // the circle the mean depth was measured over, never a radar picture
   const N=40;
-  for(const g of G){ const mm=g.rain_3h; if(mm==null||mm<=0) continue;
-    ctx.fillStyle=rgba(TH.rain,clamp(.14+mm/50*.6,.14,.74)); ctx.beginPath(); let pen=false;
+  for(const g of G){ const mm=g.rain_3h; if(mm==null||mm<0) continue;
+    ctx.beginPath(); let pen=false;
     for(let i=0;i<=N;i++){ const x=g.x+Math.cos(i/N*TAU)*10,z=g.z+Math.sin(i/N*TAU)*10,p=P(x,groundY(x,z),z); if(!p){ pen=false; continue; } pen?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]); pen=true; }
-    ctx.fill();
+    if(mm>0){ ctx.fillStyle=rgba(TH.rain,clamp(.14+mm/50*.6,.14,.74)); ctx.fill(); }
+    else { ctx.strokeStyle=rgba(TH.rain,.55); ctx.lineWidth=1; ctx.setLineDash([3,3]); ctx.stroke(); ctx.setLineDash([]); }   // measured, dry
     if(L.labels&&cam.dist<450){ const p=P(g.x,groundY(g.x,g.z),g.z-10); if(p) labelAt(ctx,mm.toFixed(mm<10?1:0)+" mm",p[0],p[1]-3); } }
 }
 function drawRegions(t){
@@ -352,7 +353,11 @@ async function pollRain(){
 async function pollAlerts(){
   if(scrub) return;
   try{ const d=await (await fetch("/api/advisories")).json(); if(!d.ok) return; const a={}, want=mode==="replay"?"SIMULATION":"LIVE";
-    for(const x of d.advisories){ if(x.mode===want&&["draft","approved","sent"].includes(x.status)&&x.alert_status!=="retracted"&&x.alert_status!=="rejected") a[x.site_no]=x.category; }
+    // a replay shows an alert only once the replay has reached its time, and for the 6 h cooldown after it
+    const now=mode==="replay"?Math.max(0,...G.map(g=>g.reading_ts||0)):Infinity;
+    for(const x of d.advisories){ if(x.mode!==want||!["draft","approved","sent"].includes(x.status)||x.alert_status==="retracted"||x.alert_status==="rejected") continue;
+      if(mode==="replay"){ const t=Date.parse(String(x.alert_id||"").split("|")[2]||"")/1000; if(!(t<=now&&now-t<=6*3600)) continue; }
+      a[x.site_no]=x.category; }
     alerts=a; }catch(e){}
 }
 const showRegionList=()=>view==="globe"||isFar();
@@ -393,7 +398,7 @@ function drawCard(){
   card.innerHTML=`<div class="sub">${g.lid} · ${g.site_no}${g.county?" · "+g.county+" Co.":""}</div><div class="nm">${g.name}</div>`+
     `<div class="val" style="color:${TH.sc[g.status]}">${g.stage==null?"—":g.stage.toFixed(2)}<small> ft</small></div>`+
     `<div class="sub" style="color:${TH.sc[g.status]}">${g.status.toUpperCase()}${g.provisional?" · provisional":""}${g.age_s!=null?" · "+ageTxt(g.age_s):""}</div>`+
-    (g.rain_3h!=null?`<div class="sub" style="margin-top:4px">Rain, 3 h to ${utcShort(g.rain_end)}: ${g.rain_3h.toFixed(1)} mm (10 km circle)</div>`:"")+
+    (g.rain_3h!=null?`<div class="sub" style="margin-top:4px">Rain, 3 h to ${utcShort(g.rain_end)}: ${g.rain_3h.toFixed(1)} mm (10 km circle)${mode==="live"&&!scrub&&g.rain_end&&Date.now()/1000-g.rain_end>2*3600?" · no newer radar data: is the MRMS live producer running?":""}</div>`:"")+
     `<div class="lvl">${g.stage!=null?`<i style="left:calc(${pct(g.stage)}% - 1px)"></i>`:""}${ticks}</div><div style="height:12px"></div>`+
     (alerts[g.site_no]?`<div class="pill" style="color:${TH.sc.moderate};border-color:${TH.sc.moderate}">open alert: ${alerts[g.site_no]}</div>${scrub?"":'<div style="margin-top:8px"><button class="btn" id="m-review">Review advisory</button></div>'}`:"");
   const rv=card.querySelector("#m-review"); if(rv) rv.onclick=()=>showTab("data");
@@ -502,7 +507,7 @@ $("m-auto").onclick=()=>{ if(view==="globe") Globe.st.auto=!Globe.st.auto; else 
 $("v-globe").onclick=toGlobe;
 $("v-flat").onclick=globeToFlat;
 $("m-tilt").onclick=()=>{ const tilted=cam.pitch<=1.45; cam.pitch=tilted?FLAT:TILT; if(tilted){ cam.yaw=0; cam.auto=false; syncAuto(); } cacheKey=""; };
-const switchMode=m=>{ closeScrub(); mode=m; setSeg(m==="live"); G=[]; alerts={}; rain={}; selected=null; return pollRegions().then(()=>Promise.all([pollRain(),pollAlerts()])).then(pollGauges); };
+const switchMode=m=>{ closeScrub(); mode=m; if(window.setConsoleMode) window.setConsoleMode(m,true); setSeg(m==="live"); G=[]; alerts={}; rain={}; selected=null; return pollRegions().then(()=>Promise.all([pollRain(),pollAlerts()])).then(pollGauges); };
 $("m-live").onclick=()=>switchMode("live");
 $("m-replay").onclick=()=>switchMode("replay");
 $("m-terrain").onclick=()=>{ terrain=!terrain; $("m-terrain").setAttribute("aria-pressed",terrain); cacheKey=""; note=""; $("map-note").textContent=""; if(terrain){ if(baseTex) loadDem(); else updatePatch(true); noteTerrain(); if(cam.pitch>1.45){ cam.pitch=TILT; } } else updatePatch(true); };
@@ -561,8 +566,10 @@ window.Map3D={
       if(view==="globe"){ flying=true; Globe.fly(g.lon,g.lat,zoomForDist(90),1500,()=>{ toFlat(g.lon,g.lat,90); select(g); }); }
       else { select(g); flyCam(g.x,g.z,90,1100); } }); },
   fromLanding(ms){ landDur=(ms||1900)/1000; landTo=0; if(selRegion){ Globe.fly(selRegion.lon,selRegion.lat*.8,1,ms||1900,()=>{ syncAuto(); }); } drawList(); drawCard(); },
-  summary:()=>({regions,alerts})
+  summary:()=>({regions,alerts}),
+  setMode(m){ if(m!==mode) switchMode(m); }
 };
+if(window.consoleMode&&window.consoleMode!==mode) switchMode(window.consoleMode);
 if(!$("tab-map").hidden&&!document.body.classList.contains("landing")) window.Map3D.show();
 if(window.ResizeObserver) new ResizeObserver(()=>{ if(running) resize(); }).observe(root); else addEventListener("resize",()=>{ if(running) resize(); });
 })();
