@@ -399,8 +399,8 @@ setInterval(()=>{ if(!document.getElementById("tab-data").hidden) loadAdvisories
   track.addEventListener("pointermove",e=>{ if(drag==null) return; drag=frac(e); show(); });
   track.addEventListener("pointerup",e=>{ if(drag==null) return; const t=last.start+drag*(last.end-last.start); drag=null; seek(t); });
   $("jb-marks").addEventListener("click",e=>{ const m=e.target.closest(".jb-m"); if(!m||!canSeek()) return; const at=+m.dataset.at;
-    if(at<=last.now){ msg("already reached"); return; } seek(Math.max(last.now+61,at-3600),300); });
-  $("jb-speed").addEventListener("change",async e=>{ const r=await post("/api/replay_clock",{speed:+e.target.value}); msg(r.ok?"speed "+spd(+e.target.value):r.d.error); poll(); });
+    if(at<=last.now){ msg("already reached"); return; } seek(Math.max(last.now+61,at-3600),last.auto?null:300); });
+  $("jb-speed").addEventListener("change",async e=>{ const v=e.target.value, sp=v==="auto"?"auto":+v; const r=await post("/api/replay_clock",{speed:sp}); msg(r.ok?(v==="auto"?"auto speed":"speed "+spd(sp)):r.d.error); poll(); });
   $("jb-stop").addEventListener("click",async e=>{
     if(!armed){ armed=true; e.target.textContent="Click again to stop"; setTimeout(()=>{ armed=false; e.target.textContent="Stop"; },5000); return; }
     armed=false; e.target.textContent="Stop"; e.target.disabled=true;
@@ -415,7 +415,7 @@ setInterval(()=>{ if(!document.getElementById("tab-data").hidden) loadAdvisories
     const lastX={}, ms=(d.markers||[]).slice().sort((a,b)=>a.at-b.at);
     $("jb-marks").innerHTML=ms.map(m=>{ const x=pos(m.at), row=m.kind==="alert"?"lo":"hi", lab=!(row in lastX)||x-lastX[row]>9; if(lab) lastX[row]=x;
       const when=d.unit==="data"?utc(m.at):"+"+Math.round(m.at)+" s";
-      return `<i class="jb-m ${m.kind} ${m.cat||""} ${m.past?"past":"future"} ${row}" data-at="${m.at}" style="left:${x.toFixed(2)}%" title="${m.label} · ${when}${canSeek()&&!m.past?" · click: skip to 1 h before it, 5 min of data per s":""}">${lab?`<span>${m.label}</span>`:""}</i>`; }).join("");
+      return `<i class="jb-m ${m.kind} ${m.cat||""} ${m.past?"past":"future"} ${row}" data-at="${m.at}" style="left:${x.toFixed(2)}%" title="${m.label} · ${when}${canSeek()&&!m.past?" · click: skip to 1 h before it":""}">${lab?`<span>${m.label}</span>`:""}</i>`; }).join("");
     if(d.unit==="data"){ $("jb-start").textContent=utc(d.start); $("jb-end").textContent=utc(d.end);
       $("jb-now").textContent=drag!=null?"skip to "+utc(d.start+drag*span):(now==null?"":"replay at "+utc(now)+(d.speed?" · "+spd(d.speed):"")); }
     else if(d.unit==="s"){ $("jb-start").textContent="start"; $("jb-end").textContent=""; $("jb-now").textContent=""; }
@@ -431,8 +431,8 @@ setInterval(()=>{ if(!document.getElementById("tab-data").hidden) loadAdvisories
       $("jb-state").textContent=j.running?(d.held?"starting the rain first":"running"):j.stopped?"stopped":(j.ok?"finished":"failed, see the Control tab");
       $("jb-stop").hidden=!d.stoppable;
       const sw=$("jb-speed-w"), sel=$("jb-speed"); sw.hidden=!(d.speeds&&j.running);
-      if(d.speeds){ const key=d.speeds.join(); if(key!==speedsKey){ speedsKey=key; sel.innerHTML=d.speeds.map(s=>`<option value="${s}">${spd(s)}</option>`).join(""); }
-        if(document.activeElement!==sel&&d.speed) sel.value=String(d.speed); }
+      if(d.speeds){ const key=d.speeds.join(); if(key!==speedsKey){ speedsKey=key; sel.innerHTML='<option value="auto">Auto: fast, 2 min/s near each flood</option>'+d.speeds.map(s=>`<option value="${s}">${spd(s)}</option>`).join(""); }
+        if(document.activeElement!==sel) sel.value=d.auto?"auto":String(d.speed); }
       if(!j.running) msg("");
       show();
     }catch(e){}

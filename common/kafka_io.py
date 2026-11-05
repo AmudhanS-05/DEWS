@@ -48,3 +48,4 @@ class JsonProducer:
 
     def flush(self, timeout: float = 30.0) -> int:
         return self.p.flush(timeout)
+

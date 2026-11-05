@@ -141,6 +141,7 @@ def process_record(tools, raw: bytes | str, force: bool = False, sleep=time.slee
 def consume(tools, force: bool = False) -> None:
     from confluent_kafka import Consumer   # imported here so --alert-id works without Kafka installed
     from common import config
+    from common.kafka_commit import commit_sync
     c = Consumer({"bootstrap.servers": config.KAFKA_BOOTSTRAP, "group.id": config.GROUP_AGENT,
                   "enable.auto.commit": False, "auto.offset.reset": "earliest"})
     c.subscribe([config.TOPIC_ALERTS])
@@ -153,7 +154,7 @@ def consume(tools, force: bool = False) -> None:
             res = process_record(tools, msg.value(), force)
             if res:
                 print(summarize(res))
-            c.commit(message=msg, asynchronous=False)   # after PostgreSQL is written; a crash re-runs the alert (dedupe drops it)
+            commit_sync(c, message=msg)   # after PostgreSQL is written; a crash re-runs the alert (dedupe drops it)
     except KeyboardInterrupt:
         pass
     finally:

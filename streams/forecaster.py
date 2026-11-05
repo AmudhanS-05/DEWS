@@ -38,6 +38,7 @@ from confluent_kafka import Consumer
 
 from common import config
 from common.kafka_io import JsonProducer
+from common.kafka_commit import commit_sync
 from common.nwps import CATEGORIES, category_of
 from common.timeutil import epoch_to_iso, now_epoch, to_epoch
 
@@ -209,7 +210,7 @@ def run(group: str, exit_when_idle: float | None):
                 if prod.failed:
                     raise RuntimeError(f"{prod.failed} messages failed to publish; offsets not committed")
                 save_state(states)
-                c.commit(asynchronous=False)
+                commit_sync(c)
                 idle_since = time.monotonic()
             elif exit_when_idle is not None and time.monotonic() - idle_since > exit_when_idle:
                 break

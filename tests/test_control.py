@@ -23,8 +23,7 @@ def test_only_this_console_may_send_it():
 
 
 def test_commands_are_built_from_the_tables_and_rain_only_where_it_exists():
-    drwt2 = ctl.job_commands("replay", "drwt2_2019", "py")
-    assert len(drwt2) == 1 and drwt2[0][:3] == ["py", "-m", "producers.replay_producer"] and "08158700" in drwt2[0]
+    assert list(ctl.FLOODS) == ["oct_2023"]
     oct23 = ctl.job_commands("replay", "oct_2023", "py")
     assert len(oct23) == 3 and "producers.mrms_qpe_producer" in oct23[0]      # rain first, or windows close without it
     assert ctl.job_commands("reset", "oct_2023", "py")[0][-1] == "--yes"
@@ -38,7 +37,7 @@ def test_agents_is_a_fixed_action_and_verify_is_gone():
 def test_a_replay_of_dates_already_replayed_is_refused(monkeypatch):
     import producers.replay_producer as rp
     monkeypatch.setattr(rp, "already_replayed", lambda s, a, b: 5)
-    code, out = ctl.Control().act("replay", "drwt2_2019")
+    code, out = ctl.Control().act("replay", "oct_2023")
     assert code == 409 and "Reset" in out["error"]
 
 
@@ -63,7 +62,14 @@ def test_three_drills_and_stop_needs_a_running_job():
 def test_replays_follow_the_shared_clock_and_gauges_wait_for_rain():
     oct23 = ctl.job_commands("replay", "oct_2023", "py")
     assert all("--clock" in c for c in oct23) and "--progress" in oct23[0] and all("--wait-rain" in c for c in oct23[1:])
-    assert "--wait-rain" not in ctl.job_commands("replay", "drwt2_2019", "py")[0]
+    assert oct23[1][:3] == ["py", "-m", "producers.replay_producer"]
+
+
+def test_auto_speed_slows_near_each_flood_only():
+    marks = [{"at": 100000.0}]
+    assert ctl.auto_speed(100000 - 5 * 3600, marks, 1800) == 1800
+    assert ctl.auto_speed(100000 - 3 * 3600, marks, 1800) == ctl.AUTO_SLOW == ctl.auto_speed(100000 + 1800, marks, 1800)
+    assert ctl.auto_speed(100000 + 2 * 3600, marks, 1800) == 1800
 
 
 def test_clock_speed_change_and_skip_ahead(tmp_path):

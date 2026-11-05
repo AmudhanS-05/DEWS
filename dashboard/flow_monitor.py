@@ -725,29 +725,6 @@ def rain_api(mode: str) -> dict:
         return {"ok": False, "error": (str(e).strip().splitlines() or ["error"])[0][:120]}
 
 
-FLOOD_MARKS: dict = {}      # flood id -> the official crossings in its source readings (known before the replay reaches them)
-
-
-def flood_crossings(f: dict, cur) -> list[dict]:
-    """First time each gauge of a flood reaches each official flood category (minor and up), from the cached USGS readings
-    the replay sends, so the overlay can show them before the replay gets there."""
-    from producers.replay_producer import load_readings
-    cur.execute("SELECT site_no, nwps_lid, minor_stage, moderate_stage, major_stage FROM gauges WHERE site_no = ANY(%s)", (f["sites"],))
-    out = []
-    for site, lid, *levels in cur.fetchall():
-        try:
-            rs = load_readings(site, f["start"], f["end"])
-        except SystemExit:
-            continue
-        for cat, lv in zip(("minor", "moderate", "major"), levels):
-            if lv is None:
-                continue
-            t = next((r["reading_ts"] for r in rs if r["value"] is not None and r["value"] >= lv), None)
-            if t is not None:
-                out.append({"at": float(t), "kind": "flood", "cat": cat, "label": f"{cat.upper()} {lid or site}"})
-    return out
-
-
 def apply_drill_state(raw: dict, st: dict | None, now: float, max_age_s: float = 900) -> dict:
     """A drill reports what it took down the moment it does it: show that at once, not after Kafka's session timeout
     (45 to 60 s) drops the dead member from its group."""
@@ -796,14 +773,12 @@ def progress_api() -> dict:
         return out
     clk = ctl.clock()
     if clk:
-        out.update(now=clk["now"], speed=clk["speed"], speeds=clk["speeds"], held=clk["speed"] == 0)
+        out.update(now=clk["now"], speed=clk["speed"], speeds=clk["speeds"], auto=clk["auto"], held=clk["speed"] == 0)
     try:
         conn = pg_conn()
         try:
             with conn.cursor() as cur:
-                if job["target"] not in FLOOD_MARKS:
-                    FLOOD_MARKS[job["target"]] = flood_crossings(f, cur)
-                out["markers"] += [dict(m) for m in FLOOD_MARKS[job["target"]]]
+                out["markers"] += [dict(m) for m in C.flood_crossings(job["target"], cur)]
                 if out["now"] is None:
                     cur.execute("""SELECT EXTRACT(EPOCH FROM max(window_end)) FROM windowed_aggregates WHERE mode = 'SIMULATION'
                                    AND site_no = ANY(%s) AND window_start >= to_timestamp(%s) AND window_start < to_timestamp(%s)""", (f["sites"], t0, t1))
@@ -1025,7 +1000,8 @@ def make_handler():
                     return self._send(403, "application/json", b'{"error":"not allowed"}')
                 try:
                     body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
-                    speed = int(body["speed"]) if body.get("speed") is not None else None
+                    speed = body.get("speed")
+                    speed = speed if speed in (None, "auto") else int(speed)
                     seek = float(body["seek"]) if body.get("seek") is not None else None
                 except (ValueError, TypeError, json.JSONDecodeError):
                     return self._send(400, "application/json", b'{"error":"bad json"}')

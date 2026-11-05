@@ -26,6 +26,7 @@ from psycopg2.extras import Json, execute_values
 
 from alerting import template
 from common import config
+from common.kafka_commit import commit_sync
 
 log = logging.getLogger("sink")
 
@@ -238,7 +239,7 @@ def run(group: str, max_batch: int, stop_after_idle_s: float | None):
                     except psycopg2.Error:
                         conn = None
                     time.sleep(3)
-            c.commit(asynchronous=False)
+            commit_sync(c)
             if time.monotonic() - last_log > 10:
                 log.info("rows written so far: %d", total)
                 last_log = time.monotonic()

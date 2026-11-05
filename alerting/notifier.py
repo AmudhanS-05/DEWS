@@ -28,6 +28,7 @@ from alerting.approval import ALERT_TRACE_ID
 from common import config
 from common.envfile import load_env
 from common.kafka_io import JsonProducer
+from common.kafka_commit import commit_sync
 
 log = logging.getLogger("notifier")
 
@@ -148,7 +149,7 @@ def run(dry_run: bool, group: str, exit_when_idle: float | None):
             except (KeyError, ValueError) as e:
                 log.error("bad approved record at offset %s: %r", m.offset(), e)
             if not dry_run:                       # a dry run must never consume a message the live notifier should send
-                c.commit(message=m, asynchronous=False)
+                commit_sync(c, message=m)
     except KeyboardInterrupt:
         pass
     finally:

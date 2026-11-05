@@ -30,7 +30,6 @@ PROCESSES = {
 }
 FLOODS = {
     "oct_2023": {"label": "Main scene: Shoal Creek (AHOT2) and Llano (LLAT2), 25 to 27 Oct 2023, with radar rain", "sites": ["08156800", "08151500"], "start": "2023-10-25", "end": "2023-10-27", "speed": 1800, "rain": True},
-    "drwt2_2019": {"label": "Too fast to warn: Onion Creek (DRWT2), 2 to 6 May 2019, no radar rain", "sites": ["08158700"], "start": "2019-05-02", "end": "2019-05-06", "speed": 3600, "rain": False},
 }
 DRILLS = {"faust": "Kill a Faust worker", "broker": "Stop a Kafka broker", "sink": "Kill the sink"}
 RAIN_HEAD_S = 15     # a window takes only the rain already in when it closes; the rain producer starts slower, so it goes first
@@ -41,7 +40,9 @@ DRILL_DOWN_S = {"faust": 70, "broker": 30, "sink": 60}   # its per-scenario --do
 CLOCK = LOGS / "replay_clock.json"     # the shared replay clock (producers/replay_clock.py)
 RAIN_AT = LOGS / "replay_rain_at.json"
 DRILL_STATE = LOGS / "drill_state.json"
-SPEEDS = [60, 300, 900, 1800, 3600, 7200, 14400]   # data seconds per real second: 1 min/s .. 4 h/s
+SPEEDS = [60, 120, 300, 900, 1800, 3600, 7200, 14400]   # data seconds per real second: 1 min/s .. 4 h/s
+AUTO_SLOW = 120                       # auto: 2 min of data per second near a flood, so a 3 h alert lead lasts 90 s
+AUTO_BEFORE_S, AUTO_AFTER_S = 4 * 3600, 3600   # ... from 4 h before each official crossing to 1 h after it
 
 
 def allowed(action, target) -> str | None:
@@ -81,6 +82,49 @@ def flood_range(f: dict) -> tuple[float, float]:
     import datetime as dt
     t0 = dt.datetime.fromisoformat(f["start"] + "T00:00:00+00:00").timestamp()
     return t0, dt.datetime.fromisoformat(f["end"] + "T00:00:00+00:00").timestamp() + 86400
+
+
+_CROSSINGS: dict = {}
+
+
+def flood_crossings(target: str, cur=None) -> list[dict]:
+    """First time each gauge of a flood reaches each official flood category (minor and up), from the cached USGS readings
+    the replay sends: known before the replay reaches them."""
+    if target in _CROSSINGS:
+        return _CROSSINGS[target]
+    from producers.replay_producer import load_readings
+    f = FLOODS[target]
+    q = "SELECT site_no, nwps_lid, minor_stage, moderate_stage, major_stage FROM gauges WHERE site_no = ANY(%s)"
+    if cur is None:
+        import psycopg2
+
+        from common import config
+        with psycopg2.connect(config.PG_DSN, connect_timeout=5) as conn, conn.cursor() as c2:
+            c2.execute(q, (f["sites"],))
+            rows = c2.fetchall()
+    else:
+        cur.execute(q, (f["sites"],))
+        rows = cur.fetchall()
+    out = []
+    for site, lid, *levels in rows:
+        try:
+            rs = load_readings(site, f["start"], f["end"])
+        except SystemExit:
+            continue
+        for cat, lv in zip(("minor", "moderate", "major"), levels):
+            if lv is None:
+                continue
+            t = next((r["reading_ts"] for r in rs if r["value"] is not None and r["value"] >= lv), None)
+            if t is not None:
+                out.append({"at": float(t), "kind": "flood", "cat": cat, "label": f"{cat.upper()} {lid or site}"})
+    _CROSSINGS[target] = out
+    return out
+
+
+def auto_speed(now: float, crossings: list[dict], fast: float) -> float:
+    """Auto pace: fast between floods, AUTO_SLOW from AUTO_BEFORE_S before each crossing to AUTO_AFTER_S after it."""
+    near = any(m["at"] - AUTO_BEFORE_S <= now <= m["at"] + AUTO_AFTER_S for m in crossings)
+    return AUTO_SLOW if near else fast
 
 
 def kill_tree(p) -> None:
@@ -247,12 +291,32 @@ class Control:
             f = FLOODS[job["target"]]
             replay_clock.write(CLOCK, flood_range(f)[0], job.get("speed") or f["speed"], target=job["target"])
             job["procs"].extend(spawn(c, log) for c, log in later)
+            threading.Thread(target=self._auto, args=(job,), daemon=True).start()
         for p in job["procs"]:
             p.wait()
         if job.get("stopped"):
             return
         job["ended"] = time.time()
         self.note("Control panel", job["label"], "ok finished" if all(p.returncode == 0 for p in job["procs"]) else "down failed, see the log")
+
+    def _auto(self, job: dict) -> None:
+        """While the replay runs with speed auto: slow down near each flood, speed up between them."""
+        from producers import replay_clock
+        try:
+            crossings = flood_crossings(job["target"])
+        except Exception:  # noqa: BLE001 - no crossings known: auto stays at the flood's normal speed
+            crossings = []
+        fast = FLOODS[job["target"]]["speed"]
+        while self.job is job and not job.get("stopped") and any(p.poll() is None for p in job["procs"]):
+            if job.get("auto", True):
+                with self.lock:
+                    c = replay_clock.read(CLOCK)
+                    if c and c["speed"] > 0 and c.get("target") == job["target"]:
+                        now = replay_clock.now_of(c)
+                        want = auto_speed(now, crossings, fast)
+                        if want != c["speed"]:
+                            replay_clock.write(CLOCK, now, want, target=job["target"])
+            time.sleep(0.5)
 
     def clock(self) -> dict | None:
         """The running replay's clock: data time now and speed."""
@@ -264,7 +328,7 @@ class Control:
         if not c or c.get("target") != j["target"]:
             return None
         t1 = flood_range(FLOODS[j["target"]])[1]
-        return {"now": min(replay_clock.now_of(c, j.get("ended")), t1), "speed": c["speed"], "speeds": SPEEDS}
+        return {"now": min(replay_clock.now_of(c, j.get("ended")), t1), "speed": c["speed"], "speeds": SPEEDS, "auto": j.get("auto", True)}
 
     def set_clock(self, speed=None, seek=None) -> tuple[int, dict]:
         """Change the running replay's speed, or skip ahead (never back: those readings are already out)."""
@@ -279,6 +343,11 @@ class Control:
             t0, t1 = flood_range(FLOODS[v["target"]])
             now = replay_clock.now_of(c)
             new_speed = c["speed"]
+            if speed == "auto":
+                self.job["auto"] = True
+                speed = None
+            elif speed is not None:
+                self.job["auto"] = False
             if speed is not None:
                 if speed not in SPEEDS:
                     return 400, {"error": "speed must be one of " + ", ".join(map(str, SPEEDS))}
