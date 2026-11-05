@@ -188,7 +188,7 @@
   </section>
   <div class="fineprint">Prototype, not an official warning</div>
   <div class="jobbar glass" id="jobbar" hidden><div class="jb-head"><span><b id="jb-label"></b> <span class="note" id="jb-state"></span></span>
-    <span class="jb-ctl"><label class="note" id="jb-speed-w" hidden>Speed <select id="jb-speed" aria-label="Replay speed"></select></label><button class="btn" id="jb-stop" hidden>Stop</button></span></div>
+    <span class="jb-ctl"><label class="note" id="jb-speed-w" hidden>Speed <select id="jb-speed" aria-label="Replay speed"></select></label><button class="btn" id="jb-stop" hidden>Stop</button><button class="btn" id="jb-x" title="Hide until the next replay or drill" aria-label="Dismiss">✕</button></span></div>
     <div class="jb-track" id="jb-track"><div class="jb-fill" id="jb-fill"></div><div class="jb-knob" id="jb-knob" hidden></div><div id="jb-marks"></div></div>
     <div class="jb-foot note"><span id="jb-start"></span><span id="jb-now"></span><span id="jb-end"></span></div>
     <div class="note jb-msg" id="jb-msg"></div></div>
@@ -383,7 +383,8 @@ setInterval(()=>{ if(!document.getElementById("tab-data").hidden) loadAdvisories
   const utc=t=>new Date(t*1000).toISOString().slice(0,16).replace("T"," ")+" UTC";
   const spd=s=>s<3600?`${s/60} min of data per s`:`${s/3600} h of data per s`;
   const post=(url,body)=>fetch(url,{method:"POST",headers:{"Content-Type":"application/json","X-DEWS-Control":"1"},body:JSON.stringify(body)}).then(async r=>({ok:r.ok,d:await r.json()}));
-  let doneAt=0, last=null, drag=null, armed=false, speedsKey="";
+  let doneAt=0, last=null, drag=null, armed=false, speedsKey="", hiddenFor=null;
+  $("jb-x").addEventListener("click",()=>{ if(last) hiddenFor=last.job.started; bar.hidden=true; });
   const msg=t=>{ $("jb-msg").textContent=t||""; };
   const frac=e=>{ const r=track.getBoundingClientRect(); return Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)); };
   const canSeek=()=>last&&last.unit==="data"&&last.job.running&&last.speeds;
@@ -424,7 +425,7 @@ setInterval(()=>{ if(!document.getElementById("tab-data").hidden) loadAdvisories
   async function poll(){
     try{
       const d=await (await fetch("/api/progress")).json(), j=d.job;
-      if(!j){ bar.hidden=true; last=null; return; }
+      if(!j||j.started===hiddenFor){ bar.hidden=true; if(!j) last=null; return; }
       if(!j.running){ if(!doneAt) doneAt=Date.now(); if(Date.now()-doneAt>60000){ bar.hidden=true; return; } } else doneAt=0;
       bar.hidden=false; last=d;
       $("jb-label").textContent=j.label;

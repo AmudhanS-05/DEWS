@@ -787,9 +787,12 @@ def progress_api() -> dict:
                 cur.execute("""SELECT a.category, COALESCE(g.nwps_lid, a.site_no), EXTRACT(EPOCH FROM COALESCE((a.details->>'window_start')::timestamptz,
                                split_part(a.alert_id, '|', 3)::timestamptz)) FROM alerts a LEFT JOIN gauges g USING (site_no)
                                WHERE a.mode = 'SIMULATION' AND a.site_no = ANY(%s) AND a.created_at >= to_timestamp(%s)""", (f["sites"], job["started"] - 5))
+                cross = {(m["cat"], m["label"].split(" ", 1)[1]): m["at"] for m in out["markers"] if m["kind"] == "flood"}
                 for cat, lid, t in cur.fetchall():
                     if t0 <= float(t) < t1:
-                        out["markers"].append({"at": float(t), "kind": "alert", "cat": cat, "label": f"alert {cat} {lid}"})
+                        c = cross.get((cat, lid))
+                        lead = f" · {(c - float(t)) / 3600:.1f} h before the crossing" if c is not None and c > float(t) else ""
+                        out["markers"].append({"at": float(t), "kind": "alert", "cat": cat, "label": f"alert {cat.upper()} {lid}{lead}"})
         finally:
             conn.close()
     except Exception as e:
