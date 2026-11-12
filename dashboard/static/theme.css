@@ -278,3 +278,6 @@ table.io td:nth-child(1){width:16%}table.io td:nth-child(2){width:18%}table.io t
 .io-kv dt{color:var(--muted)}.io-kv dd{margin:0;word-break:break-word}
 .io-l{margin:0;padding-left:16px}
 .io-pre{white-space:pre-wrap;margin:0;font-family:inherit;font-size:12px;line-height:1.45;max-height:260px;overflow:auto}
+
+.ask{display:flex;gap:8px;margin-bottom:6px}.ask input{flex:1;font:inherit;padding:6px 10px;border-radius:8px;border:1px solid rgba(127,140,160,.4);background:transparent;color:inherit}
+.ask-chips{margin-bottom:8px}.ask-a{padding:10px 12px;border-radius:10px;margin-bottom:8px}.ask-a ul{margin:6px 0;padding-left:18px}

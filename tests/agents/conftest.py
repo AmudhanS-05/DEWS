@@ -76,3 +76,10 @@ def tracked_fixtures_unchanged():
     after = _digests()
     changed = sorted(k for k in before if after.get(k) != before[k])
     assert not changed, f"tracked fixture(s) rewritten during the test run: {changed}"
+
+
+@pytest.fixture(autouse=True)
+def _investigator_off_unless_asked(monkeypatch):
+    """Tests that script the writer's and judge's replies do not expect the investigator to take one first;
+    the investigator's own tests turn it on."""
+    monkeypatch.setenv("INVESTIGATOR", "off")

@@ -50,11 +50,11 @@ function drawAgentMetrics(d){
 }
 /* the graph in agentic_ai/graph.py, drawn like the pipeline: same nodes, status dots and moving dashes */
 const AL={alert:["topic",16,170,132,64,"alerts.flood"],coordinator:["group",176,170,132,64,"Coordinator"],evidence:["group",336,50,132,64,"Evidence"],tools:["info",336,170,132,64,"Tools (MCP)"],context:["group",336,290,132,64,"Context"],
-  reconcile:["info",496,170,132,64,"Reconcile"],writer:["group",656,170,132,64,"Writer"],reviewer:["group",816,170,132,64,"Reviewer"],save:["store",976,90,132,64,"Save advisory"],keep:["store",976,250,132,64,"Keep v1"],
+  reconcile:["info",496,170,132,64,"Reconcile"],investigator:["group",496,280,132,64,"Investigator"],writer:["group",656,170,132,64,"Writer"],reviewer:["group",816,170,132,64,"Reviewer"],save:["store",976,90,132,64,"Save advisory"],keep:["store",976,250,132,64,"Keep v1"],
   human:["manual",816,390,132,64,"Human gate"],approved:["topic",656,390,132,64,"alerts.approved"],notifier:["group",496,390,132,64,"Notifier"]};
 const AE=[["e_a_c","alert","coordinator","M148 202H176"],["e_c_e","coordinator","evidence","M308 190C322 190 318 82 336 82"],["e_c_x","coordinator","context","M308 214C322 214 318 322 336 322"],
   ["e_e_t","evidence","tools","M402 114V170"],["e_x_t","context","tools","M402 290V234"],["e_e_r","evidence","reconcile","M468 82C482 82 478 190 496 190"],["e_x_r","context","reconcile","M468 322C482 322 478 214 496 214"],
-  ["e_r_w","reconcile","writer","M628 202H656"],["e_w_v","writer","reviewer","M788 202H816"],["e_v_s","reviewer","save","M948 190C962 190 958 122 976 122"],["e_v_k","reviewer","keep","M948 214C962 214 958 282 976 282"],
+  ["e_r_w","reconcile","writer","M628 202H656"],["e_r_i","reconcile","investigator","M562 234V280"],["e_i_w","investigator","writer","M628 312C642 312 638 214 656 214"],["e_i_t","investigator","tools","M496 296C480 296 484 220 468 220"],["e_w_v","writer","reviewer","M788 202H816"],["e_v_s","reviewer","save","M948 190C962 190 958 122 976 122"],["e_v_k","reviewer","keep","M948 214C962 214 958 282 976 282"],
   ["e_s_h","save","human","M1042 154V170H1108V422H948"],["e_k_h","keep","human","M1042 314V422H948"],["e_h_a","human","approved","M816 422H788"],["e_a_n","approved","notifier","M656 422H628"]];
 function agentState(d){
   const by={}; (d.agents||[]).forEach(a=>by[a.agent]=a); const act=!!d.active, st={};
@@ -63,7 +63,7 @@ function agentState(d){
     const running=act&&a.open, bits=[]; if(a.ms) bits.push((a.ms/1000).toFixed(1)+" s"); if(a.tokens) bits.push(num(a.tokens)+" tokens");
     const l2=[]; if(a.starts>1) l2.push(a.starts+" tries"); if(a.tool_calls) l2.push(a.tool_calls+" tool calls"); if(a.verdict) l2.push(a.verdict);
     set(id,running?"run":(a.verdict&&a.verdict!=="pass"?"warn":"ok"),[running?"running…":bits.join(" · ")||"ran",l2.join(" · ")]); };
-  ["coordinator","evidence","context","writer","reviewer"].forEach(agentNode);
+  ["coordinator","evidence","context","investigator","writer","reviewer"].forEach(agentNode);
   set("alert",d.run?"ok":"absent",d.run?[String(d.run.alert_id).split("|").slice(0,2).join(" "),d.run.mode||""]:["no alert yet"]);
   const calls=(d.agents||[]).reduce((n,a)=>n+(a.tool_calls||0),0); set("tools",calls?"ok":"absent",[calls?num(calls)+" calls this run":"no calls"]);
   const merged=st.evidence.status==="ok"&&st.context.status==="ok"; set("reconcile",merged?"ok":"absent",[merged?"evidence and context":"not reached"]);
@@ -102,7 +102,7 @@ function drawAgentStep(){
 }
 $("ag-t").addEventListener("input",()=>{ agFollow=+$("ag-t").value>=+$("ag-t").max; drawAgentStep(); });
 $("ag-run").addEventListener("change",e=>{ agPick=e.target.value; agFollow=true; loadAgents(); });
-const AG_ROLE={coordinator:"Coordinator · code, no LLM",evidence:"Evidence · code, parallel",context:"Context · code, parallel",reconcile:"Reconcile · rules, no LLM",
+const AG_ROLE={coordinator:"Coordinator · code, no LLM",evidence:"Evidence · code, parallel",context:"Context · code, parallel",reconcile:"Reconcile · rules, no LLM",investigator:"Investigator · LLM chooses MCP tools (at most 4)",
   writer:"Writer · LLM (Groq)",reviewer:"Reviewer · 26 rules + LLM judge (Gemini)",save:"Save · code, via MCP"};
 function ioVal(v,depth){
   if(v==null) return '<span class="note">none</span>';
@@ -119,6 +119,27 @@ function drawAgentIO(rows){
     const tools=r.tools.length?r.tools.map(t=>`<div><code>${esc(t.tool)}</code> <span class="note">${t.rows??""} rows · ${t.ms??""} ms${t.via&&t.via!=="direct"?" · "+esc(t.via):""}</span></div>`).join(""):'<span class="note">in memory</span>';
     return `<tr><td><b>${esc(AG_ROLE[r.agent]||r.agent)}</b><div class="note">${r.ms!=null?(r.ms/1000).toFixed(1)+" s":""}${r.tokens?" · "+num(r.tokens)+" tokens":""}${r.verdict?" · "+esc(r.verdict):""}</div></td><td>${tools}</td><td>${esc(r.input||"")}</td><td>${text}</td></tr>`; }).join("")+"</tbody></table>";
 }
+/* ask the database: one question at a time, the agent's tool choices shown under the answer */
+(function(){
+  const f=$("ask-f"), q=$("ask-q"), out=$("ask-out"), btn=$("ask-b");
+  async function ask(text){
+    if(!text.trim()) return; btn.disabled=true;
+    out.insertAdjacentHTML("afterbegin",`<div class="ask-a glass" id="ask-pending"><b>${esc(text)}</b><div class="note">looking it up…</div></div>`);
+    let html;
+    try{
+      const r=await fetch("/api/ask",{method:"POST",headers:{"Content-Type":"application/json","X-DEWS-Control":"1"},body:JSON.stringify({q:text})}), d=await r.json();
+      if(!r.ok) html=`<div class="note">${esc(d.error||"failed")}</div>`;
+      else{
+        const ans=(d.answer||[]).length?"<ul>"+d.answer.map(x=>`<li>${esc(x)}</li>`).join("")+"</ul>":`<div class="note">${d.stopped==="llm_unavailable"?"the LLM is not reachable: "+esc(d.error||""):d.stopped==="no_database"?"PostgreSQL is not reachable":"no answer"}</div>`;
+        const steps=(d.steps||[]).map(s=>`<div class="note">${s.rejected?"rejected ":""}<code>${esc(s.tool)}</code>(${esc(Object.values(s.args||{}).join(", "))})${s.rows!=null?" · "+s.rows+" rows":""}${s.why?" · "+esc(s.why):""}</div>`).join("");
+        html=ans+(steps?`<details><summary class="note">${d.steps.length} quer${d.steps.length===1?"y":"ies"} chosen by the agent · ${num(d.tokens||0)} tokens</summary>${steps}</details>`:"");
+      }
+    }catch(e){ html='<div class="note">cannot reach the console server</div>'; }
+    const p=$("ask-pending"); p.removeAttribute("id"); p.querySelector(".note").outerHTML=html; btn.disabled=false;
+  }
+  f.addEventListener("submit",e=>{ e.preventDefault(); const t=q.value; q.value=""; ask(t); });
+  document.querySelector(".ask-chips").addEventListener("click",e=>{ const a=e.target.closest("a[data-q]"); if(a){ e.preventDefault(); ask(a.dataset.q); } });
+})();
 async function loadAgents(){
   try{
     const d=await (await fetch("/api/agents"+(agPick?"?run="+encodeURIComponent(agPick):""))).json(); agLast=d;

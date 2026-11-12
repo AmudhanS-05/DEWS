@@ -48,6 +48,7 @@ class State(TypedDict, total=False):
     llm_error: str | None
     llm_down: str | None
     facts: dict
+    investigation: dict
     judges: list[dict]      # per reviewer attempt: judge status (pass/fail/unclear/unavailable/off/not_run), provider, model
 
 
@@ -110,6 +111,9 @@ def _now():
 def _facts(s: State) -> dict:
     f = advisory.build_facts(s["alert"], s["evidence"], s["context"], s["update_n"], s.get("episode"),
                              s["evidence"].get("data_quality"))
+    inv = s.get("investigation") or {}
+    if inv.get("findings"):
+        f["investigator_findings"] = inv["findings"]
     if s.get("disagreement"):
         f["context_disagreement"] = "the gauge evidence and a leading context signal point different ways"
     return f
@@ -235,6 +239,28 @@ def build_graph(tools, run: Run):
             run.row("coordinator", _now(), "model probability vs stage forecast", d, verdict="uncertain")
         return {"disagreement": dis, "confidence": "uncertain" if (dis or model_dis) else "normal"}
 
+    def investigator_node(s: State) -> dict:
+        """The LLM chooses extra MCP tool calls (agentic_ai.investigator); code runs them for this gauge and time only."""
+        from agentic_ai import investigator
+        m = investigator.mode()
+        if m == "off" or (m == "uncertain" and s["confidence"] != "uncertain"):
+            return {"investigation": {"skipped": m}}
+        t0 = _now()
+        run.event("investigator", "start", {"mode": m, "confidence": s["confidence"]})
+        res = investigator.investigate(llm.complete, s["alert"], s["evidence"], s["context"], s["confidence"],
+                                       s.get("disagreement"), lambda name, *a, **k: run.call("investigator", name, *a, **k))
+        for st in res["steps"]:
+            if st.get("rejected"):
+                run.event("investigator", "revision", {"rejected": st["tool"], "reason": st["rejected"]})
+        run.event("investigator", "end", {"tools": [st["tool"] for st in res["steps"] if not st.get("rejected")],
+                                          "findings": res["findings"], "stopped": res["stopped"], "tokens": res["tokens"]})
+        run.row("investigator", t0, f"confidence {s['confidence']}; chose its own tools (at most {investigator.MAX_CALLS})",
+                {"chosen": [{"tool": st["tool"], "args": st.get("args"), "why": st.get("why"), "rejected": st.get("rejected")}
+                            for st in res["steps"]],
+                 "findings": res["findings"], "dropped_findings": res.get("dropped_findings"), "stopped": res["stopped"]},
+                res["tokens"])
+        return {"investigation": res, "tokens": s.get("tokens", 0) + res["tokens"]}
+
     def writer(s: State) -> dict:
         t0, a = _now(), s["alert"]
         attempt = s["attempt"] + 1
@@ -351,12 +377,13 @@ def build_graph(tools, run: Run):
 
     g = StateGraph(State)
     for name, fn in (("coordinator", coordinator), ("evidence", evidence), ("context", context), ("reconcile", reconcile),
-                     ("writer", writer), ("reviewer", reviewer), ("save_advisory", save_advisory), ("keep_v1", keep_v1)):
+                     ("investigator", investigator_node), ("writer", writer), ("reviewer", reviewer), ("save_advisory", save_advisory), ("keep_v1", keep_v1)):
         g.add_node(name, fn)
     g.add_edge(START, "coordinator")
     g.add_conditional_edges("coordinator", route_after_coordinator, ["evidence", "context", END])
     g.add_edge(["evidence", "context"], "reconcile")
-    g.add_edge("reconcile", "writer")
+    g.add_edge("reconcile", "investigator")
+    g.add_edge("investigator", "writer")
     g.add_conditional_edges("writer", route_after_writer, ["reviewer", "keep_v1"])
     g.add_conditional_edges("reviewer", route_after_reviewer, ["save_advisory", "writer", "keep_v1"])
     g.add_edge("save_advisory", END)

@@ -473,6 +473,9 @@ def llm_user_prompt(facts: dict, confidence: str, disagreement: dict | None, fee
     parts = [f"FACTS (JSON):\n{json.dumps(facts, default=str)}", f"Confidence: {confidence}."]
     if disagreement:
         parts.append(f"The signals disagree. Evidence: {disagreement['evidence']}. Context: {disagreement['context']}.")
+    if facts.get("investigator_findings"):
+        parts.append("The investigator fetched extra evidence (investigator_findings in FACTS). Use a finding only if it "
+                     "changes how the advisory reads; copy its numbers exactly.")
     if facts["update_n"] > 1:
         parts.append(f"This is update {facts['update_n']} of the same episode: start with 'Update {facts['update_n']}:' "
                      "(after the SIMULATION label if there is one).")

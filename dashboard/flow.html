@@ -169,6 +169,11 @@
       <span><span class="dot"></span>not reached in this run</span>
       <span>green dashes moving = work flowing into that step</span>
     </div>
+    <h2>Ask the database</h2>
+    <div class="note" style="margin-bottom:6px">An agent answers from PostgreSQL: it picks fixed, read-only queries (gauges, official stages, past floods, high-water days, alerts, advisories) and never writes SQL.</div>
+    <form id="ask-f" class="ask"><input id="ask-q" type="text" maxlength="500" placeholder="e.g. Which floods has Shoal Creek had? When was LLAT2 last above action stage?" aria-label="Question"><button class="btn" id="ask-b">Ask</button></form>
+    <div class="ask-chips note"><a href="#" data-q="Which floods has Shoal Creek had, and how high did they peak?">Shoal Creek floods</a> · <a href="#" data-q="What are the official flood stages of the Llano River gauge?">Llano River stages</a> · <a href="#" data-q="Which alerts were raised for AHOT2 and were they approved?">AHOT2 alerts</a></div>
+    <div id="ask-out"></div>
     <h2>Agent inputs and outputs, this run</h2>
     <div class="note" style="margin-bottom:6px">Each step as it ran: what it read (MCP tool calls to PostgreSQL), what it was given, and what it passed on. Coordinator, Evidence, Context and Reconcile are code; the Writer and the Reviewer's judge are LLMs. The LLM never calls a tool.</div>
     <div id="ag-io"></div>

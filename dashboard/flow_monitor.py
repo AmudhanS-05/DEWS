@@ -1003,6 +1003,19 @@ def make_handler():
                     return self._send(400, "application/json", b'{"error":"bad json"}')
                 code, out = CTX["control"].act(body.get("action"), body.get("target"))
                 return self._send(code, "application/json", json.dumps(out).encode())
+            if path == "/api/ask":
+                from dashboard import control
+                if CTX["demo"] or not control.origin_ok(self.headers, self.server.server_address[1]):
+                    return self._send(403, "application/json", b'{"error":"not allowed"}')
+                try:
+                    body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+                    q = str(body.get("q") or "").strip()
+                except (ValueError, json.JSONDecodeError):
+                    return self._send(400, "application/json", b'{"error":"bad json"}')
+                if not q:
+                    return self._send(400, "application/json", b'{"error":"empty question"}')
+                from agentic_ai.ask import answer
+                return self._send(200, "application/json", json.dumps(answer(q), default=str).encode())
             if path == "/api/replay_clock":
                 from dashboard import control
                 if CTX["demo"] or not control.origin_ok(self.headers, self.server.server_address[1]):
