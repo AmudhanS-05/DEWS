@@ -893,11 +893,17 @@ def agents_api(run_id: str | None = None) -> dict:
                 age = float(cur.fetchone()[0] or 0)
                 cur.execute("SELECT run_id, alert_id, ended_at FROM agent_run_summary ORDER BY ended_at DESC LIMIT 20")
                 runs = [{"run_id": r, "alert_id": a, "ended_at": e.isoformat()} for r, a, e in cur.fetchall()]
+                cur.execute("SELECT agent, input_summary, output, tool_calls, tokens, verdict, started_at, ended_at FROM agent_runs "
+                            "WHERE run_id = %s ORDER BY started_at, id", (run["run_id"],))
+                io = [{"agent": a, "input": i, "output": o, "tools": [{"tool": t.get("tool"), "rows": t.get("rows"), "ms": t.get("ms"), "via": t.get("via")}
+                                                                       for t in (tc or []) if isinstance(t, dict)],
+                       "tokens": tk, "verdict": v, "ms": round((e - s0).total_seconds() * 1000) if s0 and e else None}
+                      for a, i, o, tc, tk, v, s0, e in cur.fetchall()]
                 cur.execute("SELECT trace_url FROM agent_runs WHERE run_id = %s AND trace_url IS NOT NULL LIMIT 1", (run["run_id"],))
                 tr = cur.fetchone()
                 run["trace_url"] = safe_trace_url(tr[0]) if tr else None
             view = agent_run_view(events)
-            return {"ok": True, "run": run, "runs": runs, **view, "active": age < ACTIVE_RUN_S and any(a["open"] for a in view["agents"]), "langsmith": langsmith_status(),
+            return {"ok": True, "run": run, "runs": runs, **view, "io": io, "active": age < ACTIVE_RUN_S and any(a["open"] for a in view["agents"]), "langsmith": langsmith_status(),
                     "advisory": {"version": adv[0], "source": adv[1], "status": adv[2]} if adv else None,
                     "events": [e for e in events if e["kind"] != "token_chunk"][-400:]}
         finally:

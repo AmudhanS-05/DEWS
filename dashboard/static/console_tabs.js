@@ -102,6 +102,23 @@ function drawAgentStep(){
 }
 $("ag-t").addEventListener("input",()=>{ agFollow=+$("ag-t").value>=+$("ag-t").max; drawAgentStep(); });
 $("ag-run").addEventListener("change",e=>{ agPick=e.target.value; agFollow=true; loadAgents(); });
+const AG_ROLE={coordinator:"Coordinator · code, no LLM",evidence:"Evidence · code, parallel",context:"Context · code, parallel",reconcile:"Reconcile · rules, no LLM",
+  writer:"Writer · LLM (Groq)",reviewer:"Reviewer · 26 rules + LLM judge (Gemini)",save:"Save · code, via MCP"};
+function ioVal(v,depth){
+  if(v==null) return '<span class="note">none</span>';
+  if(typeof v!=="object") return esc(String(v).length>220?String(v).slice(0,220)+"…":String(v));
+  if(Array.isArray(v)) return v.length?(depth>1?esc(JSON.stringify(v).slice(0,160)):'<ul class="io-l">'+v.slice(0,8).map(x=>`<li>${ioVal(x,depth+1)}</li>`).join("")+(v.length>8?`<li class="note">${v.length-8} more</li>`:"")+"</ul>"):'<span class="note">none</span>';
+  const ks=Object.keys(v); if(!ks.length) return '<span class="note">none</span>';
+  if(depth>1) return esc(JSON.stringify(v).slice(0,200));
+  return '<dl class="io-kv">'+ks.slice(0,14).map(k=>`<dt>${esc(k)}</dt><dd>${ioVal(v[k],depth+1)}</dd>`).join("")+"</dl>";
+}
+function drawAgentIO(rows){
+  if(!rows.length){ $("ag-io").innerHTML='<div class="note">no steps recorded for this run</div>'; return; }
+  $("ag-io").innerHTML='<table class="io"><thead><tr><th>Step</th><th>Reads (MCP tools)</th><th>Input</th><th>Output</th></tr></thead><tbody>'+rows.map(r=>{
+    const o=r.output||{}, text=typeof o==="object"&&o.text?`<pre class="io-pre">${esc(o.text)}</pre>${o.llm===false?'<div class="note">template text (no LLM reply)</div>':""}`:ioVal(o,0);
+    const tools=r.tools.length?r.tools.map(t=>`<div><code>${esc(t.tool)}</code> <span class="note">${t.rows??""} rows · ${t.ms??""} ms${t.via&&t.via!=="direct"?" · "+esc(t.via):""}</span></div>`).join(""):'<span class="note">in memory</span>';
+    return `<tr><td><b>${esc(AG_ROLE[r.agent]||r.agent)}</b><div class="note">${r.ms!=null?(r.ms/1000).toFixed(1)+" s":""}${r.tokens?" · "+num(r.tokens)+" tokens":""}${r.verdict?" · "+esc(r.verdict):""}</div></td><td>${tools}</td><td>${esc(r.input||"")}</td><td>${text}</td></tr>`; }).join("")+"</tbody></table>";
+}
 async function loadAgents(){
   try{
     const d=await (await fetch("/api/agents"+(agPick?"?run="+encodeURIComponent(agPick):""))).json(); agLast=d;
@@ -109,10 +126,11 @@ async function loadAgents(){
     if(sel.dataset.h!==opts){ sel.innerHTML=opts; sel.dataset.h=opts; sel.value=agPick; }
     if(!d.ok){ $("ag-note").textContent=d.error; setHtml("ag-graph",agentGraph({})); return; }
     const ls=d.langsmith&&d.langsmith.enabled?` · LangSmith traces in project <b>${esc(d.langsmith.project)}</b> (<a href="https://smith.langchain.com" target="_blank" rel="noopener">open</a>)`:" · LangSmith tracing off";
-    if(!d.run){ $("ag-note").innerHTML="No agent run recorded yet. A run appears after python -m agentic_ai.run --alert-id &lt;id&gt;."+ls; setHtml("ag-graph",agentGraph({})); $("ag-agents").innerHTML=""; $("ag-events").innerHTML=""; return; }
+    if(!d.run){ $("ag-note").innerHTML="No agent run recorded yet. A run appears after python -m agentic_ai.run --alert-id &lt;id&gt;."+ls; setHtml("ag-graph",agentGraph({})); $("ag-agents").innerHTML=""; $("ag-events").innerHTML=""; $("ag-io").innerHTML=""; return; }
     const r=d.run;
     $("ag-note").innerHTML=`${d.active?"<b>Running now</b>":"Last run"} <b>${esc(r.run_id)}</b> for alert <b>${esc(r.alert_id)}</b>${r.mode?" · <b>"+esc(r.mode)+"</b>":""} · ${r.duration_s==null?"":r.duration_s.toFixed(1)+" s"} · ${r.review_rounds} review round${r.review_rounds===1?"":"s"} · last verdict ${esc(r.last_verdict||"none")} · ${d.disagreements} disagreement${d.disagreements===1?"":"s"} · ${new Date(r.ended_at).toLocaleString([], {hour12:false})}${ls}${r.trace_url?` · <a href="${esc(r.trace_url)}" target="_blank" rel="noopener">trace of this run</a>`:" · no trace link stored for this run"}`;
     drawAgentStep();
+    drawAgentIO(d.io||[]);
     $("ag-agents").innerHTML=d.agents.map(a=>`<tr><td>${esc(a.agent)}</td><td class="r">${a.starts}</td><td class="r">${a.ms?(a.ms/1000).toFixed(1)+" s":""}</td><td class="r">${a.tool_calls||""}</td><td class="r">${a.tokens?num(a.tokens):""}</td><td>${esc(a.verdict||"")}</td></tr>`).join("");
     $("ag-events").innerHTML=d.events.slice().reverse().map(e=>{ const dt=e.detail||{}, txt=dt.name||dt.tool||(dt.reasons&&dt.reasons.length?dt.reasons.join("; "):"")||dt.verdict||""; return `<tr><td class="t">${new Date(e.ts).toLocaleTimeString([], {hour12:false})}</td><td>${esc(e.agent)}</td><td>${esc(e.kind)}</td><td>${esc(String(txt).slice(0,140))}</td></tr>`; }).join("");
   }catch(e){ $("ag-note").textContent="cannot reach the console server"; }

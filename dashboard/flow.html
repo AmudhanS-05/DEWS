@@ -169,6 +169,9 @@
       <span><span class="dot"></span>not reached in this run</span>
       <span>green dashes moving = work flowing into that step</span>
     </div>
+    <h2>Agent inputs and outputs, this run</h2>
+    <div class="note" style="margin-bottom:6px">Each step as it ran: what it read (MCP tool calls to PostgreSQL), what it was given, and what it passed on. Coordinator, Evidence, Context and Reconcile are code; the Writer and the Reviewer's judge are LLMs. The LLM never calls a tool.</div>
+    <div id="ag-io"></div>
     <h2>Time per agent, last run</h2>
     <table><thead><tr><th>Agent</th><th class="r">Starts</th><th class="r">Time</th><th class="r">Tool calls</th><th class="r">Tokens</th><th>Verdict</th></tr></thead><tbody id="ag-agents"></tbody></table>
     <h2>Events, last run (newest first, token stream left out)</h2>

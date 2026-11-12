@@ -271,3 +271,10 @@ body.landing .map3d>*:not(canvas){opacity:0;pointer-events:none;transition:opaci
 .jb-m.past span{color:var(--ink)}
 .jb-foot{display:flex;justify-content:space-between}
 .jb-msg{min-height:0;margin-top:2px}
+
+table.io td{vertical-align:top}
+table.io td:nth-child(1){width:16%}table.io td:nth-child(2){width:18%}table.io td:nth-child(3){width:20%}
+.io-kv{display:grid;grid-template-columns:max-content 1fr;gap:2px 10px;margin:0;font-size:12px}
+.io-kv dt{color:var(--muted)}.io-kv dd{margin:0;word-break:break-word}
+.io-l{margin:0;padding-left:16px}
+.io-pre{white-space:pre-wrap;margin:0;font-family:inherit;font-size:12px;line-height:1.45;max-height:260px;overflow:auto}
