@@ -34,11 +34,11 @@ def test_unknown_tools_and_repeats_are_rejected_and_the_budget_holds():
 
 
 def test_eval_scores_choices():
-    perfect = lambda case: scripted(*[json.dumps({"tool": t}) for t in sorted(case["need"])], '{"done": true, "findings": []}')
+    perfect = lambda case: scripted(*[json.dumps({"tool": t}) for t in sorted(case["need"])], *['{"done": true, "findings": []}'] * 2)
     rows = [ev.run_case(c, perfect(c)) for c in ev.CASES]
     s = ev.summary(rows)
     assert s["cases"] == 10 and s["mean_recall"] == 1.0 and s["mean_precision"] == 1.0 and s["valid"] == 10
-    lazy = ev.run_case(ev.CASES[0], scripted('{"done": true, "findings": []}'))
+    lazy = ev.run_case(ev.CASES[0], scripted('{"done": true, "findings": []}', '{"done": true, "findings": []}'))
     assert lazy["recall"] == 0.0 and lazy["chosen"] == "(none)"
 
 
@@ -63,3 +63,19 @@ def test_ask_uses_fixed_read_only_queries():
     sql, params = conn.log[0]
     assert sql == ask.QUERIES["find_gauges"] and "DROP" in params["q"]       # bound as a parameter, never in the SQL
     assert res["answer"] == ["Shoal Creek is gauge AHOT2 (08156800)."] and res["steps"][0]["rows"] == 1
+
+
+
+def test_an_open_checklist_item_gets_one_reminder():
+    case = ev.CASES[4]                                       # MAJOR forecast: impacts expected
+    assert [t for t, _ in inv.checklist(case["alert"], case["ev"], case["cx"], case["dis"])] == ["get_impacts"]
+    seen = []
+    def llm(system, user):
+        seen.append(user)
+        return LlmReply(text='{"tool": "get_impacts"}' if "NOT YET" in user and len(seen) == 2 else '{"done": true, "findings": []}',
+                        tokens=1, provider="test")
+    res = inv.investigate(llm, case["alert"], case["ev"], case["cx"], case["conf"], case["dis"], lambda n, *a, **k: ev.CANNED[n])
+    assert "SITUATION CHECKLIST" in seen[0] and [s["tool"] for s in res["steps"]] == ["get_impacts"] and res["stopped"] == "done"
+    stubborn = inv.investigate(scripted('{"done": true, "findings": []}', '{"done": true, "findings": []}'), case["alert"],
+                               case["ev"], case["cx"], case["conf"], case["dis"], lambda n, *a, **k: ev.CANNED[n])
+    assert stubborn["steps"] == [] and stubborn["stopped"] == "done"     # reminded once, then its choice stands

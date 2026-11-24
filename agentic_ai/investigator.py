@@ -80,8 +80,11 @@ def clamp_args(spec: dict, args) -> dict:
     return out
 
 
-def react(complete, system: str, user: str, tools: dict, run_tool, max_calls: int = MAX_CALLS, done_hint: str | None = None) -> dict:
-    """The loop. run_tool(name, args) -> result. Returns steps, findings, tokens, why it stopped."""
+def react(complete, system: str, user: str, tools: dict, run_tool, max_calls: int = MAX_CALLS, done_hint: str | None = None,
+          required: list[tuple[str, str]] | None = None, nudges: int = 1) -> dict:
+    """The loop. run_tool(name, args) -> result. Returns steps, findings, tokens, why it stopped.
+    required: (tool, reason) checks the situation calls for; if the LLM stops with one still open and budget left, it is
+    reminded `nudges` times (it may still decline, saying why)."""
     steps, tokens, history = [], 0, user
     menu = "\n".join(f"- {n}: {d}" + (f" (args: {', '.join(k + (' text' if r == 'text' else f' {r[0]}-{r[1]}') for k, r in a.items())})" if a else "")
                      for n, (d, a) in tools.items())
@@ -98,6 +101,14 @@ def react(complete, system: str, user: str, tools: dict, run_tool, max_calls: in
         if not act:
             return {"steps": steps, "findings": [], "tokens": tokens, "stopped": "unparsed_reply"}
         if act.get("done") or "findings" in act:
+            called = {st["tool"] for st in steps if not st.get("rejected")}
+            open_checks = [(t, why) for t, why in (required or []) if t not in called]
+            if open_checks and nudges > 0 and len(steps) < max_calls:
+                nudges -= 1
+                history += ("\n\nNOT YET: the situation checklist still has open checks: "
+                            + "; ".join(f"{t} ({why})" for t, why in open_checks)
+                            + ". Fetch them, or reply done again with a finding that says why they are not needed.")
+                continue
             f = act.get("findings") or []
             return {"steps": steps, "findings": [str(x)[:240] for x in (f if isinstance(f, list) else [f])][:6],
                     "tokens": tokens, "stopped": "done"}
@@ -141,6 +152,40 @@ def brief(alert: dict, ev: dict, cx: dict, confidence: str, disagreement: dict |
         "confidence": confidence, "disagreement": disagreement}), default=str)
 
 
+def checklist(alert: dict, ev: dict, cx: dict, disagreement: dict | None) -> list[tuple[str, str]]:
+    """Situation-specific checks a hydrologist would make, from the same facts the investigator sees (first live
+    evaluation, recall 0.50: it missed impacts on MAJOR, past floods on a fast rise, recent windows on a falling gauge
+    and neighbours when rain data were missing). The LLM still chooses; it is told these and reminded once."""
+    out: list[tuple[str, str]] = []
+    add = lambda t, why: out.append((t, why)) if t not in [x for x, _ in out] else None   # noqa: E731
+    lv = ev.get("official_levels") or alert.get("official_levels") or {}
+    fc = ev.get("forecast_stage") if ev.get("forecast_stage") is not None else alert.get("forecast_stage")
+    rate = ev.get("rise_rate_ft_per_h")
+    dq = ev.get("data_quality") or {}
+    cat = str(alert.get("category") or "").lower()
+    if dq.get("suspect"):
+        add("get_data_quality", "readings flagged as a possible sensor fault")
+    if alert.get("alert_rule") == "alert_by_model" and isinstance(fc, (int, float)) and lv.get(cat) is not None and fc < lv[cat]:
+        add("get_recent_windows", "probability fired but the stage forecast stays below the category: check the recent trend")
+        add("get_past_floods", "how past floods at this gauge developed")
+    if disagreement and disagreement.get("kind") != "model":
+        if cx.get("kind") == "rain":
+            add("get_rain", "rain contradicts the gauge: check the rain totals")
+        add("get_neighbours", "a leading signal contradicts the gauge: check upstream gauges")
+    if cx.get("kind") == "upstream":
+        add("get_neighbours", "upstream gauges are the leading signal")
+    if cx.get("kind") in (None, "none") or cx.get("basis") in (None, "none"):
+        add("get_neighbours", "no rain data: upstream gauges are the only leading signal")
+    if isinstance(rate, (int, float)) and rate >= 2.0:
+        add("get_past_floods", f"rising {rate:.1f} ft/h: how fast past floods here rose")
+    if ev.get("direction") == "falling" or (isinstance(rate, (int, float)) and rate < 0):
+        add("get_recent_windows", "the gauge is falling: check whether the peak has passed")
+    if cat in ("moderate", "major") or (isinstance(fc, (int, float)) and any(
+            lv.get(c) is not None and fc >= lv[c] for c in ("moderate", "major"))):
+        add("get_impacts", "MODERATE or MAJOR: what the stage means locally")
+    return out
+
+
 _NUM = re.compile(r"-?\d+(?:\.\d+)?")
 
 
@@ -173,7 +218,11 @@ def investigate(complete, alert: dict, ev: dict, cx: dict, confidence: str, disa
             return call(name, site, alert["category"])
         return call(name, site)                       # get_past_floods, get_gauge_info
 
+    req = checklist(alert, ev, cx, disagreement)
     b = brief(alert, ev, cx, confidence, disagreement)
-    out = react(complete, SYSTEM, b, TOOLS, run_tool)
+    if req:
+        b += "\n\nSITUATION CHECKLIST (checks this situation usually needs): " + "; ".join(f"{t}: {why}" for t, why in req)
+    out = react(complete, SYSTEM, b, TOOLS, run_tool, required=req)
+    out["checklist"] = [t for t, _ in req]
     out["findings"], out["dropped_findings"] = checked_findings(out["findings"], out["steps"], b)
     return out
